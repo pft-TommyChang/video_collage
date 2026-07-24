@@ -11,10 +11,12 @@ class PersistedEditorSettings {
     required this.tileCornerRadius,
     required this.clipLabelFontSize,
     required this.includeClipLabelsInOutput,
+    required this.showClipLabelIndex,
     required this.outputWidth,
     required this.outputHeight,
     required this.aspectLabel,
     required this.resolutionLabel,
+    required this.audioMode,
     required this.borderColorLabel,
     required this.backgroundColorLabel,
   });
@@ -25,10 +27,12 @@ class PersistedEditorSettings {
   final double tileCornerRadius;
   final double clipLabelFontSize;
   final bool includeClipLabelsInOutput;
+  final bool showClipLabelIndex;
   final int outputWidth;
   final int outputHeight;
   final String aspectLabel;
   final String resolutionLabel;
+  final String audioMode;
   final String borderColorLabel;
   final String backgroundColorLabel;
 
@@ -40,10 +44,12 @@ class PersistedEditorSettings {
       'tileCornerRadius': tileCornerRadius,
       'clipLabelFontSize': clipLabelFontSize,
       'includeClipLabelsInOutput': includeClipLabelsInOutput,
+      'showClipLabelIndex': showClipLabelIndex,
       'outputWidth': outputWidth,
       'outputHeight': outputHeight,
       'aspectLabel': aspectLabel,
       'resolutionLabel': resolutionLabel,
+      'audioMode': audioMode,
       'borderColorLabel': borderColorLabel,
       'backgroundColorLabel': backgroundColorLabel,
     };
@@ -58,10 +64,12 @@ class PersistedEditorSettings {
       clipLabelFontSize: (json['clipLabelFontSize'] as num?)?.toDouble() ?? 12,
       includeClipLabelsInOutput:
           json['includeClipLabelsInOutput'] as bool? ?? false,
+      showClipLabelIndex: json['showClipLabelIndex'] as bool? ?? false,
       outputWidth: (json['outputWidth'] as num?)?.toInt() ?? 1920,
       outputHeight: (json['outputHeight'] as num?)?.toInt() ?? 1080,
       aspectLabel: json['aspectLabel'] as String? ?? '16:9',
       resolutionLabel: json['resolutionLabel'] as String? ?? 'Full HD 1080',
+      audioMode: json['audioMode'] as String? ?? 'firstClip',
       borderColorLabel: json['borderColorLabel'] as String? ?? 'White',
       backgroundColorLabel: json['backgroundColorLabel'] as String? ?? 'Grey',
     );

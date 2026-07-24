@@ -49,6 +49,7 @@ class VideoExportService {
       duration: Duration(milliseconds: (durationSeconds * 1000).round()),
       width: stream?.getWidth() ?? 0,
       height: stream?.getHeight() ?? 0,
+      hasAudio: _hasAudioStream(information),
     );
   }
 
@@ -119,6 +120,7 @@ class VideoExportService {
               slotClips: slotClips,
               scaleFactor: options.scaleFactor,
               baseFontSize: options.clipLabelFontSize,
+              showClipLabelIndex: options.showClipLabelIndex,
               cellWidth: cellWidth,
               tempDirectory: labelTempDirectory = await Directory.systemTemp
                   .createTemp('video_collage_labels_'),
@@ -188,6 +190,13 @@ class VideoExportService {
       }
       filters.add('[merged]format=yuv420p[outv]');
 
+      final audioOutputLabel = _buildAudioFilterGraph(
+        filters: filters,
+        slotClips: slotClips,
+        audioMode: options.audioMode,
+        targetDurationSeconds: targetDurationSeconds,
+      );
+
       final arguments = <String>[
         '-y',
         for (final entry in slotClips) ...<String>['-i', entry.clip.path],
@@ -201,8 +210,6 @@ class VideoExportService {
         filters.join(';'),
         '-map',
         '[outv]',
-        '-map',
-        '0:a?',
         '-t',
         targetDurationSeconds,
         '-r',
@@ -215,10 +222,15 @@ class VideoExportService {
         '18',
         '-pix_fmt',
         'yuv420p',
-        '-c:a',
-        'aac',
-        '-b:a',
-        '192k',
+        if (audioOutputLabel != null) ...<String>[
+          '-map',
+          '[$audioOutputLabel]',
+          '-c:a',
+          'aac',
+          '-b:a',
+          '192k',
+        ] else
+          '-an',
         '-movflags',
         '+faststart',
         outputPath,
@@ -265,6 +277,7 @@ class VideoExportService {
     required List<CollageSlotClip> slotClips,
     required double scaleFactor,
     required double baseFontSize,
+    required bool showClipLabelIndex,
     required int cellWidth,
     required Directory tempDirectory,
   }) async {
@@ -282,8 +295,11 @@ class VideoExportService {
       final filePath = p.join(tempDirectory.path, 'label_$inputIndex.png');
       await _renderClipLabelImage(
         filePath: filePath,
-        text:
-            '#${slotClips[inputIndex].slotIndex + 1} ${slotClips[inputIndex].clip.name}',
+        text: buildClipLabelText(
+          slotIndex: slotClips[inputIndex].slotIndex,
+          clipName: slotClips[inputIndex].clip.name,
+          includeIndex: showClipLabelIndex,
+        ),
         labelStyle: labelStyle,
         maxTextWidth: maxTextWidth,
       );
@@ -369,6 +385,100 @@ class VideoExportService {
       }
     }
     return null;
+  }
+
+  bool _hasAudioStream(MediaInformation information) {
+    for (final stream in information.getStreams()) {
+      if (stream.getType() == 'audio') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String? _buildAudioFilterGraph({
+    required List<String> filters,
+    required List<CollageSlotClip> slotClips,
+    required AudioMode audioMode,
+    required String targetDurationSeconds,
+  }) {
+    switch (audioMode) {
+      case AudioMode.firstClip:
+        if (!slotClips.first.clip.hasAudio) {
+          return null;
+        }
+        filters.add(
+          _normalizedAudioFilter(
+            inputIndex: 0,
+            targetDurationSeconds: targetDurationSeconds,
+            outputLabel: 'outa',
+          ),
+        );
+        return 'outa';
+      case AudioMode.mixAll:
+        final audioInputIndexes = <int>[
+          for (var i = 0; i < slotClips.length; i++)
+            if (slotClips[i].clip.hasAudio) i,
+        ];
+        if (audioInputIndexes.isEmpty) {
+          return null;
+        }
+
+        final audioLabels = <String>[];
+        for (final inputIndex in audioInputIndexes) {
+          final label = 'a$inputIndex';
+          filters.add(
+            _normalizedAudioFilter(
+              inputIndex: inputIndex,
+              targetDurationSeconds: targetDurationSeconds,
+              outputLabel: label,
+            ),
+          );
+          audioLabels.add(label);
+        }
+        filters.add(
+          '${audioLabels.map((label) => '[$label]').join()}'
+          'amix=inputs=${audioLabels.length}:duration=longest:dropout_transition=0[outa]',
+        );
+        return 'outa';
+      case AudioMode.longestClip:
+        var longestInputIndex = 0;
+        var longestDuration = Duration.zero;
+        for (var i = 0; i < slotClips.length; i++) {
+          final clip = slotClips[i].clip;
+          if (clip.duration > longestDuration) {
+            longestDuration = clip.duration;
+            longestInputIndex = i;
+          }
+        }
+        if (!slotClips[longestInputIndex].clip.hasAudio) {
+          return null;
+        }
+        filters.add(
+          _normalizedAudioFilter(
+            inputIndex: longestInputIndex,
+            targetDurationSeconds: targetDurationSeconds,
+            outputLabel: 'outa',
+          ),
+        );
+        return 'outa';
+      case AudioMode.mute:
+        return null;
+    }
+  }
+
+  String _normalizedAudioFilter({
+    required int inputIndex,
+    required String targetDurationSeconds,
+    required String outputLabel,
+  }) {
+    return '[$inputIndex:a]'
+        'asetpts=PTS-STARTPTS,'
+        'aresample=44100:async=1:first_pts=0,'
+        'aformat=sample_rates=44100:channel_layouts=stereo,'
+        'apad,'
+        'atrim=duration=$targetDurationSeconds'
+        '[$outputLabel]';
   }
 
   String _roundedCornerFilter({

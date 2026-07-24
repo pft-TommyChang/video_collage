@@ -33,6 +33,20 @@ class ColorChoice {
   final String ffmpegHex;
 }
 
+enum AudioMode {
+  firstClip,
+  mixAll,
+  longestClip,
+  mute;
+
+  String get label => switch (this) {
+    AudioMode.firstClip => 'First clip audio',
+    AudioMode.mixAll => 'Mix all audios',
+    AudioMode.longestClip => 'Longest clip audio',
+    AudioMode.mute => 'Mute',
+  };
+}
+
 class VideoClipInfo {
   const VideoClipInfo({
     required this.path,
@@ -40,6 +54,7 @@ class VideoClipInfo {
     required this.duration,
     required this.width,
     required this.height,
+    required this.hasAudio,
   });
 
   final String path;
@@ -47,6 +62,7 @@ class VideoClipInfo {
   final Duration duration;
   final int width;
   final int height;
+  final bool hasAudio;
 
   VideoClipInfo copyWith({
     String? path,
@@ -54,6 +70,7 @@ class VideoClipInfo {
     Duration? duration,
     int? width,
     int? height,
+    bool? hasAudio,
   }) {
     return VideoClipInfo(
       path: path ?? this.path,
@@ -61,6 +78,7 @@ class VideoClipInfo {
       duration: duration ?? this.duration,
       width: width ?? this.width,
       height: height ?? this.height,
+      hasAudio: hasAudio ?? this.hasAudio,
     );
   }
 }
@@ -78,7 +96,9 @@ class ExportOptions {
     required this.backgroundColor,
     required this.borderColor,
     required this.includeClipLabelsInOutput,
+    required this.showClipLabelIndex,
     required this.clipLabelFontSize,
+    required this.audioMode,
   });
 
   final int rows;
@@ -90,7 +110,9 @@ class ExportOptions {
   final ColorChoice backgroundColor;
   final ColorChoice borderColor;
   final bool includeClipLabelsInOutput;
+  final bool showClipLabelIndex;
   final double clipLabelFontSize;
+  final AudioMode audioMode;
 
   double get aspectRatio => outputWidth / outputHeight;
   double get shortEdge => outputWidth < outputHeight
@@ -150,4 +172,15 @@ String formatDuration(Duration duration) {
     return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
   return '$minutes:${seconds.toString().padLeft(2, '0')}';
+}
+
+String buildClipLabelText({
+  required int slotIndex,
+  required String clipName,
+  required bool includeIndex,
+}) {
+  if (!includeIndex) {
+    return clipName;
+  }
+  return '#${slotIndex + 1} $clipName';
 }

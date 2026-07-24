@@ -99,6 +99,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   ResolutionPreset _selectedResolution = _resolutionPresets[1];
   ColorChoice _selectedBorderColor = _colorChoices[0];
   ColorChoice _selectedBackgroundColor = _colorChoices[1];
+  AudioMode _selectedAudioMode = AudioMode.firstClip;
 
   int _rows = 2;
   int _columns = 2;
@@ -106,6 +107,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   double _tileCornerRadius = 12;
   double _clipLabelFontSize = 12;
   bool _includeClipLabelsInOutput = false;
+  bool _showClipLabelIndex = false;
   bool _isImporting = false;
   bool _isExporting = false;
   double _exportProgress = 0;
@@ -147,7 +149,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       backgroundColor: _selectedBackgroundColor,
       borderColor: _selectedBorderColor,
       includeClipLabelsInOutput: _includeClipLabelsInOutput,
+      showClipLabelIndex: _showClipLabelIndex,
       clipLabelFontSize: _clipLabelFontSize,
+      audioMode: _selectedAudioMode,
     );
   }
 
@@ -171,6 +175,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
           .clamp(8, 24)
           .toDouble();
       _includeClipLabelsInOutput = savedSettings.includeClipLabelsInOutput;
+      _showClipLabelIndex = savedSettings.showClipLabelIndex;
       _selectedAspect = _aspectPresets.firstWhere(
         (preset) => preset.label == savedSettings.aspectLabel,
         orElse: () => _selectedAspect,
@@ -178,6 +183,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _selectedResolution = _resolutionPresets.firstWhere(
         (preset) => preset.label == savedSettings.resolutionLabel,
         orElse: () => _selectedResolution,
+      );
+      _selectedAudioMode = AudioMode.values.firstWhere(
+        (mode) => mode.name == savedSettings.audioMode,
+        orElse: () => _selectedAudioMode,
       );
       _selectedBorderColor = _colorChoices.firstWhere(
         (choice) => choice.label == savedSettings.borderColorLabel,
@@ -215,10 +224,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         tileCornerRadius: _tileCornerRadius,
         clipLabelFontSize: _clipLabelFontSize,
         includeClipLabelsInOutput: _includeClipLabelsInOutput,
+        showClipLabelIndex: _showClipLabelIndex,
         outputWidth: width,
         outputHeight: height,
         aspectLabel: _selectedAspect.label,
         resolutionLabel: _selectedResolution.label,
+        audioMode: _selectedAudioMode.name,
         borderColorLabel: _selectedBorderColor.label,
         backgroundColorLabel: _selectedBackgroundColor.label,
       ),
@@ -736,6 +747,16 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     });
                                   },
                                 ),
+                                SwitchListTile.adaptive(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('Show label index'),
+                                  value: _showClipLabelIndex,
+                                  onChanged: (value) {
+                                    _setStateAndSave(() {
+                                      _showClipLabelIndex = value;
+                                    });
+                                  },
+                                ),
                               ],
                             ),
                           ),
@@ -746,6 +767,18 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
+                                _SelectionDropdown<AudioMode>(
+                                  label: 'Audio',
+                                  selected: _selectedAudioMode,
+                                  options: AudioMode.values,
+                                  itemLabel: (mode) => mode.label,
+                                  onSelected: (mode) {
+                                    _setStateAndSave(() {
+                                      _selectedAudioMode = mode;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
                                 _SelectionDropdown<ResolutionPreset>(
                                   label: 'Resolution',
                                   selected: _selectedResolution,
@@ -1008,6 +1041,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                     : index,
                                                 showLabel:
                                                     _includeClipLabelsInOutput,
+                                                showLabelIndex:
+                                                    _showClipLabelIndex,
                                                 onEditLabel: clip == null
                                                     ? null
                                                     : () => unawaited(
@@ -1388,6 +1423,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       duration: Duration.zero,
       width: 0,
       height: 0,
+      hasAudio: false,
     );
   }
 
@@ -1415,6 +1451,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
           duration: value.duration,
           width: value.size.width.round(),
           height: value.size.height.round(),
+          hasAudio: false,
         );
       }
 
@@ -1458,6 +1495,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
   Future<void> _editClipTitle(VideoClipInfo clip) async {
     var draftName = clip.name;
+    final textController = TextEditingController(text: clip.name)
+      ..selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: clip.name.length,
+      );
 
     final updatedName = await showDialog<String>(
       context: context,
@@ -1465,7 +1507,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         return AlertDialog(
           title: const Text('Edit clip label'),
           content: TextFormField(
-            initialValue: clip.name,
+            controller: textController,
             autofocus: true,
             textInputAction: TextInputAction.done,
             decoration: const InputDecoration(
@@ -1494,6 +1536,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         );
       },
     );
+    textController.dispose();
 
     if (!mounted || updatedName == null) {
       return;
@@ -1796,6 +1839,7 @@ class _PreviewTile extends StatelessWidget {
     required this.backgroundColor,
     required this.dragData,
     required this.showLabel,
+    required this.showLabelIndex,
     required this.onEditLabel,
     required this.clipLabelFontSize,
     required this.isDragTarget,
@@ -1812,6 +1856,7 @@ class _PreviewTile extends StatelessWidget {
   final Color backgroundColor;
   final int? dragData;
   final bool showLabel;
+  final bool showLabelIndex;
   final VoidCallback? onEditLabel;
   final double clipLabelFontSize;
   final bool isDragTarget;
@@ -1821,7 +1866,11 @@ class _PreviewTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = !showLabel || clip == null
         ? null
-        : '#${index + 1} ${clip!.name}';
+        : buildClipLabelText(
+            slotIndex: index,
+            clipName: clip!.name,
+            includeIndex: showLabelIndex,
+          );
     final tile = _PreviewTileBody(
       clip: clip,
       controller: controller,
