@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/media_information.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
@@ -53,6 +56,7 @@ class VideoExportService {
     required List<CollageSlotClip> slotClips,
     required ExportOptions options,
     required String outputPath,
+    void Function(VideoExportProgress progress)? onProgress,
   }) async {
     if (slotClips.isEmpty) {
       throw const VideoExportException('Please add at least one video.');
@@ -83,8 +87,33 @@ class VideoExportService {
     );
     final targetDurationSeconds = (targetDurationMs / 1000).toStringAsFixed(3);
     Directory? labelTempDirectory;
+    var lastProgress = 0.0;
+
+    void reportProgress({
+      required double progress,
+      required int processedMs,
+      double? speed,
+    }) {
+      if (onProgress == null) {
+        return;
+      }
+      final normalized = progress.clamp(0.0, 1.0);
+      if (normalized < lastProgress) {
+        return;
+      }
+      lastProgress = normalized;
+      onProgress(
+        VideoExportProgress(
+          progress: normalized,
+          processed: Duration(milliseconds: processedMs),
+          total: Duration(milliseconds: targetDurationMs),
+          speed: speed,
+        ),
+      );
+    }
 
     try {
+      reportProgress(progress: 0, processedMs: 0);
       final labelOverlays = options.includeClipLabelsInOutput
           ? await _createClipLabelOverlays(
               slotClips: slotClips,
@@ -194,7 +223,25 @@ class VideoExportService {
         outputPath,
       ];
 
-      final session = await FFmpegKit.executeWithArguments(arguments);
+      await FFmpegKitConfig.enableStatistics();
+      final sessionCompleter = Completer<FFmpegSession>();
+      await FFmpegKit.executeWithArgumentsAsync(
+        arguments,
+        (session) {
+          if (!sessionCompleter.isCompleted) {
+            sessionCompleter.complete(session);
+          }
+        },
+        null,
+        (statistics) {
+          reportProgress(
+            progress: statistics.getTime() / targetDurationMs,
+            processedMs: statistics.getTime(),
+            speed: statistics.getSpeed(),
+          );
+        },
+      );
+      final session = await sessionCompleter.future;
       final returnCode = await session.getReturnCode();
 
       if (!ReturnCode.isSuccess(returnCode)) {
@@ -203,6 +250,7 @@ class VideoExportService {
           'ffmpeg export failed:\n${output ?? 'Unknown FFmpeg error'}',
         );
       }
+      reportProgress(progress: 1, processedMs: targetDurationMs);
     } finally {
       if (labelTempDirectory case final directory?) {
         if (await directory.exists()) {
@@ -364,4 +412,18 @@ class _ClipLabelOverlay {
   final String filePath;
   final int x;
   final int y;
+}
+
+class VideoExportProgress {
+  const VideoExportProgress({
+    required this.progress,
+    required this.processed,
+    required this.total,
+    this.speed,
+  });
+
+  final double progress;
+  final Duration processed;
+  final Duration total;
+  final double? speed;
 }

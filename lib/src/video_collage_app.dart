@@ -107,6 +107,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   bool _includeClipLabelsInOutput = false;
   bool _isImporting = false;
   bool _isExporting = false;
+  double _exportProgress = 0;
   bool _isPreviewPlaying = false;
   String? _statusMessage;
 
@@ -378,6 +379,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
     setState(() {
       _isExporting = true;
+      _exportProgress = 0;
       _statusMessage = 'Exporting collage video...';
     });
 
@@ -386,11 +388,26 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         slotClips: _slotClipsForExport(),
         options: options,
         outputPath: savePath,
+        onProgress: (progress) {
+          if (!mounted) {
+            return;
+          }
+          final percent = (progress.progress * 100).round().clamp(0, 100);
+          final speedText = progress.speed == null || progress.speed! <= 0
+              ? ''
+              : ' • ${progress.speed!.toStringAsFixed(2)}x';
+          setState(() {
+            _exportProgress = progress.progress;
+            _statusMessage =
+                'Exporting collage video... $percent% • ${formatDuration(progress.processed)} / ${formatDuration(progress.total)}$speedText';
+          });
+        },
       );
       if (!mounted) {
         return;
       }
       setState(() {
+        _exportProgress = 1;
         _statusMessage = 'Export complete: $savePath';
       });
     } on VideoExportException catch (error) {
@@ -411,6 +428,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       if (mounted) {
         setState(() {
           _isExporting = false;
+          _exportProgress = 0;
         });
       }
     }
@@ -744,16 +762,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                             Center(
                               child: SizedBox(
                                 width: 240,
-                                child: FilledButton.icon(
+                                child: _ExportButton(
                                   onPressed: _isExporting ? null : _export,
-                                  icon: const Icon(
-                                    Icons.file_download_outlined,
-                                  ),
-                                  label: Text(
-                                    _isExporting
-                                        ? 'Exporting...'
-                                        : 'Export MP4',
-                                  ),
+                                  isExporting: _isExporting,
+                                  progress: _exportProgress,
                                 ),
                               ),
                             ),
@@ -1306,6 +1318,82 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
             'Preview failed for ${path.split(Platform.pathSeparator).last}.';
       });
     }
+  }
+}
+
+class _ExportButton extends StatelessWidget {
+  const _ExportButton({
+    required this.onPressed,
+    required this.isExporting,
+    required this.progress,
+  });
+
+  final VoidCallback? onPressed;
+  final bool isExporting;
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = Radius.circular(999);
+    const idleColor = Color(0xFFA0563D);
+    const trackColor = Color(0xFFD8C8B0);
+    const progressColor = Color(0xFFA0563D);
+    final foregroundColor = isExporting
+        ? const Color(0xFF766658)
+        : Colors.white;
+    final clampedProgress = progress.clamp(0.0, 1.0);
+    final percent = (clampedProgress * 100).round().clamp(0, 100);
+
+    return SizedBox(
+      height: 56,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.all(radius),
+        child: Material(
+          color: isExporting ? trackColor : idleColor,
+          child: InkWell(
+            onTap: onPressed,
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                if (isExporting)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: clampedProgress,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: progressColor,
+                          borderRadius: BorderRadius.all(radius),
+                        ),
+                      ),
+                    ),
+                  ),
+                Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        Icons.file_download_outlined,
+                        color: foregroundColor,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        isExporting ? 'Exporting... $percent%' : 'Export MP4',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: foregroundColor,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
