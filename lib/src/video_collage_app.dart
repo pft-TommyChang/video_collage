@@ -414,7 +414,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   @override
   Widget build(BuildContext context) {
     final options = _options;
-    final activeCount = _slotClipsForExport().length;
+    final slotClips = _slotClipsForExport();
+    final activeCount = slotClips.length;
+    final exportDuration = slotClips.fold<Duration>(
+      Duration.zero,
+      (current, entry) =>
+          entry.clip.duration > current ? entry.clip.duration : current,
+    );
     final previewCanvasWidth = options.outputWidth.toDouble().clamp(
       1.0,
       double.infinity,
@@ -436,271 +442,319 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                   border: Border(right: BorderSide(color: Color(0xFFD8D0C4))),
                   color: Color(0xFFFFFCF7),
                 ),
-                child: ListView(
-                  padding: const EdgeInsets.all(20),
+                child: Column(
                   children: <Widget>[
-                    Text(
-                      'Video Collage Studio',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Flutter macOS editor for multi-video collage layouts with ffmpeg export.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF5A6270),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    _SectionCard(
-                      title: 'Media',
-                      subtitle:
-                          '${_clips.length} loaded • capacity $_gridCapacity',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: <Widget>[
-                              FilledButton.icon(
-                                onPressed: _isImporting ? null : _pickVideos,
-                                icon: const Icon(Icons.video_library_outlined),
-                                label: Text(
-                                  _isImporting ? 'Loading...' : 'Add Videos',
-                                ),
-                              ),
-                              IconButton.outlined(
-                                onPressed: _clips.isEmpty ? null : _autoLayout,
-                                tooltip: 'Auto Layout',
-                                style: IconButton.styleFrom(
-                                  minimumSize: const Size(34, 34),
-                                  maximumSize: const Size(34, 34),
-                                ),
-                                icon: const Icon(Icons.auto_fix_high, size: 18),
-                              ),
-                              IconButton.outlined(
-                                onPressed: _clips.isEmpty ? null : _clearClips,
-                                tooltip: 'Clear',
-                                style: IconButton.styleFrom(
-                                  minimumSize: const Size(34, 34),
-                                  maximumSize: const Size(34, 34),
-                                ),
-                                icon: const Icon(
-                                  Icons.cleaning_services_outlined,
-                                  size: 18,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          if (_clips.isEmpty)
-                            const _EmptyListState()
-                          else
-                            ..._clips.asMap().entries.map((entry) {
-                              final clip = entry.value;
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: _ClipListTile(
-                                  clip: clip,
-                                  isUsed: _isClipVisibleInGrid(clip.path),
-                                  isLoading: _loadingClipPaths.contains(
-                                    clip.path,
-                                  ),
-                                  errorMessage: _clipErrors[clip.path],
-                                  onRemove: () => _removeClip(clip),
-                                ),
-                              );
-                            }),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Layout',
-                      subtitle: 'Rows, columns, and border spacing',
-                      child: Column(
-                        children: <Widget>[
-                          _StepperRow(
-                            label: 'Rows',
-                            value: _rows,
-                            onChanged: (value) =>
-                                _setStateAndSave(() => _rows = value),
-                          ),
-                          const SizedBox(height: 12),
-                          _StepperRow(
-                            label: 'Columns',
-                            value: _columns,
-                            onChanged: (value) =>
-                                _setStateAndSave(() => _columns = value),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: <Widget>[
-                              const Expanded(child: Text('Border thickness')),
-                              Text('${_borderThickness.round()} px'),
-                            ],
-                          ),
-                          Slider(
-                            value: _borderThickness,
-                            min: 0,
-                            max: 48,
-                            divisions: 24,
-                            onChanged: (value) {
-                              _setStateAndSave(() {
-                                _borderThickness = value;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: <Widget>[
-                              const Expanded(child: Text('Tile corner radius')),
-                              Text('${_tileCornerRadius.round()} px'),
-                            ],
-                          ),
-                          Slider(
-                            value: _tileCornerRadius,
-                            min: 0,
-                            max: 48,
-                            divisions: 24,
-                            onChanged: (value) {
-                              _setStateAndSave(() {
-                                _tileCornerRadius = value;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 6),
-                          _ColorSelector(
-                            label: 'Border',
-                            selected: _selectedBorderColor,
-                            onSelected: (choice) {
-                              _setStateAndSave(() {
-                                _selectedBorderColor = choice;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          _ColorSelector(
-                            label: 'Background',
-                            selected: _selectedBackgroundColor,
-                            onSelected: (choice) {
-                              _setStateAndSave(() {
-                                _selectedBackgroundColor = choice;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Output',
-                      subtitle: 'Aspect ratio and render size',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.all(20),
                         children: <Widget>[
                           Text(
-                            'Aspect ratio',
-                            style: Theme.of(context).textTheme.titleSmall,
+                            'Video Collage Studio',
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _aspectPresets.map((preset) {
-                              return ChoiceChip(
-                                selected: identical(preset, _selectedAspect),
-                                label: Text(preset.label),
-                                onSelected: (_) => _applyAspectPreset(preset),
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 8),
                           Text(
-                            'Resolution preset',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _resolutionPresets.map((preset) {
-                              return ChoiceChip(
-                                selected: identical(
-                                  preset,
-                                  _selectedResolution,
-                                ),
-                                label: Text(preset.label),
-                                onSelected: (_) =>
-                                    _applyResolutionPreset(preset),
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: TextField(
-                                  controller: _widthController,
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: <TextInputFormatter>[
-                                    FilteringTextInputFormatter.digitsOnly,
-                                  ],
-                                  decoration: const InputDecoration(
-                                    labelText: 'Width',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextField(
-                                  controller: _heightController,
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: <TextInputFormatter>[
-                                    FilteringTextInputFormatter.digitsOnly,
-                                  ],
-                                  decoration: const InputDecoration(
-                                    labelText: 'Height',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'More than $_gridCapacity videos is supported. The current export uses the first $_gridCapacity clips in order.',
-                            style: Theme.of(context).textTheme.bodySmall
+                            'Flutter macOS editor for multi-video collage layouts with ffmpeg export.',
+                            style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: const Color(0xFF5A6270)),
                           ),
+                          const SizedBox(height: 20),
+                          _SectionCard(
+                            title: 'Media',
+                            subtitle:
+                                '${_clips.length} loaded • capacity $_gridCapacity',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  children: <Widget>[
+                                    FilledButton.icon(
+                                      onPressed: _isImporting
+                                          ? null
+                                          : _pickVideos,
+                                      icon: const Icon(
+                                        Icons.video_library_outlined,
+                                      ),
+                                      label: Text(
+                                        _isImporting
+                                            ? 'Loading...'
+                                            : 'Add Videos',
+                                      ),
+                                    ),
+                                    IconButton.outlined(
+                                      onPressed: _clips.isEmpty
+                                          ? null
+                                          : _autoLayout,
+                                      tooltip: 'Auto Layout',
+                                      style: IconButton.styleFrom(
+                                        minimumSize: const Size(34, 34),
+                                        maximumSize: const Size(34, 34),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.auto_fix_high,
+                                        size: 18,
+                                      ),
+                                    ),
+                                    IconButton.outlined(
+                                      onPressed: _clips.isEmpty
+                                          ? null
+                                          : _clearClips,
+                                      tooltip: 'Clear',
+                                      style: IconButton.styleFrom(
+                                        minimumSize: const Size(34, 34),
+                                        maximumSize: const Size(34, 34),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.cleaning_services_outlined,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                if (_clips.isEmpty)
+                                  const _EmptyListState()
+                                else
+                                  ..._clips.asMap().entries.map((entry) {
+                                    final clip = entry.value;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 10,
+                                      ),
+                                      child: _ClipListTile(
+                                        clip: clip,
+                                        isUsed: _isClipVisibleInGrid(clip.path),
+                                        isLoading: _loadingClipPaths.contains(
+                                          clip.path,
+                                        ),
+                                        errorMessage: _clipErrors[clip.path],
+                                        onRemove: () => _removeClip(clip),
+                                      ),
+                                    );
+                                  }),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _SectionCard(
+                            title: 'Layout',
+                            subtitle: 'Rows, columns, and border spacing',
+                            child: Column(
+                              children: <Widget>[
+                                _StepperRow(
+                                  label: 'Rows',
+                                  value: _rows,
+                                  onChanged: (value) =>
+                                      _setStateAndSave(() => _rows = value),
+                                ),
+                                const SizedBox(height: 12),
+                                _StepperRow(
+                                  label: 'Columns',
+                                  value: _columns,
+                                  onChanged: (value) =>
+                                      _setStateAndSave(() => _columns = value),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: <Widget>[
+                                    const Expanded(
+                                      child: Text('Border thickness'),
+                                    ),
+                                    Text('${_borderThickness.round()} px'),
+                                  ],
+                                ),
+                                Slider(
+                                  value: _borderThickness,
+                                  min: 0,
+                                  max: 48,
+                                  divisions: 24,
+                                  onChanged: (value) {
+                                    _setStateAndSave(() {
+                                      _borderThickness = value;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: <Widget>[
+                                    const Expanded(
+                                      child: Text('Tile corner radius'),
+                                    ),
+                                    Text('${_tileCornerRadius.round()} px'),
+                                  ],
+                                ),
+                                Slider(
+                                  value: _tileCornerRadius,
+                                  min: 0,
+                                  max: 48,
+                                  divisions: 24,
+                                  onChanged: (value) {
+                                    _setStateAndSave(() {
+                                      _tileCornerRadius = value;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 6),
+                                _ColorSelector(
+                                  label: 'Border',
+                                  selected: _selectedBorderColor,
+                                  onSelected: (choice) {
+                                    _setStateAndSave(() {
+                                      _selectedBorderColor = choice;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                _ColorSelector(
+                                  label: 'Background',
+                                  selected: _selectedBackgroundColor,
+                                  onSelected: (choice) {
+                                    _setStateAndSave(() {
+                                      _selectedBackgroundColor = choice;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _SectionCard(
+                            title: 'Output',
+                            subtitle: 'Aspect ratio and render size',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  'Aspect ratio',
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _aspectPresets.map((preset) {
+                                    return ChoiceChip(
+                                      selected: identical(
+                                        preset,
+                                        _selectedAspect,
+                                      ),
+                                      label: Text(preset.label),
+                                      onSelected: (_) =>
+                                          _applyAspectPreset(preset),
+                                    );
+                                  }).toList(),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Resolution preset',
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _resolutionPresets.map((preset) {
+                                    return ChoiceChip(
+                                      selected: identical(
+                                        preset,
+                                        _selectedResolution,
+                                      ),
+                                      label: Text(preset.label),
+                                      onSelected: (_) =>
+                                          _applyResolutionPreset(preset),
+                                    );
+                                  }).toList(),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _widthController,
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: <TextInputFormatter>[
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                        ],
+                                        decoration: const InputDecoration(
+                                          labelText: 'Width',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _heightController,
+                                        keyboardType: TextInputType.number,
+                                        inputFormatters: <TextInputFormatter>[
+                                          FilteringTextInputFormatter
+                                              .digitsOnly,
+                                        ],
+                                        decoration: const InputDecoration(
+                                          labelText: 'Height',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'More than $_gridCapacity videos is supported. The current export uses the first $_gridCapacity clips in order.',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: const Color(0xFF5A6270),
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Export',
-                      subtitle: 'Create an .mp4 collage video',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: _isExporting ? null : _export,
-                              icon: const Icon(Icons.file_download_outlined),
-                              label: Text(
-                                _isExporting ? 'Exporting...' : 'Export MP4',
+                    DecoratedBox(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE7D6C0),
+                        border: Border(
+                          top: BorderSide(color: Color(0xFFD8C9B5)),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Center(
+                              child: SizedBox(
+                                width: 240,
+                                child: FilledButton.icon(
+                                  onPressed: _isExporting ? null : _export,
+                                  icon: const Icon(
+                                    Icons.file_download_outlined,
+                                  ),
+                                  label: Text(
+                                    _isExporting
+                                        ? 'Exporting...'
+                                        : 'Export MP4',
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Output: ${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
+                            const SizedBox(height: 12),
+                            Center(
+                              child: Text(
+                                'Output: ${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • ${formatDuration(exportDuration)}',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
