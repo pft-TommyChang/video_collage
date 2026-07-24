@@ -106,6 +106,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   double _tileCornerRadius = 12;
   bool _isImporting = false;
   bool _isExporting = false;
+  bool _isPreviewPlaying = false;
   String? _statusMessage;
 
   @override
@@ -775,6 +776,26 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                       children: <Widget>[
                         Row(
                           children: <Widget>[
+                            IconButton.filledTonal(
+                              onPressed: _controllers.isEmpty
+                                  ? null
+                                  : () {
+                                      unawaited(
+                                        _setPreviewPlayback(
+                                          !_isPreviewPlaying,
+                                        ),
+                                      );
+                                    },
+                              tooltip: _isPreviewPlaying
+                                  ? 'Pause preview'
+                                  : 'Play preview',
+                              icon: Icon(
+                                _isPreviewPlaying
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Text(
                                 'Preview',
@@ -1162,6 +1183,28 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     unawaited(_loadClip(path));
   }
 
+  Future<void> _setPreviewPlayback(bool shouldPlay) async {
+    final controllers = _controllers.values.toList(growable: false);
+
+    setState(() {
+      _isPreviewPlaying = shouldPlay;
+      _statusMessage = shouldPlay
+          ? 'Preview playback started.'
+          : 'Preview playback paused.';
+    });
+
+    for (final controller in controllers) {
+      if (!controller.value.isInitialized) {
+        continue;
+      }
+      if (shouldPlay) {
+        await controller.play();
+      } else {
+        await controller.pause();
+      }
+    }
+  }
+
   int _ensureEven(int value) {
     if (value <= 0) {
       return 2;
@@ -1186,7 +1229,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       await controller.initialize().timeout(const Duration(seconds: 12));
       await controller.setLooping(true);
       await controller.setVolume(0);
-      await controller.play();
+      if (_isPreviewPlaying) {
+        await controller.play();
+      } else {
+        await controller.pause();
+      }
 
       VideoClipInfo clip;
       try {
