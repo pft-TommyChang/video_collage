@@ -40,6 +40,7 @@ dependencies:
   video_player_media_kit: ^2.0.0
   media_kit_libs_macos_video: ^1.1.4
   ffmpeg_kit_flutter_new: ^4.5.2
+  desktop_drop: ^0.7.1
 
 dev_dependencies:
   flutter_test:

@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 import 'package:video_player/video_player.dart';
 
 import 'models.dart';
@@ -33,6 +35,14 @@ const _colorChoices = <ColorChoice>[
   ColorChoice(label: 'Coral', color: Color(0xFFFF7A59), ffmpegHex: '0xFF7A59'),
   ColorChoice(label: 'Aqua', color: Color(0xFF4CC9C0), ffmpegHex: '0x4CC9C0'),
 ];
+
+const _supportedVideoExtensions = <String>{
+  '.mp4',
+  '.mov',
+  '.m4v',
+  '.avi',
+  '.mkv',
+};
 
 class VideoCollageApp extends StatelessWidget {
   const VideoCollageApp({super.key});
@@ -83,6 +93,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   late final TextEditingController _heightController;
   Timer? _settingsSaveDebounce;
   bool _isRestoringSettings = false;
+  int? _externalDropHoverSlotIndex;
 
   AspectRatioPreset _selectedAspect = _aspectPresets[4];
   ResolutionPreset _selectedResolution = _resolutionPresets[1];
@@ -786,42 +797,74 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                               index,
                                             );
                                           },
-                                          builder:
-                                              (
-                                                context,
-                                                candidateData,
-                                                rejectedData,
-                                              ) {
-                                                return _PreviewTile(
-                                                  clip: clip,
-                                                  controller: clip == null
-                                                      ? null
-                                                      : _controllers[clip.path],
-                                                  cornerRadius:
-                                                      _tileCornerRadius,
-                                                  isLoading:
-                                                      clip != null &&
-                                                      _loadingClipPaths
-                                                          .contains(clip.path),
-                                                  errorMessage: clip == null
-                                                      ? null
-                                                      : _clipErrors[clip.path],
-                                                  onPickVideo: clip == null
-                                                      ? () => _pickVideoForSlot(
-                                                          index,
-                                                        )
-                                                      : null,
-                                                  index: index,
-                                                  backgroundColor:
-                                                      _selectedBackgroundColor
-                                                          .color,
-                                                  dragData: clip == null
-                                                      ? null
-                                                      : index,
-                                                  isDragTarget:
-                                                      candidateData.isNotEmpty,
+                                          builder: (context, candidateData, rejectedData) {
+                                            return DropTarget(
+                                              onDragEntered: (_) {
+                                                if (_externalDropHoverSlotIndex !=
+                                                    index) {
+                                                  setState(() {
+                                                    _externalDropHoverSlotIndex =
+                                                        index;
+                                                  });
+                                                }
+                                              },
+                                              onDragExited: (_) {
+                                                if (_externalDropHoverSlotIndex ==
+                                                    index) {
+                                                  setState(() {
+                                                    _externalDropHoverSlotIndex =
+                                                        null;
+                                                  });
+                                                }
+                                              },
+                                              onDragDone: (details) {
+                                                if (_externalDropHoverSlotIndex ==
+                                                    index) {
+                                                  setState(() {
+                                                    _externalDropHoverSlotIndex =
+                                                        null;
+                                                  });
+                                                }
+                                                unawaited(
+                                                  _handleExternalDropToSlot(
+                                                    index,
+                                                    details.files,
+                                                  ),
                                                 );
                                               },
+                                              child: _PreviewTile(
+                                                clip: clip,
+                                                controller: clip == null
+                                                    ? null
+                                                    : _controllers[clip.path],
+                                                cornerRadius: _tileCornerRadius,
+                                                isLoading:
+                                                    clip != null &&
+                                                    _loadingClipPaths.contains(
+                                                      clip.path,
+                                                    ),
+                                                errorMessage: clip == null
+                                                    ? null
+                                                    : _clipErrors[clip.path],
+                                                onPickVideo: clip == null
+                                                    ? () => _pickVideoForSlot(
+                                                        index,
+                                                      )
+                                                    : null,
+                                                index: index,
+                                                backgroundColor:
+                                                    _selectedBackgroundColor
+                                                        .color,
+                                                dragData: clip == null
+                                                    ? null
+                                                    : index,
+                                                isDragTarget:
+                                                    candidateData.isNotEmpty ||
+                                                    _externalDropHoverSlotIndex ==
+                                                        index,
+                                              ),
+                                            );
+                                          },
                                         );
                                       },
                                     ),
@@ -964,6 +1007,74 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _statusMessage =
           'Swapped slot ${fromSlotIndex + 1} with slot ${toSlotIndex + 1}.';
     });
+  }
+
+  Future<void> _handleExternalDropToSlot(
+    int slotIndex,
+    List<DropItem> items,
+  ) async {
+    final item = _firstSupportedVideoDropItem(items);
+    if (item == null) {
+      return;
+    }
+
+    final path = item.path;
+    if (path.isEmpty) {
+      return;
+    }
+
+    VideoClipInfo? existingClip;
+    for (final clip in _clips) {
+      if (clip.path == path) {
+        existingClip = clip;
+        break;
+      }
+    }
+    if (existingClip != null) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _slotAssignments.removeWhere(
+          (assignedSlotIndex, assignedPath) =>
+              assignedSlotIndex != slotIndex && assignedPath == path,
+        );
+        _slotAssignments[slotIndex] = path;
+        _statusMessage =
+            'Assigned ${existingClip!.name} to slot ${slotIndex + 1}.';
+      });
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _clips.add(_placeholderClip(path));
+      _slotAssignments[slotIndex] = path;
+      _loadingClipPaths.add(path);
+      _clipErrors.remove(path);
+      _statusMessage = 'Queued ${p.basename(path)} for slot ${slotIndex + 1}.';
+    });
+
+    await _loadClip(path);
+  }
+
+  DropItem? _firstSupportedVideoDropItem(List<DropItem> items) {
+    for (final item in items) {
+      if (item is DropItemDirectory) {
+        continue;
+      }
+      if (_isSupportedVideoPath(item.path)) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  bool _isSupportedVideoPath(String path) {
+    return _supportedVideoExtensions.contains(p.extension(path).toLowerCase());
   }
 
   Future<void> _pickVideoForSlot(int slotIndex) async {
@@ -1280,16 +1391,13 @@ class _PreviewTile extends StatelessWidget {
     return LongPressDraggable<int>(
       data: dragData!,
       delay: const Duration(milliseconds: 220),
-      dragAnchorStrategy: (
-        Draggable<Object> draggable,
-        BuildContext context,
-        Offset position,
-      ) {
-        return Offset(
-          _dragFeedbackSize.width / 2,
-          _dragFeedbackSize.height / 2,
-        );
-      },
+      dragAnchorStrategy:
+          (Draggable<Object> draggable, BuildContext context, Offset position) {
+            return Offset(
+              _dragFeedbackSize.width / 2,
+              _dragFeedbackSize.height / 2,
+            );
+          },
       feedback: Transform.scale(
         scale: 1.04,
         child: SizedBox(
