@@ -25,7 +25,11 @@ class VideoExportException implements Exception {
 }
 
 class VideoExportService {
-  const VideoExportService();
+  VideoExportService();
+
+  Future<void> cancelActiveExport() {
+    return FFmpegKit.cancel();
+  }
 
   Future<VideoClipInfo> probeMedia(String filePath) async {
     if (_isPhotoPath(filePath)) {
@@ -310,6 +314,10 @@ class VideoExportService {
       final session = await sessionCompleter.future;
       final returnCode = await session.getReturnCode();
 
+      if (ReturnCode.isCancel(returnCode)) {
+        throw const VideoExportException('Export cancelled.');
+      }
+
       if (!ReturnCode.isSuccess(returnCode)) {
         final output = await session.getOutput();
         throw VideoExportException(
@@ -431,6 +439,9 @@ class VideoExportService {
 
       final session = await FFmpegKit.executeWithArguments(arguments);
       final returnCode = await session.getReturnCode();
+      if (ReturnCode.isCancel(returnCode)) {
+        throw const VideoExportException('Export cancelled.');
+      }
       if (!ReturnCode.isSuccess(returnCode)) {
         final output = await session.getOutput();
         throw VideoExportException(

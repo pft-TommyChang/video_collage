@@ -91,7 +91,7 @@ class VideoCollageScreen extends StatefulWidget {
 class _VideoCollageScreenState extends State<VideoCollageScreen> {
   final SystemDialogService _dialogService = const SystemDialogService();
   final EditorSettingsStore _settingsStore = const EditorSettingsStore();
-  final VideoExportService _exportService = const VideoExportService();
+  final VideoExportService _exportService = VideoExportService();
 
   final List<VideoClipInfo> _clips = <VideoClipInfo>[];
   final Map<int, String> _slotAssignments = <int, String>{};
@@ -793,6 +793,44 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     }
   }
 
+  Future<void> _handleExportButtonPressed() async {
+    if (!_isExporting) {
+      await _export();
+      return;
+    }
+
+    final shouldCancel = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Cancel export?'),
+          content: const Text(
+            'The export is still running. Do you want to cancel it?',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Keep exporting'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Cancel export'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldCancel != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _statusMessage = 'Cancelling export...';
+    });
+    await _exportService.cancelActiveExport();
+  }
+
   @override
   Widget build(BuildContext context) {
     final options = _options;
@@ -1176,12 +1214,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           : 'Datetime in filename: Off',
                                       isSelected: _appendDateTimeToExportName,
                                       selectedIcon: const Icon(
-                                        Icons.more_time_rounded,
+                                        Icons.shuffle_rounded,
                                         color: Color(0xFFA0563D),
                                       ),
                                       icon: const Icon(
-                                        Icons.more_time_outlined,
-                                        color: Color(0xFF6A452D),
+                                        Icons.shuffle_outlined,
+                                        color: Color(0x446A452D),
                                       ),
                                       iconSize: 24,
                                     ),
@@ -1190,7 +1228,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 SizedBox(
                                   width: 220,
                                   child: _ExportButton(
-                                    onPressed: _isExporting ? null : _export,
+                                    onPressed: () => unawaited(
+                                      _handleExportButtonPressed(),
+                                    ),
                                     isExporting: _isExporting,
                                     progress: _exportProgress,
                                     exportFormat: exportFormat,
@@ -1686,16 +1726,17 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     int slotIndex,
     List<DropItem> items,
   ) async {
-    final item = _firstSupportedMediaDropItem(items);
-    if (item == null) {
+    final supportedPaths = _supportedMediaDropPaths(items);
+    if (supportedPaths.isEmpty) {
       return;
     }
 
-    final path = item.path;
-    if (path.isEmpty) {
+    if (supportedPaths.length > 1) {
+      await _handleExternalMultiDrop(supportedPaths);
       return;
     }
 
+    final path = supportedPaths.first;
     VideoClipInfo? existingClip;
     for (final clip in _clips) {
       if (clip.path == path) {
@@ -1734,16 +1775,76 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     await _loadClip(path);
   }
 
-  DropItem? _firstSupportedMediaDropItem(List<DropItem> items) {
+  Future<void> _handleExternalMultiDrop(List<String> paths) async {
+    final uniquePaths = <String>[];
+    final seenPaths = <String>{};
+    for (final path in paths) {
+      if (path.isEmpty || !seenPaths.add(path)) {
+        continue;
+      }
+      if (_clips.any((clip) => clip.path == path)) {
+        continue;
+      }
+      uniquePaths.add(path);
+    }
+
+    final emptySlots = <int>[];
+    for (var slotIndex = 0; slotIndex < _gridCapacity; slotIndex += 1) {
+      if (!_slotAssignments.containsKey(slotIndex)) {
+        emptySlots.add(slotIndex);
+      }
+    }
+
+    final queuedPaths = <String>[];
+    final queuedSlots = <int>[];
+    final assignCount = math.min(uniquePaths.length, emptySlots.length);
+    for (var index = 0; index < assignCount; index += 1) {
+      queuedPaths.add(uniquePaths[index]);
+      queuedSlots.add(emptySlots[index]);
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (queuedPaths.isEmpty) {
+      setState(() {
+        _statusMessage = emptySlots.isEmpty
+            ? 'No empty slots available for dropped media.'
+            : 'Dropped media was already added.';
+      });
+      return;
+    }
+
+    setState(() {
+      for (var index = 0; index < queuedPaths.length; index += 1) {
+        final path = queuedPaths[index];
+        final slotIndex = queuedSlots[index];
+        _clips.add(_placeholderClip(path));
+        _slotAssignments[slotIndex] = path;
+        _loadingClipPaths.add(path);
+        _clipErrors.remove(path);
+      }
+      _statusMessage =
+          'Queued ${queuedPaths.length} media item(s) into empty slots.';
+    });
+
+    for (final path in queuedPaths) {
+      await _loadClip(path);
+    }
+  }
+
+  List<String> _supportedMediaDropPaths(List<DropItem> items) {
+    final paths = <String>[];
     for (final item in items) {
       if (item is DropItemDirectory) {
         continue;
       }
       if (_isSupportedMediaPath(item.path)) {
-        return item;
+        paths.add(item.path);
       }
     }
-    return null;
+    return paths;
   }
 
   bool _isSupportedVideoPath(String path) {
