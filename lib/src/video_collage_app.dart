@@ -351,12 +351,59 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       return;
     }
 
-    final columns = math.sqrt(_clips.length).ceil();
-    final rows = (_clips.length / columns).ceil();
+    final consideredClips = _clips.take(36).toList(growable: false);
+    final clipAspects = consideredClips
+        .map(_clipAspectRatio)
+        .where((aspect) => aspect > 0)
+        .toList(growable: false);
+    if (clipAspects.isEmpty) {
+      return;
+    }
+
+    final clipCount = consideredClips.length;
+    final dominantOrientation = _dominantOrientation(clipAspects);
+    _AutoLayoutChoice? bestChoice;
+
+    for (var rows = 1; rows <= 6; rows++) {
+      for (var columns = 1; columns <= 6; columns++) {
+        final capacity = rows * columns;
+        if (capacity < clipCount) {
+          continue;
+        }
+        for (final aspectPreset in _aspectPresets) {
+          final choice = _evaluateAutoLayoutChoice(
+            rows: rows,
+            columns: columns,
+            aspectPreset: aspectPreset,
+            clipAspects: clipAspects,
+            dominantOrientation: dominantOrientation,
+            clipCount: clipCount,
+          );
+          final currentBest = bestChoice;
+          if (currentBest == null || choice.isBetterThan(currentBest)) {
+            bestChoice = choice;
+          }
+        }
+      }
+    }
+
+    if (bestChoice == null) {
+      return;
+    }
+
+    final resolvedChoice = bestChoice;
+    final size = _sizeFromPreset(
+      resolvedChoice.aspectPreset,
+      _selectedResolution,
+    );
     _setStateAndSave(() {
-      _columns = columns.clamp(1, 6);
-      _rows = rows.clamp(1, 6);
-      _statusMessage = 'Auto layout applied for ${_clips.length} videos.';
+      _rows = resolvedChoice.rows;
+      _columns = resolvedChoice.columns;
+      _selectedAspect = resolvedChoice.aspectPreset;
+      _widthController.text = '${size.$1}';
+      _heightController.text = '${size.$2}';
+      _statusMessage =
+          'Auto layout picked ${resolvedChoice.rows}×${resolvedChoice.columns} • ${resolvedChoice.aspectPreset.label}.';
     });
   }
 
@@ -1045,6 +1092,85 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     return candidate;
   }
 
+  double _clipAspectRatio(VideoClipInfo clip) {
+    if (clip.width > 0 && clip.height > 0) {
+      return clip.width / clip.height;
+    }
+    final controller = _controllers[clip.path];
+    if (controller != null && controller.value.isInitialized) {
+      final size = controller.value.size;
+      if (size.width > 0 && size.height > 0) {
+        return size.width / size.height;
+      }
+    }
+    return 1.0;
+  }
+
+  _AutoLayoutOrientation _orientationForAspect(double aspect) {
+    if (aspect < 0.9) {
+      return _AutoLayoutOrientation.portrait;
+    }
+    if (aspect > 1.1) {
+      return _AutoLayoutOrientation.landscape;
+    }
+    return _AutoLayoutOrientation.square;
+  }
+
+  _AutoLayoutOrientation _dominantOrientation(List<double> clipAspects) {
+    var portraitCount = 0;
+    var squareCount = 0;
+    var landscapeCount = 0;
+
+    for (final aspect in clipAspects) {
+      switch (_orientationForAspect(aspect)) {
+        case _AutoLayoutOrientation.portrait:
+          portraitCount++;
+          break;
+        case _AutoLayoutOrientation.square:
+          squareCount++;
+          break;
+        case _AutoLayoutOrientation.landscape:
+          landscapeCount++;
+          break;
+      }
+    }
+
+    if (portraitCount >= squareCount && portraitCount >= landscapeCount) {
+      return _AutoLayoutOrientation.portrait;
+    }
+    if (landscapeCount >= squareCount) {
+      return _AutoLayoutOrientation.landscape;
+    }
+    return _AutoLayoutOrientation.square;
+  }
+
+  _AutoLayoutChoice _evaluateAutoLayoutChoice({
+    required int rows,
+    required int columns,
+    required AspectRatioPreset aspectPreset,
+    required List<double> clipAspects,
+    required _AutoLayoutOrientation dominantOrientation,
+    required int clipCount,
+  }) {
+    final tileAspect = aspectPreset.value * rows / columns;
+    final visibleFraction =
+        clipAspects.fold<double>(0, (total, clipAspect) {
+          return total +
+              math.min(tileAspect / clipAspect, clipAspect / tileAspect);
+        }) /
+        clipAspects.length;
+
+    return _AutoLayoutChoice(
+      rows: rows,
+      columns: columns,
+      aspectPreset: aspectPreset,
+      emptySlots: rows * columns - clipCount,
+      averageVisibleFraction: visibleFraction,
+      orientationMatches:
+          _orientationForAspect(tileAspect) == dominantOrientation,
+    );
+  }
+
   VideoClipInfo? _clipForSlot(int slotIndex) {
     final path = _slotAssignments[slotIndex];
     if (path == null) {
@@ -1463,6 +1589,46 @@ class _ExportButton extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+enum _AutoLayoutOrientation { portrait, square, landscape }
+
+class _AutoLayoutChoice {
+  const _AutoLayoutChoice({
+    required this.rows,
+    required this.columns,
+    required this.aspectPreset,
+    required this.emptySlots,
+    required this.averageVisibleFraction,
+    required this.orientationMatches,
+  });
+
+  final int rows;
+  final int columns;
+  final AspectRatioPreset aspectPreset;
+  final int emptySlots;
+  final double averageVisibleFraction;
+  final bool orientationMatches;
+
+  bool isBetterThan(_AutoLayoutChoice other) {
+    if (emptySlots != other.emptySlots) {
+      return emptySlots < other.emptySlots;
+    }
+    final visibleDelta = averageVisibleFraction - other.averageVisibleFraction;
+    if (visibleDelta.abs() > 0.0001) {
+      return visibleDelta > 0;
+    }
+    if (orientationMatches != other.orientationMatches) {
+      return orientationMatches;
+    }
+    final shapeDelta = (rows - columns).abs().compareTo(
+      (other.rows - other.columns).abs(),
+    );
+    if (shapeDelta != 0) {
+      return shapeDelta < 0;
+    }
+    return rows < other.rows;
   }
 }
 
