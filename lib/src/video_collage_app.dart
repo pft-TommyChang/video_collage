@@ -55,7 +55,7 @@ class VideoCollageApp extends StatelessWidget {
     );
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Video Collage Studio',
+      title: 'Perfect Video Collage',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: scheme,
@@ -449,15 +449,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                         padding: const EdgeInsets.all(20),
                         children: <Widget>[
                           Text(
-                            'Video Collage Studio',
+                            'Perfect Video Collage',
                             style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Flutter macOS editor for multi-video collage layouts with ffmpeg export.',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: const Color(0xFF5A6270)),
                           ),
                           const SizedBox(height: 20),
                           _SectionCard(
@@ -1654,48 +1648,58 @@ class _ColorSelector extends StatelessWidget {
       children: <Widget>[
         Text('$label color', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _colorChoices.map((choice) {
-            final isSelected = choice == selected;
-            return InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () => onSelected(choice),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    width: isSelected ? 2 : 1,
-                    color: isSelected
-                        ? const Color(0xFF171A21)
-                        : const Color(0xFFD7CEC2),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: choice.color,
-                        shape: BoxShape.circle,
-                      ),
+        DropdownButtonFormField<ColorChoice>(
+          value: selected,
+          isExpanded: true,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: const BorderSide(
+                color: Color(0xFF171A21),
+                width: 2,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          items: _colorChoices.map((choice) {
+            return DropdownMenuItem<ColorChoice>(
+              value: choice,
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: choice.color,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFD7CEC2)),
                     ),
-                    const SizedBox(width: 8),
-                    Text(choice.label),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(choice.label),
+                ],
               ),
             );
           }).toList(),
+          onChanged: (choice) {
+            if (choice != null) {
+              onSelected(choice);
+            }
+          },
         ),
       ],
     );
