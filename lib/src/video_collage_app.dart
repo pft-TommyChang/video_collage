@@ -870,9 +870,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                 child: Column(
                   children: <Widget>[
                     Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.all(20),
-                        children: <Widget>[
+                      child: AbsorbPointer(
+                        absorbing: _isExporting,
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 160),
+                          opacity: _isExporting ? 0.58 : 1,
+                          child: ListView(
+                            padding: const EdgeInsets.all(20),
+                            children: <Widget>[
                           Row(
                             children: <Widget>[
                               DecoratedBox(
@@ -1016,8 +1021,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 const SizedBox(height: 12),
                                 Row(
                                   children: <Widget>[
-                                    const Expanded(
-                                      child: Text('Border thickness'),
+                                    Expanded(
+                                      child: Text('Border thickness', style: Theme.of(context).textTheme.titleSmall),
                                     ),
                                     Text('${_borderThickness.round()} px'),
                                   ],
@@ -1036,8 +1041,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 const SizedBox(height: 12),
                                 Row(
                                   children: <Widget>[
-                                    const Expanded(
-                                      child: Text('Tile corner radius'),
+                                    Expanded(
+                                      child: Text('Tile corner radius', style: Theme.of(context).textTheme.titleSmall),
                                     ),
                                     Text('${_tileCornerRadius.round()} px'),
                                   ],
@@ -1056,8 +1061,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 const SizedBox(height: 12),
                                 Row(
                                   children: <Widget>[
-                                    const Expanded(
-                                      child: Text('Clip label font size'),
+                                    Expanded(
+                                      child: Text('Clip label font size', style: Theme.of(context).textTheme.titleSmall),
                                     ),
                                     Text('${_clipLabelFontSize.round()} px'),
                                   ],
@@ -1180,8 +1185,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 20),
-                        ],
+                              const SizedBox(height: 20),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                     DecoratedBox(
@@ -1203,12 +1210,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   child: Align(
                                     alignment: Alignment.centerLeft,
                                     child: IconButton(
-                                      onPressed: () {
-                                        _setStateAndSave(() {
-                                          _appendDateTimeToExportName =
-                                              !_appendDateTimeToExportName;
-                                        });
-                                      },
+                                      onPressed: _isExporting
+                                          ? null
+                                          : () {
+                                              _setStateAndSave(() {
+                                                _appendDateTimeToExportName =
+                                                    !_appendDateTimeToExportName;
+                                              });
+                                            },
                                       tooltip: _appendDateTimeToExportName
                                           ? 'Datetime in filename: On'
                                           : 'Datetime in filename: Off',
@@ -1240,7 +1249,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   child: Align(
                                     alignment: Alignment.centerRight,
                                     child: IconButton(
-                                      onPressed: _showExportHistory,
+                                      onPressed: _isExporting
+                                          ? null
+                                          : _showExportHistory,
                                       tooltip: 'History',
                                       icon: const Icon(Icons.history_rounded),
                                       color: const Color(0xFF6A452D),
@@ -1269,22 +1280,27 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
               ),
             ),
             Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: <Color>[
-                      Color(0xFFFFF8EE),
-                      Color(0xFFF4E7D5),
-                      Color(0xFFE7DDD0),
-                    ],
-                  ),
-                ),
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(28),
-                    child: Column(
+              child: AbsorbPointer(
+                absorbing: _isExporting,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 160),
+                  opacity: _isExporting ? 0.58 : 1,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: <Color>[
+                          Color(0xFFFFF8EE),
+                          Color(0xFFF4E7D5),
+                          Color(0xFFE7DDD0),
+                        ],
+                      ),
+                    ),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(28),
+                        child: Column(
                       children: <Widget>[
                         Row(
                           children: <Widget>[
@@ -1512,6 +1528,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           ),
                         ),
                       ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
