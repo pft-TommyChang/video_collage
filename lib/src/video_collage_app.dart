@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import 'models.dart';
+import 'services/editor_settings_store.dart';
 import 'services/system_dialog_service.dart';
 import 'services/video_export_service.dart';
 
@@ -68,6 +69,7 @@ class VideoCollageScreen extends StatefulWidget {
 
 class _VideoCollageScreenState extends State<VideoCollageScreen> {
   final SystemDialogService _dialogService = const SystemDialogService();
+  final EditorSettingsStore _settingsStore = const EditorSettingsStore();
   final VideoExportService _exportService = const VideoExportService();
 
   final List<VideoClipInfo> _clips = <VideoClipInfo>[];
@@ -79,6 +81,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
   late final TextEditingController _widthController;
   late final TextEditingController _heightController;
+  Timer? _settingsSaveDebounce;
+  bool _isRestoringSettings = false;
 
   AspectRatioPreset _selectedAspect = _aspectPresets[4];
   ResolutionPreset _selectedResolution = _resolutionPresets[1];
@@ -97,12 +101,16 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   void initState() {
     super.initState();
     final initialSize = _sizeFromPreset(_selectedAspect, _selectedResolution);
-    _widthController = TextEditingController(text: '${initialSize.$1}');
-    _heightController = TextEditingController(text: '${initialSize.$2}');
+    _widthController = TextEditingController(text: '${initialSize.$1}')
+      ..addListener(_scheduleSettingsSave);
+    _heightController = TextEditingController(text: '${initialSize.$2}')
+      ..addListener(_scheduleSettingsSave);
+    unawaited(_restoreSettings());
   }
 
   @override
   void dispose() {
+    _settingsSaveDebounce?.cancel();
     _widthController.dispose();
     _heightController.dispose();
     for (final controller in _controllers.values) {
@@ -127,6 +135,77 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   int get _gridCapacity => _rows * _columns;
+
+  Future<void> _restoreSettings() async {
+    final savedSettings = await _settingsStore.load();
+    if (!mounted || savedSettings == null) {
+      return;
+    }
+
+    _isRestoringSettings = true;
+    setState(() {
+      _rows = savedSettings.rows.clamp(1, 6);
+      _columns = savedSettings.columns.clamp(1, 6);
+      _borderThickness = savedSettings.borderThickness.clamp(0, 48).toDouble();
+      _tileCornerRadius = savedSettings.tileCornerRadius
+          .clamp(0, 48)
+          .toDouble();
+      _selectedAspect = _aspectPresets.firstWhere(
+        (preset) => preset.label == savedSettings.aspectLabel,
+        orElse: () => _selectedAspect,
+      );
+      _selectedResolution = _resolutionPresets.firstWhere(
+        (preset) => preset.label == savedSettings.resolutionLabel,
+        orElse: () => _selectedResolution,
+      );
+      _selectedBorderColor = _colorChoices.firstWhere(
+        (choice) => choice.label == savedSettings.borderColorLabel,
+        orElse: () => _selectedBorderColor,
+      );
+      _selectedBackgroundColor = _colorChoices.firstWhere(
+        (choice) => choice.label == savedSettings.backgroundColorLabel,
+        orElse: () => _selectedBackgroundColor,
+      );
+      _widthController.text = '${_ensureEven(savedSettings.outputWidth)}';
+      _heightController.text = '${_ensureEven(savedSettings.outputHeight)}';
+    });
+    _isRestoringSettings = false;
+  }
+
+  void _scheduleSettingsSave() {
+    if (_isRestoringSettings) {
+      return;
+    }
+
+    _settingsSaveDebounce?.cancel();
+    _settingsSaveDebounce = Timer(const Duration(milliseconds: 250), () {
+      unawaited(_persistSettings());
+    });
+  }
+
+  Future<void> _persistSettings() async {
+    final width = _ensureEven(int.tryParse(_widthController.text) ?? 1080);
+    final height = _ensureEven(int.tryParse(_heightController.text) ?? 1920);
+    await _settingsStore.save(
+      PersistedEditorSettings(
+        rows: _rows,
+        columns: _columns,
+        borderThickness: _borderThickness,
+        tileCornerRadius: _tileCornerRadius,
+        outputWidth: width,
+        outputHeight: height,
+        aspectLabel: _selectedAspect.label,
+        resolutionLabel: _selectedResolution.label,
+        borderColorLabel: _selectedBorderColor.label,
+        backgroundColorLabel: _selectedBackgroundColor.label,
+      ),
+    );
+  }
+
+  void _setStateAndSave(VoidCallback update) {
+    setState(update);
+    _scheduleSettingsSave();
+  }
 
   Future<void> _pickVideos() async {
     setState(() {
@@ -224,7 +303,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
   void _applyResolutionPreset(ResolutionPreset preset) {
     final size = _sizeFromPreset(_selectedAspect, preset);
-    setState(() {
+    _setStateAndSave(() {
       _selectedResolution = preset;
       _widthController.text = '${size.$1}';
       _heightController.text = '${size.$2}';
@@ -233,7 +312,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
   void _applyAspectPreset(AspectRatioPreset preset) {
     final size = _sizeFromPreset(preset, _selectedResolution);
-    setState(() {
+    _setStateAndSave(() {
       _selectedAspect = preset;
       _widthController.text = '${size.$1}';
       _heightController.text = '${size.$2}';
@@ -247,7 +326,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
     final columns = math.sqrt(_clips.length).ceil();
     final rows = (_clips.length / columns).ceil();
-    setState(() {
+    _setStateAndSave(() {
       _columns = columns.clamp(1, 6);
       _rows = rows.clamp(1, 6);
       _statusMessage = 'Auto layout applied for ${_clips.length} videos.';
@@ -434,14 +513,15 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           _StepperRow(
                             label: 'Rows',
                             value: _rows,
-                            onChanged: (value) => setState(() => _rows = value),
+                            onChanged: (value) =>
+                                _setStateAndSave(() => _rows = value),
                           ),
                           const SizedBox(height: 12),
                           _StepperRow(
                             label: 'Columns',
                             value: _columns,
                             onChanged: (value) =>
-                                setState(() => _columns = value),
+                                _setStateAndSave(() => _columns = value),
                           ),
                           const SizedBox(height: 12),
                           Row(
@@ -456,7 +536,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                             max: 48,
                             divisions: 24,
                             onChanged: (value) {
-                              setState(() {
+                              _setStateAndSave(() {
                                 _borderThickness = value;
                               });
                             },
@@ -474,7 +554,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                             max: 48,
                             divisions: 24,
                             onChanged: (value) {
-                              setState(() {
+                              _setStateAndSave(() {
                                 _tileCornerRadius = value;
                               });
                             },
@@ -484,7 +564,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                             label: 'Border',
                             selected: _selectedBorderColor,
                             onSelected: (choice) {
-                              setState(() {
+                              _setStateAndSave(() {
                                 _selectedBorderColor = choice;
                               });
                             },
@@ -494,7 +574,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                             label: 'Background',
                             selected: _selectedBackgroundColor,
                             onSelected: (choice) {
-                              setState(() {
+                              _setStateAndSave(() {
                                 _selectedBackgroundColor = choice;
                               });
                             },
@@ -736,9 +816,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.64),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color(0xFFD8D0C4),
-                            ),
+                            border: Border.all(color: const Color(0xFFD8D0C4)),
                           ),
                           child: Text(
                             _statusMessage ?? 'Ready',
