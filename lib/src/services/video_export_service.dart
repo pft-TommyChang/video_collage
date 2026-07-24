@@ -27,7 +27,14 @@ class VideoExportException implements Exception {
 class VideoExportService {
   const VideoExportService();
 
-  Future<VideoClipInfo> probeClip(String filePath) async {
+  Future<VideoClipInfo> probeMedia(String filePath) async {
+    if (_isPhotoPath(filePath)) {
+      return _probePhoto(filePath);
+    }
+    return _probeVideo(filePath);
+  }
+
+  Future<VideoClipInfo> _probeVideo(String filePath) async {
     final session = await FFprobeKit.getMediaInformation(filePath);
     final returnCode = await session.getReturnCode();
     final information = session.getMediaInformation();
@@ -50,7 +57,30 @@ class VideoExportService {
       width: stream?.getWidth() ?? 0,
       height: stream?.getHeight() ?? 0,
       hasAudio: _hasAudioStream(information),
+      mediaKind: MediaKind.video,
     );
+  }
+
+  Future<VideoClipInfo> _probePhoto(String filePath) async {
+    final bytes = await File(filePath).readAsBytes();
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+
+    try {
+      return VideoClipInfo(
+        path: filePath,
+        name: p.basenameWithoutExtension(filePath),
+        duration: Duration.zero,
+        width: image.width,
+        height: image.height,
+        hasAudio: false,
+        mediaKind: MediaKind.photo,
+      );
+    } finally {
+      image.dispose();
+      codec.dispose();
+    }
   }
 
   Future<void> exportCollage({
@@ -60,7 +90,7 @@ class VideoExportService {
     void Function(VideoExportProgress progress)? onProgress,
   }) async {
     if (slotClips.isEmpty) {
-      throw const VideoExportException('Please add at least one video.');
+      throw const VideoExportException('Please add at least one media item.');
     }
 
     final border = options.borderPx;
@@ -78,6 +108,7 @@ class VideoExportService {
       );
     }
 
+    final exportFormat = exportFormatForClips(slotClips);
     final targetDurationMs = math.max(
       1000,
       slotClips.fold<int>(
@@ -115,6 +146,16 @@ class VideoExportService {
 
     try {
       reportProgress(progress: 0, processedMs: 0);
+      if (exportFormat == ExportFormat.jpg) {
+        await _exportPhotoCollage(
+          slotClips: slotClips,
+          options: options,
+          outputPath: outputPath,
+        );
+        reportProgress(progress: 1, processedMs: targetDurationMs);
+        return;
+      }
+
       final labelOverlays = options.includeClipLabelsInOutput
           ? await _createClipLabelOverlays(
               slotClips: slotClips,
@@ -132,13 +173,13 @@ class VideoExportService {
       ];
 
       for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex++) {
-        final clipDurationMs = slotClips[inputIndex]
-            .clip
-            .duration
-            .inMilliseconds
-            .clamp(0, targetDurationMs);
+        final clip = slotClips[inputIndex].clip;
+        final clipDurationMs = clip.duration.inMilliseconds.clamp(
+          0,
+          targetDurationMs,
+        );
         final stopDurationMs = targetDurationMs - clipDurationMs;
-        final stopDurationFilter = stopDurationMs > 0
+        final stopDurationFilter = clip.isVideo && stopDurationMs > 0
             ? ',tpad=stop_mode=clone:stop_duration=${(stopDurationMs / 1000).toStringAsFixed(3)}'
             : '';
         final roundedCornerFilter = _roundedCornerFilter(
@@ -199,7 +240,19 @@ class VideoExportService {
 
       final arguments = <String>[
         '-y',
-        for (final entry in slotClips) ...<String>['-i', entry.clip.path],
+        for (final entry in slotClips)
+          ...entry.clip.isPhoto
+              ? <String>[
+                  '-loop',
+                  '1',
+                  '-framerate',
+                  '30',
+                  '-t',
+                  targetDurationSeconds,
+                  '-i',
+                  entry.clip.path,
+                ]
+              : <String>['-i', entry.clip.path],
         for (final overlay in labelOverlays) ...<String>[
           '-loop',
           '1',
@@ -264,6 +317,126 @@ class VideoExportService {
         );
       }
       reportProgress(progress: 1, processedMs: targetDurationMs);
+    } finally {
+      if (labelTempDirectory case final directory?) {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      }
+    }
+  }
+
+  Future<void> _exportPhotoCollage({
+    required List<CollageSlotClip> slotClips,
+    required ExportOptions options,
+    required String outputPath,
+  }) async {
+    final border = options.borderPx;
+    final cellWidth =
+        ((options.outputWidth - ((options.columns + 1) * border)) /
+                options.columns)
+            .floor();
+    final cellHeight =
+        ((options.outputHeight - ((options.rows + 1) * border)) / options.rows)
+            .floor();
+    Directory? labelTempDirectory;
+
+    try {
+      final labelOverlays = options.includeClipLabelsInOutput
+          ? await _createClipLabelOverlays(
+              slotClips: slotClips,
+              scaleFactor: options.scaleFactor,
+              baseFontSize: options.clipLabelFontSize,
+              showClipLabelIndex: options.showClipLabelIndex,
+              cellWidth: cellWidth,
+              tempDirectory: labelTempDirectory = await Directory.systemTemp
+                  .createTemp('photo_collage_labels_'),
+            )
+          : const <_ClipLabelOverlay>[];
+
+      final filters = <String>[
+        'color=c=${options.borderColor.ffmpegHex}:s=${options.outputWidth}x${options.outputHeight}:d=1[base]',
+      ];
+
+      for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex++) {
+        final roundedCornerFilter = _roundedCornerFilter(
+          cellWidth: cellWidth,
+          cellHeight: cellHeight,
+          radius: options.tileCornerRadiusPx,
+        );
+
+        filters.add(
+          '[$inputIndex:v]'
+          'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
+          'crop=$cellWidth:$cellHeight,'
+          'setsar=1'
+          '[clip$inputIndex]',
+        );
+
+        var decoratedClipName = 'clip$inputIndex';
+        if (options.includeClipLabelsInOutput) {
+          final labelInputIndex = slotClips.length + inputIndex;
+          final labelOverlay = labelOverlays[inputIndex];
+          final labeledClipName = 'labeled$inputIndex';
+          filters.add(
+            '[$decoratedClipName][$labelInputIndex:v]overlay='
+            'x=${labelOverlay.x}:y=${labelOverlay.y}:format=auto'
+            '[$labeledClipName]',
+          );
+          decoratedClipName = labeledClipName;
+        }
+
+        filters.add(
+          '[$decoratedClipName]${_filterChainFrom(roundedCornerFilter)}[v$inputIndex]',
+        );
+      }
+
+      for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex++) {
+        final slotIndex = slotClips[inputIndex].slotIndex;
+        final row = slotIndex ~/ options.columns;
+        final col = slotIndex % options.columns;
+        final x = border + col * (cellWidth + border);
+        final y = border + row * (cellHeight + border);
+        final source = inputIndex == 0 ? 'base' : 'stage${inputIndex - 1}';
+        final destination = inputIndex == slotClips.length - 1
+            ? 'merged'
+            : 'stage$inputIndex';
+        filters.add(
+          '[$source][v$inputIndex]overlay=x=$x:y=$y:eof_action=pass[$destination]',
+        );
+      }
+      filters.add('[merged]format=yuvj420p[outv]');
+
+      final arguments = <String>[
+        '-y',
+        for (final entry in slotClips) ...<String>['-i', entry.clip.path],
+        for (final overlay in labelOverlays) ...<String>[
+          '-loop',
+          '1',
+          '-i',
+          overlay.filePath,
+        ],
+        '-filter_complex',
+        filters.join(';'),
+        '-map',
+        '[outv]',
+        '-frames:v',
+        '1',
+        '-c:v',
+        'mjpeg',
+        '-q:v',
+        '2',
+        outputPath,
+      ];
+
+      final session = await FFmpegKit.executeWithArguments(arguments);
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode)) {
+        final output = await session.getOutput();
+        throw VideoExportException(
+          'ffmpeg export failed:\n${output ?? 'Unknown FFmpeg error'}',
+        );
+      }
     } finally {
       if (labelTempDirectory case final directory?) {
         if (await directory.exists()) {
@@ -396,6 +569,10 @@ class VideoExportService {
     return false;
   }
 
+  bool _isPhotoPath(String filePath) {
+    return _photoExtensions.contains(p.extension(filePath).toLowerCase());
+  }
+
   String? _buildAudioFilterGraph({
     required List<String> filters,
     required List<CollageSlotClip> slotClips,
@@ -503,6 +680,15 @@ class VideoExportService {
     return ",format=yuva420p,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='$alphaExpression'";
   }
 }
+
+const Set<String> _photoExtensions = <String>{
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.heic',
+  '.heif',
+};
 
 String _filterChainFrom(String filterChain) {
   return filterChain.startsWith(',') ? filterChain.substring(1) : filterChain;

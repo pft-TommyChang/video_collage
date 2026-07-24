@@ -33,6 +33,8 @@ class ColorChoice {
   final String ffmpegHex;
 }
 
+enum MediaKind { video, photo }
+
 enum AudioMode {
   firstClip,
   mixAll,
@@ -47,6 +49,21 @@ enum AudioMode {
   };
 }
 
+enum ExportFormat {
+  mp4,
+  jpg;
+
+  String get label => switch (this) {
+    ExportFormat.mp4 => 'MP4',
+    ExportFormat.jpg => 'JPG',
+  };
+
+  String get suggestedFileName => switch (this) {
+    ExportFormat.mp4 => 'perfect_collage_export.mp4',
+    ExportFormat.jpg => 'perfect_collage_export.jpg',
+  };
+}
+
 class VideoClipInfo {
   const VideoClipInfo({
     required this.path,
@@ -55,6 +72,7 @@ class VideoClipInfo {
     required this.width,
     required this.height,
     required this.hasAudio,
+    required this.mediaKind,
   });
 
   final String path;
@@ -63,6 +81,10 @@ class VideoClipInfo {
   final int width;
   final int height;
   final bool hasAudio;
+  final MediaKind mediaKind;
+
+  bool get isVideo => mediaKind == MediaKind.video;
+  bool get isPhoto => mediaKind == MediaKind.photo;
 
   VideoClipInfo copyWith({
     String? path,
@@ -71,6 +93,7 @@ class VideoClipInfo {
     int? width,
     int? height,
     bool? hasAudio,
+    MediaKind? mediaKind,
   }) {
     return VideoClipInfo(
       path: path ?? this.path,
@@ -79,6 +102,7 @@ class VideoClipInfo {
       width: width ?? this.width,
       height: height ?? this.height,
       hasAudio: hasAudio ?? this.hasAudio,
+      mediaKind: mediaKind ?? this.mediaKind,
     );
   }
 }
@@ -183,4 +207,12 @@ String buildClipLabelText({
     return clipName;
   }
   return '#${slotIndex + 1} $clipName';
+}
+
+ExportFormat exportFormatForClips(Iterable<CollageSlotClip> slotClips) {
+  final clips = slotClips.toList(growable: false);
+  if (clips.isNotEmpty && clips.every((entry) => entry.clip.isPhoto)) {
+    return ExportFormat.jpg;
+  }
+  return ExportFormat.mp4;
 }

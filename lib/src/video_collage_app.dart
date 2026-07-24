@@ -44,6 +44,15 @@ const _supportedVideoExtensions = <String>{
   '.mkv',
 };
 
+const _supportedPhotoExtensions = <String>{
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.heic',
+  '.heif',
+};
+
 class VideoCollageApp extends StatelessWidget {
   const VideoCollageApp({super.key});
 
@@ -245,14 +254,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     return p.basenameWithoutExtension(path);
   }
 
-  Future<void> _pickVideos() async {
+  Future<void> _pickMedia() async {
     setState(() {
       _isImporting = true;
-      _statusMessage = 'Selecting videos...';
+      _statusMessage = 'Selecting media...';
     });
 
     try {
-      final paths = await _dialogService.pickVideos();
+      final paths = await _dialogService.pickMedia();
       final newPaths = paths
           .where((path) => !_clips.any((clip) => clip.path == path))
           .toList();
@@ -265,7 +274,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
             _clipErrors.remove(path);
             _slotAssignments[_nextAvailableSlot()] = path;
           }
-          _statusMessage = 'Queued ${newPaths.length} video(s) for import.';
+          _statusMessage = 'Queued ${newPaths.length} media item(s) for import.';
         });
       }
 
@@ -279,10 +288,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
       setState(() {
         _statusMessage = paths.isEmpty
-            ? 'No video was selected.'
+            ? 'No media was selected.'
             : newPaths.isEmpty
-            ? 'Selected videos were already added.'
-            : 'Added ${newPaths.length} video(s). Initializing previews...';
+            ? 'Selected media was already added.'
+            : 'Added ${newPaths.length} media item(s). Initializing previews...';
       });
     } on PlatformException catch (error) {
       if (!mounted) {
@@ -303,7 +312,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         return;
       }
       setState(() {
-        _statusMessage = 'Unable to load videos: $error';
+        _statusMessage = 'Unable to load media: $error';
       });
     } finally {
       if (mounted) {
@@ -321,6 +330,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _slotAssignments.removeWhere((_, path) => path == clip.path);
       _loadingClipPaths.remove(clip.path);
       _clipErrors.remove(clip.path);
+      if (_controllers.isEmpty) {
+        _isPreviewPlaying = false;
+      }
       _statusMessage = 'Removed ${clip.name}.';
     });
   }
@@ -335,7 +347,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _slotAssignments.clear();
       _loadingClipPaths.clear();
       _clipErrors.clear();
-      _statusMessage = 'Cleared all videos.';
+      _isPreviewPlaying = false;
+      _statusMessage = 'Cleared all media.';
     });
   }
 
@@ -421,12 +434,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   Future<void> _export() async {
     if (_clips.isEmpty) {
       setState(() {
-        _statusMessage = 'Add videos before exporting.';
+        _statusMessage = 'Add media before exporting.';
       });
       return;
     }
 
     final options = _options;
+    final slotClips = _slotClipsForExport();
+    final exportFormat = exportFormatForClips(slotClips);
     if (options.outputWidth <= 0 || options.outputHeight <= 0) {
       setState(() {
         _statusMessage = 'Resolution must be greater than zero.';
@@ -434,7 +449,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       return;
     }
 
-    final savePath = await _dialogService.pickSavePath();
+    final savePath = await _dialogService.pickSavePath(format: exportFormat);
     if (savePath == null || savePath.isEmpty) {
       if (!mounted) {
         return;
@@ -448,12 +463,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     setState(() {
       _isExporting = true;
       _exportProgress = 0;
-      _statusMessage = 'Exporting collage video...';
+      _statusMessage = exportFormat == ExportFormat.jpg
+          ? 'Exporting collage image...'
+          : 'Exporting collage video...';
     });
 
     try {
       await _exportService.exportCollage(
-        slotClips: _slotClipsForExport(),
+        slotClips: slotClips,
         options: options,
         outputPath: savePath,
         onProgress: (progress) {
@@ -467,7 +484,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
           setState(() {
             _exportProgress = progress.progress;
             _statusMessage =
-                'Exporting collage video... $percent% • ${formatDuration(progress.processed)} / ${formatDuration(progress.total)}$speedText';
+                exportFormat == ExportFormat.jpg
+                ? 'Exporting collage image... $percent%'
+                : 'Exporting collage video... $percent% • ${formatDuration(progress.processed)} / ${formatDuration(progress.total)}$speedText';
           });
         },
       );
@@ -510,6 +529,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final scaledTileCornerRadius = options.scaledTileCornerRadius;
     final overlayLabelScale = options.scaleFactor * 1.2;
     final activeCount = slotClips.length;
+    final exportFormat = exportFormatForClips(slotClips);
+    final hasPreviewMotion = slotClips.any((entry) => entry.clip.isVideo);
     final exportDuration = slotClips.fold<Duration>(
       Duration.zero,
       (current, entry) =>
@@ -560,14 +581,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     FilledButton.icon(
                                       onPressed: _isImporting
                                           ? null
-                                          : _pickVideos,
+                                          : _pickMedia,
                                       icon: const Icon(
                                         Icons.video_library_outlined,
                                       ),
                                       label: Text(
                                         _isImporting
                                             ? 'Loading...'
-                                            : 'Add Videos',
+                                            : 'Add Media',
                                       ),
                                     ),
                                     const Spacer(),
@@ -842,17 +863,20 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                             Center(
                               child: SizedBox(
                                 width: 240,
-                                child: _ExportButton(
+                              child: _ExportButton(
                                   onPressed: _isExporting ? null : _export,
                                   isExporting: _isExporting,
                                   progress: _exportProgress,
+                                  exportFormat: exportFormat,
                                 ),
                               ),
                             ),
                             const SizedBox(height: 12),
                             Center(
                               child: Text(
-                                'Output: ${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • ${formatDuration(exportDuration)}',
+                                exportFormat == ExportFormat.jpg
+                                    ? 'Output: ${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • ${exportFormat.label}'
+                                    : 'Output: ${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • ${formatDuration(exportDuration)} • ${exportFormat.label}',
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
@@ -886,18 +910,20 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                         Row(
                           children: <Widget>[
                             IconButton.filledTonal(
-                              onPressed: _controllers.isEmpty
+                              onPressed: !hasPreviewMotion
                                   ? null
                                   : () {
                                       unawaited(
                                         _setPreviewPlayback(!_isPreviewPlaying),
                                       );
                                     },
-                              tooltip: _isPreviewPlaying
+                              tooltip: !hasPreviewMotion
+                                  ? 'Preview playback unavailable for photos only'
+                                  : _isPreviewPlaying
                                   ? 'Pause preview'
                                   : 'Play preview',
                               icon: Icon(
-                                _isPreviewPlaying
+                                hasPreviewMotion && _isPreviewPlaying
                                     ? Icons.pause_rounded
                                     : Icons.play_arrow_rounded,
                               ),
@@ -923,7 +949,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 ),
                               ),
                               child: Text(
-                                '${_clips.length} videos • $activeCount active in preview',
+                                '${_clips.length} media • $activeCount active in preview',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                             ),
@@ -1027,8 +1053,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                 errorMessage: clip == null
                                                     ? null
                                                     : _clipErrors[clip.path],
-                                                onPickVideo: clip == null
-                                                    ? () => _pickVideoForSlot(
+                                                onPickMedia: clip == null
+                                                    ? () => _pickMediaForSlot(
                                                         index,
                                                       )
                                                     : null,
@@ -1286,7 +1312,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     int slotIndex,
     List<DropItem> items,
   ) async {
-    final item = _firstSupportedVideoDropItem(items);
+    final item = _firstSupportedMediaDropItem(items);
     if (item == null) {
       return;
     }
@@ -1334,12 +1360,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     await _loadClip(path);
   }
 
-  DropItem? _firstSupportedVideoDropItem(List<DropItem> items) {
+  DropItem? _firstSupportedMediaDropItem(List<DropItem> items) {
     for (final item in items) {
       if (item is DropItemDirectory) {
         continue;
       }
-      if (_isSupportedVideoPath(item.path)) {
+      if (_isSupportedMediaPath(item.path)) {
         return item;
       }
     }
@@ -1350,14 +1376,22 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     return _supportedVideoExtensions.contains(p.extension(path).toLowerCase());
   }
 
-  Future<void> _pickVideoForSlot(int slotIndex) async {
-    final path = await _dialogService.pickSingleVideo();
+  bool _isSupportedPhotoPath(String path) {
+    return _supportedPhotoExtensions.contains(p.extension(path).toLowerCase());
+  }
+
+  bool _isSupportedMediaPath(String path) {
+    return _isSupportedVideoPath(path) || _isSupportedPhotoPath(path);
+  }
+
+  Future<void> _pickMediaForSlot(int slotIndex) async {
+    final path = await _dialogService.pickSingleMedia();
     if (path == null || path.isEmpty) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _statusMessage = 'No video was selected.';
+        _statusMessage = 'No media was selected.';
       });
       return;
     }
@@ -1367,7 +1401,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         return;
       }
       setState(() {
-        _statusMessage = 'Selected video was already added.';
+        _statusMessage = 'Selected media was already added.';
       });
       return;
     }
@@ -1381,7 +1415,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _slotAssignments[slotIndex] = path;
       _loadingClipPaths.add(path);
       _clipErrors.remove(path);
-      _statusMessage = 'Queued 1 video for slot ${slotIndex + 1}.';
+      _statusMessage = 'Queued 1 media item for slot ${slotIndex + 1}.';
     });
 
     unawaited(_loadClip(path));
@@ -1424,10 +1458,45 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       width: 0,
       height: 0,
       hasAudio: false,
+      mediaKind: _isSupportedPhotoPath(path) ? MediaKind.photo : MediaKind.video,
     );
   }
 
   Future<void> _loadClip(String path) async {
+    if (_isSupportedPhotoPath(path)) {
+      try {
+        final clip = await _exportService.probeMedia(path);
+        if (!mounted) {
+          return;
+        }
+
+        _controllers.remove(path)?.dispose();
+        setState(() {
+          _loadingClipPaths.remove(path);
+          _clipErrors.remove(path);
+          final index = _clips.indexWhere((clip) => clip.path == path);
+          if (index >= 0) {
+            _clips[index] = clip.copyWith(name: _clips[index].name);
+            _statusMessage = 'Loaded ${_clips[index].name}.';
+          } else {
+            _clips.add(clip);
+            _statusMessage = 'Loaded ${clip.name}.';
+          }
+        });
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _loadingClipPaths.remove(path);
+          _clipErrors[path] = '$error';
+          _statusMessage =
+              'Preview failed for ${path.split(Platform.pathSeparator).last}.';
+        });
+      }
+      return;
+    }
+
     VideoPlayerController? controller;
     try {
       controller = VideoPlayerController.file(File(path));
@@ -1442,7 +1511,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
       VideoClipInfo clip;
       try {
-        clip = await _exportService.probeClip(path);
+        clip = await _exportService.probeMedia(path);
       } catch (_) {
         final value = controller.value;
         clip = VideoClipInfo(
@@ -1452,6 +1521,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
           width: value.size.width.round(),
           height: value.size.height.round(),
           hasAudio: false,
+          mediaKind: MediaKind.video,
         );
       }
 
@@ -1564,11 +1634,13 @@ class _ExportButton extends StatelessWidget {
     required this.onPressed,
     required this.isExporting,
     required this.progress,
+    required this.exportFormat,
   });
 
   final VoidCallback? onPressed;
   final bool isExporting;
   final double progress;
+  final ExportFormat exportFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -1616,7 +1688,9 @@ class _ExportButton extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        isExporting ? 'Exporting... $percent%' : 'Export MP4',
+                        isExporting
+                            ? 'Exporting... $percent%'
+                            : 'Export ${exportFormat.label}',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               color: foregroundColor,
@@ -1760,7 +1834,11 @@ class _ClipListTile extends StatelessWidget {
               ),
               alignment: Alignment.center,
               child: Icon(
-                isUsed ? Icons.grid_view_rounded : Icons.pause_presentation,
+                isUsed
+                    ? Icons.grid_view_rounded
+                    : clip.isPhoto
+                    ? Icons.photo_outlined
+                    : Icons.movie_creation_outlined,
                 color: Colors.white,
               ),
             ),
@@ -1819,7 +1897,10 @@ class _ClipListTile extends StatelessWidget {
       return 'Preview unavailable • export still possible';
     }
     if (clip.width == 0 || clip.height == 0) {
-      return formatDuration(clip.duration);
+      return clip.isPhoto ? 'Photo' : formatDuration(clip.duration);
+    }
+    if (clip.isPhoto) {
+      return '${clip.width}×${clip.height} • Photo';
     }
     return '${clip.width}×${clip.height} • ${formatDuration(clip.duration)}';
   }
@@ -1834,7 +1915,7 @@ class _PreviewTile extends StatelessWidget {
     required this.cornerRadius,
     required this.isLoading,
     required this.errorMessage,
-    required this.onPickVideo,
+    required this.onPickMedia,
     required this.index,
     required this.backgroundColor,
     required this.dragData,
@@ -1851,7 +1932,7 @@ class _PreviewTile extends StatelessWidget {
   final double cornerRadius;
   final bool isLoading;
   final String? errorMessage;
-  final VoidCallback? onPickVideo;
+  final VoidCallback? onPickMedia;
   final int index;
   final Color backgroundColor;
   final int? dragData;
@@ -1877,7 +1958,7 @@ class _PreviewTile extends StatelessWidget {
       cornerRadius: cornerRadius,
       isLoading: isLoading,
       errorMessage: errorMessage,
-      onTap: onPickVideo,
+      onTap: onPickMedia,
       label: label,
       backgroundColor: backgroundColor,
       onLabelTap: onEditLabel,
@@ -2005,6 +2086,22 @@ class _PreviewTileBody extends StatelessWidget {
                         child: VideoPlayer(controller!),
                       ),
                     )
+                  else if (clip?.isPhoto == true)
+                    Positioned.fill(
+                      child: Image.file(
+                        File(clip!.path),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Center(
+                            child: Icon(
+                              Icons.warning_amber_rounded,
+                              size: 34,
+                              color: Colors.black.withValues(alpha: 0.28),
+                            ),
+                          );
+                        },
+                      ),
+                    )
                   else if (isLoading)
                     const Center(
                       child: SizedBox(
@@ -2022,7 +2119,9 @@ class _PreviewTileBody extends StatelessWidget {
                             clip == null
                                 ? Icons.add
                                 : errorMessage == null
-                                ? Icons.movie_creation_outlined
+                                ? clip!.isPhoto
+                                    ? Icons.photo_outlined
+                                    : Icons.movie_creation_outlined
                                 : Icons.warning_amber_rounded,
                             size: clip == null ? 68 : 34,
                             color: Colors.black.withValues(alpha: 0.28),
@@ -2357,7 +2456,7 @@ class _EmptyListState extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE7DED1)),
       ),
       child: Text(
-        'Import .mp4, .mov, .m4v, .avi, or .mkv clips. The app supports more videos than the visible grid and exports the first rows×columns clips in order.',
+        'Import videos or photos to start your collage.',
         style: Theme.of(
           context,
         ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF697180)),
