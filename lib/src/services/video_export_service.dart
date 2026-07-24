@@ -85,6 +85,12 @@ class VideoExportService {
     ];
 
     for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex++) {
+      final clipDurationMs =
+          slotClips[inputIndex].clip.duration.inMilliseconds.clamp(0, targetDurationMs);
+      final stopDurationMs = targetDurationMs - clipDurationMs;
+      final stopDurationFilter = stopDurationMs > 0
+          ? ',tpad=stop_mode=clone:stop_duration=${(stopDurationMs / 1000).toStringAsFixed(3)}'
+          : '';
       final roundedCornerFilter = _roundedCornerFilter(
         cellWidth: cellWidth,
         cellHeight: cellHeight,
@@ -95,6 +101,7 @@ class VideoExportService {
         'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
         'crop=$cellWidth:$cellHeight,'
         'setsar=1'
+        '$stopDurationFilter'
         '$roundedCornerFilter'
         '[v$inputIndex]',
       );
@@ -119,8 +126,6 @@ class VideoExportService {
     final arguments = <String>[
       '-y',
       for (final entry in slotClips) ...<String>[
-        '-stream_loop',
-        '-1',
         '-i',
         entry.clip.path,
       ],

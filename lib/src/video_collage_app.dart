@@ -612,15 +612,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                         ],
                       ),
                     ),
-                    if (_statusMessage != null) ...<Widget>[
-                      const SizedBox(height: 16),
-                      Text(
-                        _statusMessage!,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF364152),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -733,6 +724,28 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 ),
                               ),
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.64),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0xFFD8D0C4),
+                            ),
+                          ),
+                          child: Text(
+                            _statusMessage ?? 'Ready',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: const Color(0xFF364152)),
                           ),
                         ),
                       ],
