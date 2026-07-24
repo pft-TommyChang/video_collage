@@ -976,6 +976,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                       ),
                                       child: _ClipListTile(
                                         clip: clip,
+                                        controller: _controllers[clip.path],
                                         isUsed: _isClipVisibleInGrid(clip.path),
                                         isLoading: _loadingClipPaths.contains(
                                           clip.path,
@@ -2429,6 +2430,7 @@ class _SectionCard extends StatelessWidget {
 class _ClipListTile extends StatelessWidget {
   const _ClipListTile({
     required this.clip,
+    required this.controller,
     required this.isUsed,
     required this.isLoading,
     required this.errorMessage,
@@ -2436,6 +2438,7 @@ class _ClipListTile extends StatelessWidget {
   });
 
   final VideoClipInfo clip;
+  final VideoPlayerController? controller;
   final bool isUsed;
   final bool isLoading;
   final String? errorMessage;
@@ -2454,25 +2457,7 @@ class _ClipListTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: isUsed
-                    ? const Color(0xFFFF7A59)
-                    : const Color(0xFFCCD4DD),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                isUsed
-                    ? Icons.grid_view_rounded
-                    : clip.isPhoto
-                    ? Icons.photo_outlined
-                    : Icons.movie_creation_outlined,
-                color: Colors.white,
-              ),
-            ),
+            _buildThumbnail(),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -2515,6 +2500,102 @@ class _ClipListTile extends StatelessWidget {
               icon: const Icon(Icons.close),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThumbnail() {
+    const borderRadius = BorderRadius.all(Radius.circular(14));
+    const activeBorderColor = Color(0xFFFF7A59);
+    const inactiveBorderColor = Color(0xFFD6DCE4);
+
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: borderRadius,
+        border: Border.all(
+          color: isUsed ? activeBorderColor : inactiveBorderColor,
+          width: isUsed ? 2 : 1.25,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(13),
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            if (controller != null && controller!.value.isInitialized)
+              FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: controller!.value.size.width,
+                  height: controller!.value.size.height,
+                  child: VideoPlayer(controller!),
+                ),
+              )
+            else if (!isLoading && errorMessage == null && clip.isPhoto)
+              Image.file(
+                File(clip.path),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildThumbnailFallback();
+                },
+              )
+            else if (isLoading)
+              const Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              )
+            else
+              _buildThumbnailFallback(),
+            Positioned(
+              right: 4,
+              bottom: 4,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: isUsed
+                      ? const Color(0xFFA0563D)
+                      : Colors.black.withValues(alpha: 0.62),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 2,
+                  ),
+                  child: Icon(
+                    isUsed ? Icons.visibility_rounded : Icons.crop_square_rounded,
+                    size: 11,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThumbnailFallback() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: isUsed ? const Color(0xFFFFF1EC) : const Color(0xFFF4F6F8),
+      ),
+      child: Center(
+        child: Icon(
+          errorMessage != null
+              ? Icons.warning_amber_rounded
+              : clip.isPhoto
+              ? Icons.photo_outlined
+              : Icons.movie_creation_outlined,
+          size: 24,
+          color: isUsed ? const Color(0xFFA0563D) : const Color(0xFF8C98A8),
         ),
       ),
     );
