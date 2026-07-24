@@ -55,7 +55,7 @@ class VideoCollageApp extends StatelessWidget {
     );
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Perfect Video Collage',
+      title: 'Perfect Collage',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: scheme,
@@ -543,7 +543,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                         padding: const EdgeInsets.all(20),
                         children: <Widget>[
                           Text(
-                            'Perfect Video Collage',
+                            'Perfect Collage',
                             style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),

@@ -15,7 +15,7 @@ class MainFlutterWindow: NSWindow, NSWindowDelegate {
     self.setContentSize(restoredContentSize())
 
     RegisterGeneratedPlugins(registry: flutterViewController)
-    self.title = "Perfect Video Collage"
+    self.title = "Perfect Collage"
 
     super.awakeFromNib()
   }
