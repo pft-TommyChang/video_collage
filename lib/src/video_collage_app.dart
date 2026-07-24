@@ -104,6 +104,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   int _columns = 2;
   double _borderThickness = 12;
   double _tileCornerRadius = 12;
+  bool _includeClipLabelsInOutput = false;
   bool _isImporting = false;
   bool _isExporting = false;
   bool _isPreviewPlaying = false;
@@ -143,6 +144,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       tileCornerRadius: _tileCornerRadius,
       backgroundColor: _selectedBackgroundColor,
       borderColor: _selectedBorderColor,
+      includeClipLabelsInOutput: _includeClipLabelsInOutput,
     );
   }
 
@@ -162,6 +164,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _tileCornerRadius = savedSettings.tileCornerRadius
           .clamp(0, 48)
           .toDouble();
+      _includeClipLabelsInOutput = savedSettings.includeClipLabelsInOutput;
       _selectedAspect = _aspectPresets.firstWhere(
         (preset) => preset.label == savedSettings.aspectLabel,
         orElse: () => _selectedAspect,
@@ -204,6 +207,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         columns: _columns,
         borderThickness: _borderThickness,
         tileCornerRadius: _tileCornerRadius,
+        includeClipLabelsInOutput: _includeClipLabelsInOutput,
         outputWidth: width,
         outputHeight: height,
         aspectLabel: _selectedAspect.label,
@@ -416,6 +420,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   Widget build(BuildContext context) {
     final options = _options;
     final slotClips = _slotClipsForExport();
+    final scaledBorderThickness = options.scaledBorderThickness;
+    final scaledTileCornerRadius = options.scaledTileCornerRadius;
+    final overlayLabelScale = options.scaleFactor * 1.2;
     final activeCount = slotClips.length;
     final exportDuration = slotClips.fold<Duration>(
       Duration.zero,
@@ -589,6 +596,16 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   onChanged: (value) {
                                     _setStateAndSave(() {
                                       _tileCornerRadius = value;
+                                    });
+                                  },
+                                ),
+                                SwitchListTile.adaptive(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('Include clip labels'),
+                                  value: _includeClipLabelsInOutput,
+                                  onChanged: (value) {
+                                    _setStateAndSave(() {
+                                      _includeClipLabelsInOutput = value;
                                     });
                                   },
                                 ),
@@ -781,9 +798,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   ? null
                                   : () {
                                       unawaited(
-                                        _setPreviewPlayback(
-                                          !_isPreviewPlaying,
-                                        ),
+                                        _setPreviewPlayback(!_isPreviewPlaying),
                                       );
                                     },
                               tooltip: _isPreviewPlaying
@@ -842,7 +857,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     ],
                                   ),
                                   child: Padding(
-                                    padding: EdgeInsets.all(_borderThickness),
+                                    padding: EdgeInsets.all(
+                                      scaledBorderThickness,
+                                    ),
                                     child: GridView.builder(
                                       physics:
                                           const NeverScrollableScrollPhysics(),
@@ -850,8 +867,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                       gridDelegate:
                                           SliverGridDelegateWithFixedCrossAxisCount(
                                             crossAxisCount: _columns,
-                                            crossAxisSpacing: _borderThickness,
-                                            mainAxisSpacing: _borderThickness,
+                                            crossAxisSpacing:
+                                                scaledBorderThickness,
+                                            mainAxisSpacing:
+                                                scaledBorderThickness,
                                             childAspectRatio:
                                                 previewCellAspectRatio,
                                           ),
@@ -906,7 +925,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                 controller: clip == null
                                                     ? null
                                                     : _controllers[clip.path],
-                                                cornerRadius: _tileCornerRadius,
+                                                cornerRadius:
+                                                    scaledTileCornerRadius,
                                                 isLoading:
                                                     clip != null &&
                                                     _loadingClipPaths.contains(
@@ -931,6 +951,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                     candidateData.isNotEmpty ||
                                                     _externalDropHoverSlotIndex ==
                                                         index,
+                                                overlayLabelScale:
+                                                    overlayLabelScale,
                                               ),
                                             );
                                           },
@@ -1031,7 +1053,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   double _previewCellAspectRatio(ExportOptions options) {
-    final border = options.borderThickness;
+    final border = options.scaledBorderThickness;
     final cellWidth =
         ((options.outputWidth - ((options.columns + 1) * border)) /
                 options.columns)
@@ -1451,6 +1473,7 @@ class _PreviewTile extends StatelessWidget {
     required this.backgroundColor,
     required this.dragData,
     required this.isDragTarget,
+    required this.overlayLabelScale,
   });
 
   final VideoClipInfo? clip;
@@ -1463,6 +1486,7 @@ class _PreviewTile extends StatelessWidget {
   final Color backgroundColor;
   final int? dragData;
   final bool isDragTarget;
+  final double overlayLabelScale;
 
   @override
   Widget build(BuildContext context) {
@@ -1477,6 +1501,7 @@ class _PreviewTile extends StatelessWidget {
       label: label,
       backgroundColor: backgroundColor,
       isDragTarget: isDragTarget,
+      overlayLabelScale: overlayLabelScale,
     );
 
     if (dragData == null) {
@@ -1513,6 +1538,7 @@ class _PreviewTile extends StatelessWidget {
               label: label,
               backgroundColor: backgroundColor,
               isDragTarget: false,
+              overlayLabelScale: overlayLabelScale,
             ),
           ),
         ),
@@ -1534,6 +1560,7 @@ class _PreviewTileBody extends StatelessWidget {
     required this.label,
     required this.backgroundColor,
     required this.isDragTarget,
+    required this.overlayLabelScale,
   });
 
   final VideoClipInfo? clip;
@@ -1545,9 +1572,12 @@ class _PreviewTileBody extends StatelessWidget {
   final String? label;
   final Color backgroundColor;
   final bool isDragTarget;
+  final double overlayLabelScale;
 
   @override
   Widget build(BuildContext context) {
+    final labelStyle = clipLabelStyleForOverlayScale(overlayLabelScale);
+
     return AnimatedScale(
       duration: const Duration(milliseconds: 140),
       scale: isDragTarget ? 1.02 : 1,
@@ -1646,10 +1676,10 @@ class _PreviewTileBody extends StatelessWidget {
                     Align(
                       alignment: Alignment.topLeft,
                       child: Container(
-                        margin: const EdgeInsets.all(10),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
+                        margin: EdgeInsets.all(labelStyle.margin),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: labelStyle.horizontalPadding,
+                          vertical: labelStyle.verticalPadding,
                         ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.48),
@@ -1659,9 +1689,9 @@ class _PreviewTileBody extends StatelessWidget {
                           label!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 12,
+                            fontSize: labelStyle.fontSize,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -1696,7 +1726,7 @@ class _ColorSelector extends StatelessWidget {
         Text('$label color', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 10),
         DropdownButtonFormField<ColorChoice>(
-          value: selected,
+          initialValue: selected,
           isExpanded: true,
           decoration: InputDecoration(
             filled: true,
@@ -1715,10 +1745,7 @@ class _ColorSelector extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(
-                color: Color(0xFF171A21),
-                width: 2,
-              ),
+              borderSide: const BorderSide(color: Color(0xFF171A21), width: 2),
             ),
           ),
           icon: const Icon(Icons.keyboard_arrow_down_rounded),

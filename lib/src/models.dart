@@ -50,6 +50,8 @@ class VideoClipInfo {
 }
 
 class ExportOptions {
+  static const double _referenceShortEdge = 720;
+
   const ExportOptions({
     required this.rows,
     required this.columns,
@@ -59,6 +61,7 @@ class ExportOptions {
     required this.tileCornerRadius,
     required this.backgroundColor,
     required this.borderColor,
+    required this.includeClipLabelsInOutput,
   });
 
   final int rows;
@@ -69,9 +72,44 @@ class ExportOptions {
   final double tileCornerRadius;
   final ColorChoice backgroundColor;
   final ColorChoice borderColor;
+  final bool includeClipLabelsInOutput;
 
   double get aspectRatio => outputWidth / outputHeight;
-  int get borderPx => borderThickness.round();
+  double get shortEdge => outputWidth < outputHeight
+      ? outputWidth.toDouble()
+      : outputHeight.toDouble();
+  double get scaleFactor => shortEdge / _referenceShortEdge;
+  double get scaledBorderThickness => borderThickness * scaleFactor;
+  double get scaledTileCornerRadius => tileCornerRadius * scaleFactor;
+  int get borderPx => scaledBorderThickness.round();
+  int get tileCornerRadiusPx => scaledTileCornerRadius.round();
+}
+
+class ClipLabelStyle {
+  const ClipLabelStyle({
+    required this.margin,
+    required this.horizontalPadding,
+    required this.verticalPadding,
+    required this.fontSize,
+  });
+
+  final double margin;
+  final double horizontalPadding;
+  final double verticalPadding;
+  final double fontSize;
+}
+
+double overlayLabelScaleForExportScale(double scaleFactor) {
+  return scaleFactor * 1.2;
+}
+
+ClipLabelStyle clipLabelStyleForOverlayScale(double overlayLabelScale) {
+  return ClipLabelStyle(
+    margin: 8 * overlayLabelScale,
+    horizontalPadding: 8 * overlayLabelScale,
+    verticalPadding: 4 * overlayLabelScale,
+    fontSize: 12 * overlayLabelScale,
+  );
 }
 
 class CollageSlotClip {

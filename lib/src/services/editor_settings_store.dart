@@ -9,6 +9,7 @@ class PersistedEditorSettings {
     required this.columns,
     required this.borderThickness,
     required this.tileCornerRadius,
+    required this.includeClipLabelsInOutput,
     required this.outputWidth,
     required this.outputHeight,
     required this.aspectLabel,
@@ -21,6 +22,7 @@ class PersistedEditorSettings {
   final int columns;
   final double borderThickness;
   final double tileCornerRadius;
+  final bool includeClipLabelsInOutput;
   final int outputWidth;
   final int outputHeight;
   final String aspectLabel;
@@ -34,6 +36,7 @@ class PersistedEditorSettings {
       'columns': columns,
       'borderThickness': borderThickness,
       'tileCornerRadius': tileCornerRadius,
+      'includeClipLabelsInOutput': includeClipLabelsInOutput,
       'outputWidth': outputWidth,
       'outputHeight': outputHeight,
       'aspectLabel': aspectLabel,
@@ -49,6 +52,8 @@ class PersistedEditorSettings {
       columns: (json['columns'] as num?)?.toInt() ?? 2,
       borderThickness: (json['borderThickness'] as num?)?.toDouble() ?? 12,
       tileCornerRadius: (json['tileCornerRadius'] as num?)?.toDouble() ?? 12,
+      includeClipLabelsInOutput:
+          json['includeClipLabelsInOutput'] as bool? ?? false,
       outputWidth: (json['outputWidth'] as num?)?.toInt() ?? 1920,
       outputHeight: (json['outputHeight'] as num?)?.toInt() ?? 1080,
       aspectLabel: json['aspectLabel'] as String? ?? '16:9',
@@ -81,7 +86,7 @@ class EditorSettingsStore {
         return null;
       }
       return PersistedEditorSettings.fromJson(
-        Map<String, dynamic>.from(decoded as Map),
+        Map<String, dynamic>.from(decoded),
       );
     } catch (_) {
       return null;
