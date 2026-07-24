@@ -104,6 +104,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   int _columns = 2;
   double _borderThickness = 12;
   double _tileCornerRadius = 12;
+  double _clipLabelFontSize = 12;
   bool _includeClipLabelsInOutput = false;
   bool _isImporting = false;
   bool _isExporting = false;
@@ -146,6 +147,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       backgroundColor: _selectedBackgroundColor,
       borderColor: _selectedBorderColor,
       includeClipLabelsInOutput: _includeClipLabelsInOutput,
+      clipLabelFontSize: _clipLabelFontSize,
     );
   }
 
@@ -164,6 +166,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _borderThickness = savedSettings.borderThickness.clamp(0, 48).toDouble();
       _tileCornerRadius = savedSettings.tileCornerRadius
           .clamp(0, 48)
+          .toDouble();
+      _clipLabelFontSize = savedSettings.clipLabelFontSize
+          .clamp(8, 24)
           .toDouble();
       _includeClipLabelsInOutput = savedSettings.includeClipLabelsInOutput;
       _selectedAspect = _aspectPresets.firstWhere(
@@ -208,6 +213,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         columns: _columns,
         borderThickness: _borderThickness,
         tileCornerRadius: _tileCornerRadius,
+        clipLabelFontSize: _clipLabelFontSize,
         includeClipLabelsInOutput: _includeClipLabelsInOutput,
         outputWidth: width,
         outputHeight: height,
@@ -565,9 +571,20 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           const SizedBox(height: 16),
                           _SectionCard(
                             title: 'Layout',
-                            subtitle: 'Rows, columns, and border spacing',
+                            subtitle:
+                                'Aspect ratio, rows, columns, and styling',
                             child: Column(
                               children: <Widget>[
+                                _SelectionDropdown<AspectRatioPreset>(
+                                  label: 'Aspect ratio',
+                                  selected: _selectedAspect,
+                                  options: _aspectPresets,
+                                  itemLabel: (preset) => preset.label,
+                                  itemBuilder: (preset) =>
+                                      _AspectRatioDropdownItem(preset: preset),
+                                  onSelected: _applyAspectPreset,
+                                ),
+                                const SizedBox(height: 16),
                                 _StepperRow(
                                   label: 'Rows',
                                   value: _rows,
@@ -621,6 +638,26 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     });
                                   },
                                 ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: <Widget>[
+                                    const Expanded(
+                                      child: Text('Clip label font size'),
+                                    ),
+                                    Text('${_clipLabelFontSize.round()} px'),
+                                  ],
+                                ),
+                                Slider(
+                                  value: _clipLabelFontSize,
+                                  min: 8,
+                                  max: 24,
+                                  divisions: 16,
+                                  onChanged: (value) {
+                                    _setStateAndSave(() {
+                                      _clipLabelFontSize = value;
+                                    });
+                                  },
+                                ),
                                 const SizedBox(height: 6),
                                 _ColorSelector(
                                   label: 'Border',
@@ -658,20 +695,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           const SizedBox(height: 16),
                           _SectionCard(
                             title: 'Output',
-                            subtitle: 'Aspect ratio and render size',
+                            subtitle: 'Resolution and render size',
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                _SelectionDropdown<AspectRatioPreset>(
-                                  label: 'Aspect ratio',
-                                  selected: _selectedAspect,
-                                  options: _aspectPresets,
-                                  itemLabel: (preset) => preset.label,
-                                  itemBuilder: (preset) =>
-                                      _AspectRatioDropdownItem(preset: preset),
-                                  onSelected: _applyAspectPreset,
-                                ),
-                                const SizedBox(height: 16),
                                 _SelectionDropdown<ResolutionPreset>(
                                   label: 'Resolution',
                                   selected: _selectedResolution,
@@ -939,6 +966,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                     : () => unawaited(
                                                         _editClipTitle(clip),
                                                       ),
+                                                clipLabelFontSize:
+                                                    _clipLabelFontSize,
                                                 isDragTarget:
                                                     candidateData.isNotEmpty ||
                                                     _externalDropHoverSlotIndex ==
@@ -1602,6 +1631,7 @@ class _PreviewTile extends StatelessWidget {
     required this.dragData,
     required this.showLabel,
     required this.onEditLabel,
+    required this.clipLabelFontSize,
     required this.isDragTarget,
     required this.overlayLabelScale,
   });
@@ -1617,6 +1647,7 @@ class _PreviewTile extends StatelessWidget {
   final int? dragData;
   final bool showLabel;
   final VoidCallback? onEditLabel;
+  final double clipLabelFontSize;
   final bool isDragTarget;
   final double overlayLabelScale;
 
@@ -1635,6 +1666,7 @@ class _PreviewTile extends StatelessWidget {
       label: label,
       backgroundColor: backgroundColor,
       onLabelTap: onEditLabel,
+      clipLabelFontSize: clipLabelFontSize,
       isDragTarget: isDragTarget,
       overlayLabelScale: overlayLabelScale,
     );
@@ -1673,6 +1705,7 @@ class _PreviewTile extends StatelessWidget {
               label: label,
               backgroundColor: backgroundColor,
               onLabelTap: null,
+              clipLabelFontSize: clipLabelFontSize,
               isDragTarget: false,
               overlayLabelScale: overlayLabelScale,
             ),
@@ -1696,6 +1729,7 @@ class _PreviewTileBody extends StatelessWidget {
     required this.label,
     required this.backgroundColor,
     required this.onLabelTap,
+    required this.clipLabelFontSize,
     required this.isDragTarget,
     required this.overlayLabelScale,
   });
@@ -1709,12 +1743,16 @@ class _PreviewTileBody extends StatelessWidget {
   final String? label;
   final Color backgroundColor;
   final VoidCallback? onLabelTap;
+  final double clipLabelFontSize;
   final bool isDragTarget;
   final double overlayLabelScale;
 
   @override
   Widget build(BuildContext context) {
-    final labelStyle = clipLabelStyleForOverlayScale(overlayLabelScale);
+    final labelStyle = clipLabelStyleForOverlayScale(
+      overlayLabelScale,
+      baseFontSize: clipLabelFontSize,
+    );
 
     return AnimatedScale(
       duration: const Duration(milliseconds: 140),

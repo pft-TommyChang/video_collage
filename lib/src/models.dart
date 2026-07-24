@@ -78,6 +78,7 @@ class ExportOptions {
     required this.backgroundColor,
     required this.borderColor,
     required this.includeClipLabelsInOutput,
+    required this.clipLabelFontSize,
   });
 
   final int rows;
@@ -89,6 +90,7 @@ class ExportOptions {
   final ColorChoice backgroundColor;
   final ColorChoice borderColor;
   final bool includeClipLabelsInOutput;
+  final double clipLabelFontSize;
 
   double get aspectRatio => outputWidth / outputHeight;
   double get shortEdge => outputWidth < outputHeight
@@ -119,12 +121,16 @@ double overlayLabelScaleForExportScale(double scaleFactor) {
   return scaleFactor * 1.2;
 }
 
-ClipLabelStyle clipLabelStyleForOverlayScale(double overlayLabelScale) {
+ClipLabelStyle clipLabelStyleForOverlayScale(
+  double overlayLabelScale, {
+  required double baseFontSize,
+}) {
+  final fontScale = baseFontSize / 12;
   return ClipLabelStyle(
-    margin: 8 * overlayLabelScale,
-    horizontalPadding: 8 * overlayLabelScale,
-    verticalPadding: 4 * overlayLabelScale,
-    fontSize: 12 * overlayLabelScale,
+    margin: 8 * overlayLabelScale * fontScale,
+    horizontalPadding: 8 * overlayLabelScale * fontScale,
+    verticalPadding: 4 * overlayLabelScale * fontScale,
+    fontSize: baseFontSize * overlayLabelScale,
   );
 }
 

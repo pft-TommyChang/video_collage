@@ -118,6 +118,7 @@ class VideoExportService {
           ? await _createClipLabelOverlays(
               slotClips: slotClips,
               scaleFactor: options.scaleFactor,
+              baseFontSize: options.clipLabelFontSize,
               cellWidth: cellWidth,
               tempDirectory: labelTempDirectory = await Directory.systemTemp
                   .createTemp('video_collage_labels_'),
@@ -263,11 +264,13 @@ class VideoExportService {
   Future<List<_ClipLabelOverlay>> _createClipLabelOverlays({
     required List<CollageSlotClip> slotClips,
     required double scaleFactor,
+    required double baseFontSize,
     required int cellWidth,
     required Directory tempDirectory,
   }) async {
     final labelStyle = clipLabelStyleForOverlayScale(
       overlayLabelScaleForExportScale(scaleFactor),
+      baseFontSize: baseFontSize,
     );
     final maxTextWidth = math.max(
       1.0,

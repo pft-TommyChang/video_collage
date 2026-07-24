@@ -9,6 +9,7 @@ class PersistedEditorSettings {
     required this.columns,
     required this.borderThickness,
     required this.tileCornerRadius,
+    required this.clipLabelFontSize,
     required this.includeClipLabelsInOutput,
     required this.outputWidth,
     required this.outputHeight,
@@ -22,6 +23,7 @@ class PersistedEditorSettings {
   final int columns;
   final double borderThickness;
   final double tileCornerRadius;
+  final double clipLabelFontSize;
   final bool includeClipLabelsInOutput;
   final int outputWidth;
   final int outputHeight;
@@ -36,6 +38,7 @@ class PersistedEditorSettings {
       'columns': columns,
       'borderThickness': borderThickness,
       'tileCornerRadius': tileCornerRadius,
+      'clipLabelFontSize': clipLabelFontSize,
       'includeClipLabelsInOutput': includeClipLabelsInOutput,
       'outputWidth': outputWidth,
       'outputHeight': outputHeight,
@@ -52,6 +55,7 @@ class PersistedEditorSettings {
       columns: (json['columns'] as num?)?.toInt() ?? 2,
       borderThickness: (json['borderThickness'] as num?)?.toDouble() ?? 12,
       tileCornerRadius: (json['tileCornerRadius'] as num?)?.toDouble() ?? 12,
+      clipLabelFontSize: (json['clipLabelFontSize'] as num?)?.toDouble() ?? 12,
       includeClipLabelsInOutput:
           json['includeClipLabelsInOutput'] as bool? ?? false,
       outputWidth: (json['outputWidth'] as num?)?.toInt() ?? 1920,
