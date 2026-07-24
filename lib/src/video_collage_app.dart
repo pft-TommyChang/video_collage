@@ -777,26 +777,51 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           ),
                                       itemBuilder: (context, index) {
                                         final clip = _clipForSlot(index);
-                                        return _PreviewTile(
-                                          clip: clip,
-                                          controller: clip == null
-                                              ? null
-                                              : _controllers[clip.path],
-                                          cornerRadius: _tileCornerRadius,
-                                          isLoading:
-                                              clip != null &&
-                                              _loadingClipPaths.contains(
-                                                clip.path,
-                                              ),
-                                          errorMessage: clip == null
-                                              ? null
-                                              : _clipErrors[clip.path],
-                                          onPickVideo: clip == null
-                                              ? () => _pickVideoForSlot(index)
-                                              : null,
-                                          index: index,
-                                          backgroundColor:
-                                              _selectedBackgroundColor.color,
+                                        return DragTarget<int>(
+                                          onWillAcceptWithDetails: (details) =>
+                                              details.data != index,
+                                          onAcceptWithDetails: (details) {
+                                            _moveOrSwapPreviewSlot(
+                                              details.data,
+                                              index,
+                                            );
+                                          },
+                                          builder:
+                                              (
+                                                context,
+                                                candidateData,
+                                                rejectedData,
+                                              ) {
+                                                return _PreviewTile(
+                                                  clip: clip,
+                                                  controller: clip == null
+                                                      ? null
+                                                      : _controllers[clip.path],
+                                                  cornerRadius:
+                                                      _tileCornerRadius,
+                                                  isLoading:
+                                                      clip != null &&
+                                                      _loadingClipPaths
+                                                          .contains(clip.path),
+                                                  errorMessage: clip == null
+                                                      ? null
+                                                      : _clipErrors[clip.path],
+                                                  onPickVideo: clip == null
+                                                      ? () => _pickVideoForSlot(
+                                                          index,
+                                                        )
+                                                      : null,
+                                                  index: index,
+                                                  backgroundColor:
+                                                      _selectedBackgroundColor
+                                                          .color,
+                                                  dragData: clip == null
+                                                      ? null
+                                                      : index,
+                                                  isDragTarget:
+                                                      candidateData.isNotEmpty,
+                                                );
+                                              },
                                         );
                                       },
                                     ),
@@ -912,6 +937,33 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
     }
     return false;
+  }
+
+  void _moveOrSwapPreviewSlot(int fromSlotIndex, int toSlotIndex) {
+    if (fromSlotIndex == toSlotIndex) {
+      return;
+    }
+
+    final sourcePath = _slotAssignments[fromSlotIndex];
+    if (sourcePath == null) {
+      return;
+    }
+
+    setState(() {
+      final targetPath = _slotAssignments[toSlotIndex];
+      _slotAssignments.remove(fromSlotIndex);
+
+      if (targetPath == null) {
+        _slotAssignments[toSlotIndex] = sourcePath;
+        _statusMessage = 'Moved clip to slot ${toSlotIndex + 1}.';
+        return;
+      }
+
+      _slotAssignments[toSlotIndex] = sourcePath;
+      _slotAssignments[fromSlotIndex] = targetPath;
+      _statusMessage =
+          'Swapped slot ${fromSlotIndex + 1} with slot ${toSlotIndex + 1}.';
+    });
   }
 
   Future<void> _pickVideoForSlot(int slotIndex) async {
@@ -1180,6 +1232,8 @@ class _ClipListTile extends StatelessWidget {
 }
 
 class _PreviewTile extends StatelessWidget {
+  static const Size _dragFeedbackSize = Size(240, 160);
+
   const _PreviewTile({
     required this.clip,
     required this.controller,
@@ -1189,6 +1243,8 @@ class _PreviewTile extends StatelessWidget {
     required this.onPickVideo,
     required this.index,
     required this.backgroundColor,
+    required this.dragData,
+    required this.isDragTarget,
   });
 
   final VideoClipInfo? clip;
@@ -1199,94 +1255,218 @@ class _PreviewTile extends StatelessWidget {
   final VoidCallback? onPickVideo;
   final int index;
   final Color backgroundColor;
+  final int? dragData;
+  final bool isDragTarget;
 
   @override
   Widget build(BuildContext context) {
     final label = clip == null ? null : '#${index + 1} ${clip!.name}';
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(cornerRadius),
-      child: Material(
-        color: backgroundColor,
-        child: InkWell(
-          onTap: onPickVideo,
-          child: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              if (controller != null && controller!.value.isInitialized)
-                FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: controller!.value.size.width,
-                    height: controller!.value.size.height,
-                    child: VideoPlayer(controller!),
+    final tile = _PreviewTileBody(
+      clip: clip,
+      controller: controller,
+      cornerRadius: cornerRadius,
+      isLoading: isLoading,
+      errorMessage: errorMessage,
+      onTap: onPickVideo,
+      label: label,
+      backgroundColor: backgroundColor,
+      isDragTarget: isDragTarget,
+    );
+
+    if (dragData == null) {
+      return tile;
+    }
+
+    return LongPressDraggable<int>(
+      data: dragData!,
+      delay: const Duration(milliseconds: 220),
+      dragAnchorStrategy: (
+        Draggable<Object> draggable,
+        BuildContext context,
+        Offset position,
+      ) {
+        return Offset(
+          _dragFeedbackSize.width / 2,
+          _dragFeedbackSize.height / 2,
+        );
+      },
+      feedback: Transform.scale(
+        scale: 1.04,
+        child: SizedBox(
+          width: _dragFeedbackSize.width,
+          height: _dragFeedbackSize.height,
+          child: Material(
+            color: Colors.transparent,
+            elevation: 24,
+            shadowColor: const Color(0x55000000),
+            borderRadius: BorderRadius.circular(cornerRadius + 8),
+            child: _PreviewTileBody(
+              clip: clip,
+              controller: controller,
+              cornerRadius: cornerRadius,
+              isLoading: isLoading,
+              errorMessage: errorMessage,
+              onTap: null,
+              label: label,
+              backgroundColor: backgroundColor,
+              isDragTarget: false,
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.30, child: tile),
+      child: tile,
+    );
+  }
+}
+
+class _PreviewTileBody extends StatelessWidget {
+  const _PreviewTileBody({
+    required this.clip,
+    required this.controller,
+    required this.cornerRadius,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.onTap,
+    required this.label,
+    required this.backgroundColor,
+    required this.isDragTarget,
+  });
+
+  final VideoClipInfo? clip;
+  final VideoPlayerController? controller;
+  final double cornerRadius;
+  final bool isLoading;
+  final String? errorMessage;
+  final VoidCallback? onTap;
+  final String? label;
+  final Color backgroundColor;
+  final bool isDragTarget;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 140),
+      scale: isDragTarget ? 1.02 : 1,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(cornerRadius),
+          boxShadow: isDragTarget
+              ? const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x26FF7A59),
+                    blurRadius: 22,
+                    offset: Offset(0, 8),
                   ),
-                )
-              else if (isLoading)
-                const Center(
-                  child: SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  ),
-                )
-              else
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Icon(
-                        clip == null
-                            ? Icons.add
-                            : errorMessage == null
-                            ? Icons.movie_creation_outlined
-                            : Icons.warning_amber_rounded,
-                        size: clip == null ? 68 : 34,
-                        color: Colors.black.withValues(alpha: 0.28),
+                ]
+              : const <BoxShadow>[],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(cornerRadius),
+          child: Material(
+            color: backgroundColor,
+            child: InkWell(
+              onTap: onTap,
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  if (controller != null && controller!.value.isInitialized)
+                    FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
+                        width: controller!.value.size.width,
+                        height: controller!.value.size.height,
+                        child: VideoPlayer(controller!),
                       ),
-                      if (errorMessage != null) ...<Widget>[
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Text(
-                            'Preview failed',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Colors.black.withValues(alpha: 0.55),
-                                  fontWeight: FontWeight.w600,
-                                ),
+                    )
+                  else if (isLoading)
+                    const Center(
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      ),
+                    )
+                  else
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(
+                            clip == null
+                                ? Icons.add
+                                : errorMessage == null
+                                ? Icons.movie_creation_outlined
+                                : Icons.warning_amber_rounded,
+                            size: clip == null ? 68 : 34,
+                            color: Colors.black.withValues(alpha: 0.28),
+                          ),
+                          if (errorMessage != null) ...<Widget>[
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              child: Text(
+                                'Preview failed',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.55,
+                                      ),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  if (isDragTarget)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(cornerRadius),
+                            border: Border.all(
+                              color: const Color(0xFFFF7A59),
+                              width: 3,
+                            ),
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-                ),
-              if (label != null)
-                Align(
-                  alignment: Alignment.topLeft,
-                  child: Container(
-                    margin: const EdgeInsets.all(10),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.48),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ),
-                ),
-            ],
+                  if (label != null)
+                    Align(
+                      alignment: Alignment.topLeft,
+                      child: Container(
+                        margin: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.48),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          label!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
