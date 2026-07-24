@@ -88,7 +88,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   int _rows = 2;
   int _columns = 2;
   double _borderThickness = 12;
-  double _tileCornerRadius = 0;
+  double _tileCornerRadius = 12;
   bool _isImporting = false;
   bool _isExporting = false;
   String? _statusMessage;
@@ -383,13 +383,22 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                               IconButton.outlined(
                                 onPressed: _clips.isEmpty ? null : _autoLayout,
                                 tooltip: 'Auto Layout',
-                                icon: const Icon(Icons.auto_fix_high),
+                                style: IconButton.styleFrom(
+                                  minimumSize: const Size(34, 34),
+                                  maximumSize: const Size(34, 34),
+                                ),
+                                icon: const Icon(Icons.auto_fix_high, size: 18),
                               ),
                               IconButton.outlined(
                                 onPressed: _clips.isEmpty ? null : _clearClips,
                                 tooltip: 'Clear',
+                                style: IconButton.styleFrom(
+                                  minimumSize: const Size(34, 34),
+                                  maximumSize: const Size(34, 34),
+                                ),
                                 icon: const Icon(
                                   Icons.cleaning_services_outlined,
+                                  size: 18,
                                 ),
                               ),
                             ],
@@ -1102,7 +1111,7 @@ class _PreviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = clip == null ? 'Empty' : '#${index + 1} ${clip!.name}';
+    final label = clip == null ? null : '#${index + 1} ${clip!.name}';
     return ClipRRect(
       borderRadius: BorderRadius.circular(cornerRadius),
       child: Material(
@@ -1140,7 +1149,7 @@ class _PreviewTile extends StatelessWidget {
                             : errorMessage == null
                             ? Icons.movie_creation_outlined
                             : Icons.warning_amber_rounded,
-                        size: 34,
+                        size: clip == null ? 68 : 34,
                         color: Colors.black.withValues(alpha: 0.28),
                       ),
                       if (errorMessage != null) ...<Widget>[
@@ -1161,30 +1170,31 @@ class _PreviewTile extends StatelessWidget {
                     ],
                   ),
                 ),
-              Align(
-                alignment: Alignment.topLeft,
-                child: Container(
-                  margin: const EdgeInsets.all(10),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.48),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+              if (label != null)
+                Align(
+                  alignment: Alignment.topLeft,
+                  child: Container(
+                    margin: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.48),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
