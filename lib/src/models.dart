@@ -59,8 +59,8 @@ enum ExportFormat {
   };
 
   String get suggestedFileName => switch (this) {
-    ExportFormat.mp4 => 'perfect_collage_export.mp4',
-    ExportFormat.jpg => 'perfect_collage_export.jpg',
+    ExportFormat.mp4 => 'pfc_export.mp4',
+    ExportFormat.jpg => 'pfc_export.jpg',
   };
 }
 

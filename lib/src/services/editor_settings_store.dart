@@ -3,6 +3,34 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+class ExportHistoryEntry {
+  const ExportHistoryEntry({
+    required this.path,
+    required this.format,
+    required this.timestampMillis,
+  });
+
+  final String path;
+  final String format;
+  final int timestampMillis;
+
+  Map<String, Object> toJson() {
+    return <String, Object>{
+      'path': path,
+      'format': format,
+      'timestampMillis': timestampMillis,
+    };
+  }
+
+  factory ExportHistoryEntry.fromJson(Map<String, dynamic> json) {
+    return ExportHistoryEntry(
+      path: json['path'] as String? ?? '',
+      format: json['format'] as String? ?? 'MP4',
+      timestampMillis: (json['timestampMillis'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class PersistedEditorSettings {
   const PersistedEditorSettings({
     required this.rows,
@@ -17,6 +45,8 @@ class PersistedEditorSettings {
     required this.aspectLabel,
     required this.resolutionLabel,
     required this.audioMode,
+    required this.appendDateTimeToExportName,
+    required this.lastExportDirectory,
     required this.borderColorLabel,
     required this.backgroundColorLabel,
   });
@@ -33,6 +63,8 @@ class PersistedEditorSettings {
   final String aspectLabel;
   final String resolutionLabel;
   final String audioMode;
+  final bool appendDateTimeToExportName;
+  final String lastExportDirectory;
   final String borderColorLabel;
   final String backgroundColorLabel;
 
@@ -50,6 +82,8 @@ class PersistedEditorSettings {
       'aspectLabel': aspectLabel,
       'resolutionLabel': resolutionLabel,
       'audioMode': audioMode,
+      'appendDateTimeToExportName': appendDateTimeToExportName,
+      'lastExportDirectory': lastExportDirectory,
       'borderColorLabel': borderColorLabel,
       'backgroundColorLabel': backgroundColorLabel,
     };
@@ -70,6 +104,9 @@ class PersistedEditorSettings {
       aspectLabel: json['aspectLabel'] as String? ?? '16:9',
       resolutionLabel: json['resolutionLabel'] as String? ?? 'Full HD 1080',
       audioMode: json['audioMode'] as String? ?? 'firstClip',
+      appendDateTimeToExportName:
+          json['appendDateTimeToExportName'] as bool? ?? false,
+      lastExportDirectory: json['lastExportDirectory'] as String? ?? '',
       borderColorLabel: json['borderColorLabel'] as String? ?? 'White',
       backgroundColorLabel: json['backgroundColorLabel'] as String? ?? 'Grey',
     );
@@ -80,6 +117,7 @@ class EditorSettingsStore {
   const EditorSettingsStore();
 
   static const _settingsFileName = 'editor_settings.json';
+  static const _exportHistoryFileName = 'export_history.json';
 
   Future<PersistedEditorSettings?> load() async {
     try {
@@ -115,19 +153,78 @@ class EditorSettingsStore {
     }
   }
 
+  Future<List<ExportHistoryEntry>> loadExportHistory() async {
+    try {
+      final historyFile = await _exportHistoryFile();
+      if (!await historyFile.exists()) {
+        return const <ExportHistoryEntry>[];
+      }
+
+      final rawHistory = await historyFile.readAsString();
+      if (rawHistory.isEmpty) {
+        return const <ExportHistoryEntry>[];
+      }
+
+      final decoded = jsonDecode(rawHistory);
+      if (decoded is! List) {
+        return const <ExportHistoryEntry>[];
+      }
+
+      return decoded
+          .whereType<Map>()
+          .map(
+            (entry) => ExportHistoryEntry.fromJson(
+              Map<String, dynamic>.from(entry),
+            ),
+          )
+          .where((entry) => entry.path.isNotEmpty)
+          .toList(growable: false);
+    } catch (_) {
+      return const <ExportHistoryEntry>[];
+    }
+  }
+
+  Future<List<ExportHistoryEntry>> addExportHistoryEntry(
+    ExportHistoryEntry entry,
+  ) async {
+    try {
+      final existing = await loadExportHistory();
+      final updated = <ExportHistoryEntry>[
+        entry,
+        ...existing.where((candidate) => candidate.path != entry.path),
+      ].take(5).toList(growable: false);
+
+      final historyFile = await _exportHistoryFile();
+      await historyFile.parent.create(recursive: true);
+      await historyFile.writeAsString(
+        jsonEncode(updated.map((item) => item.toJson()).toList(growable: false)),
+      );
+      return updated;
+    } catch (_) {
+      return await loadExportHistory();
+    }
+  }
+
   Future<File> _settingsFile() async {
+    return File(p.join((await _supportDirectory()).path, _settingsFileName));
+  }
+
+  Future<File> _exportHistoryFile() async {
+    return File(p.join((await _supportDirectory()).path, _exportHistoryFileName));
+  }
+
+  Future<Directory> _supportDirectory() async {
     final homeDirectory = Platform.environment['HOME'];
     if (homeDirectory == null || homeDirectory.isEmpty) {
       throw const FileSystemException('HOME is not available.');
     }
 
-    return File(
+    return Directory(
       p.join(
         homeDirectory,
         'Library',
         'Application Support',
         'video_collage_mac',
-        _settingsFileName,
       ),
     );
   }

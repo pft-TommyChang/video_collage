@@ -18,6 +18,8 @@ const _aspectPresets = <AspectRatioPreset>[
   AspectRatioPreset(label: '4:5', widthFactor: 4, heightFactor: 5),
   AspectRatioPreset(label: '3:4', widthFactor: 3, heightFactor: 4),
   AspectRatioPreset(label: '1:1', widthFactor: 1, heightFactor: 1),
+  AspectRatioPreset(label: '5:4', widthFactor: 5, heightFactor: 4),
+  AspectRatioPreset(label: '4:3', widthFactor: 4, heightFactor: 3),
   AspectRatioPreset(label: '16:9', widthFactor: 16, heightFactor: 9),
 ];
 
@@ -101,6 +103,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   late final TextEditingController _widthController;
   late final TextEditingController _heightController;
   Timer? _settingsSaveDebounce;
+  Timer? _toastTimer;
+  OverlayEntry? _toastOverlayEntry;
   bool _isRestoringSettings = false;
   int? _externalDropHoverSlotIndex;
 
@@ -117,11 +121,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   double _clipLabelFontSize = 12;
   bool _includeClipLabelsInOutput = false;
   bool _showClipLabelIndex = false;
+  bool _appendDateTimeToExportName = false;
   bool _isImporting = false;
   bool _isExporting = false;
   double _exportProgress = 0;
   bool _isPreviewPlaying = false;
   String? _statusMessage;
+  List<ExportHistoryEntry> _exportHistory = const <ExportHistoryEntry>[];
+  String _lastExportDirectory = '';
 
   @override
   void initState() {
@@ -132,11 +139,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     _heightController = TextEditingController(text: '${initialSize.$2}')
       ..addListener(_scheduleSettingsSave);
     unawaited(_restoreSettings());
+    unawaited(_restoreExportHistory());
   }
 
   @override
   void dispose() {
     _settingsSaveDebounce?.cancel();
+    _toastTimer?.cancel();
+    _toastOverlayEntry?.remove();
     _widthController.dispose();
     _heightController.dispose();
     for (final controller in _controllers.values) {
@@ -185,6 +195,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
           .toDouble();
       _includeClipLabelsInOutput = savedSettings.includeClipLabelsInOutput;
       _showClipLabelIndex = savedSettings.showClipLabelIndex;
+      _appendDateTimeToExportName = savedSettings.appendDateTimeToExportName;
       _selectedAspect = _aspectPresets.firstWhere(
         (preset) => preset.label == savedSettings.aspectLabel,
         orElse: () => _selectedAspect,
@@ -197,6 +208,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         (mode) => mode.name == savedSettings.audioMode,
         orElse: () => _selectedAudioMode,
       );
+      _lastExportDirectory = savedSettings.lastExportDirectory;
       _selectedBorderColor = _colorChoices.firstWhere(
         (choice) => choice.label == savedSettings.borderColorLabel,
         orElse: () => _selectedBorderColor,
@@ -222,6 +234,16 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     });
   }
 
+  Future<void> _restoreExportHistory() async {
+    final history = await _settingsStore.loadExportHistory();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _exportHistory = history;
+    });
+  }
+
   Future<void> _persistSettings() async {
     final width = _ensureEven(int.tryParse(_widthController.text) ?? 1080);
     final height = _ensureEven(int.tryParse(_heightController.text) ?? 1920);
@@ -239,6 +261,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         aspectLabel: _selectedAspect.label,
         resolutionLabel: _selectedResolution.label,
         audioMode: _selectedAudioMode.name,
+        appendDateTimeToExportName: _appendDateTimeToExportName,
+        lastExportDirectory: _lastExportDirectory,
         borderColorLabel: _selectedBorderColor.label,
         backgroundColorLabel: _selectedBackgroundColor.label,
       ),
@@ -250,8 +274,244 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     _scheduleSettingsSave();
   }
 
+  Future<void> _recordExportHistory(String path, ExportFormat format) async {
+    final normalizedPath = _resolveHistoryPath(path);
+    final history = await _settingsStore.addExportHistoryEntry(
+      ExportHistoryEntry(
+        path: normalizedPath,
+        format: format.label,
+        timestampMillis: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _exportHistory = history;
+    });
+  }
+
+  Future<void> _openExportHistoryEntry(ExportHistoryEntry entry) async {
+    final resolvedPath = _resolveHistoryPath(entry.path);
+    final file = File(resolvedPath);
+    if (!await file.exists()) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _statusMessage = 'Export file no longer exists: $resolvedPath';
+      });
+      return;
+    }
+
+    try {
+      final result = await Process.run('open', <String>[resolvedPath]);
+      if (result.exitCode != 0 && mounted) {
+        setState(() {
+          _statusMessage = 'Unable to open export: $resolvedPath';
+        });
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _statusMessage = 'Unable to open export: $resolvedPath';
+      });
+    }
+  }
+
+  Future<void> _openExportHistoryFolder(ExportHistoryEntry entry) async {
+    final resolvedPath = _resolveHistoryPath(entry.path);
+    final file = File(resolvedPath);
+    if (!await file.exists()) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _statusMessage = 'Export file no longer exists: $resolvedPath';
+      });
+      return;
+    }
+
+    final directoryPath = p.dirname(resolvedPath);
+    final directory = Directory(directoryPath);
+    if (!await directory.exists()) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _statusMessage = 'Export folder no longer exists: $directoryPath';
+      });
+      return;
+    }
+
+    try {
+      final result = await Process.run('open', <String>['-R', resolvedPath]);
+      if (result.exitCode != 0 && mounted) {
+        setState(() {
+          _statusMessage = 'Unable to open folder: $directoryPath';
+        });
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _statusMessage = 'Unable to open folder: $directoryPath';
+      });
+    }
+  }
+
+  String _resolveHistoryPath(String path) {
+    if (p.isAbsolute(path)) {
+      return p.normalize(path);
+    }
+    return p.normalize(p.absolute(path));
+  }
+
+  Future<void> _showExportHistory() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Export History'),
+          content: SizedBox(
+            width: 520,
+            child: _exportHistory.isEmpty
+                ? const Text('No export history yet.')
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _exportHistory.length,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final entry = _exportHistory[index];
+                      final exists = File(entry.path).existsSync();
+                      return ListTile(
+                        enabled: exists,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          p.basename(entry.path),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          '${entry.format} • ${_formatHistoryTimestamp(entry.timestampMillis)}\n${entry.path}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            IconButton(
+                              tooltip: 'Open folder',
+                              onPressed: !exists
+                                  ? null
+                                  : () {
+                                      Navigator.of(dialogContext).pop();
+                                      unawaited(
+                                        _openExportHistoryFolder(entry),
+                                      );
+                                    },
+                              icon: const Icon(Icons.folder_open_outlined),
+                            ),
+                            IconButton(
+                              tooltip: 'Open file',
+                              onPressed: !exists
+                                  ? null
+                                  : () {
+                                      Navigator.of(dialogContext).pop();
+                                      unawaited(_openExportHistoryEntry(entry));
+                                    },
+                              icon: const Icon(Icons.open_in_new_rounded),
+                            ),
+                          ],
+                        ),
+                        onTap: !exists
+                            ? null
+                            : () {
+                                Navigator.of(dialogContext).pop();
+                                unawaited(_openExportHistoryEntry(entry));
+                              },
+                      );
+                    },
+                  ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showToast(String message) {
+    _toastTimer?.cancel();
+    _toastOverlayEntry?.remove();
+
+    final overlay = Overlay.of(context);
+
+    final entry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: 0,
+        right: 0,
+        bottom: 36,
+        child: IgnorePointer(
+          child: Center(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xE3171A21),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+    _toastOverlayEntry = entry;
+    _toastTimer = Timer(const Duration(seconds: 1), () {
+      _toastOverlayEntry?.remove();
+      _toastOverlayEntry = null;
+      _toastTimer = null;
+    });
+  }
+
   String _defaultClipNameForPath(String path) {
     return p.basenameWithoutExtension(path);
+  }
+
+  String _suggestedExportFileName(ExportFormat format) {
+    if (!_appendDateTimeToExportName) {
+      return format.suggestedFileName;
+    }
+    final now = DateTime.now();
+    final timestamp =
+        '${now.year.toString().padLeft(4, '0')}'
+        '${now.month.toString().padLeft(2, '0')}'
+        '${now.day.toString().padLeft(2, '0')}'
+        '${now.hour.toString().padLeft(2, '0')}'
+        '${now.minute.toString().padLeft(2, '0')}';
+    final extension = format == ExportFormat.jpg ? 'jpg' : 'mp4';
+    return 'pfc_export_$timestamp.$extension';
   }
 
   Future<void> _pickMedia() async {
@@ -449,7 +709,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       return;
     }
 
-    final savePath = await _dialogService.pickSavePath(format: exportFormat);
+    final savePath = await _dialogService.pickSavePath(
+      format: exportFormat,
+      suggestedName: _suggestedExportFileName(exportFormat),
+      initialDirectory: _lastExportDirectory.isEmpty ? null : _lastExportDirectory,
+    );
     if (savePath == null || savePath.isEmpty) {
       if (!mounted) {
         return;
@@ -493,10 +757,17 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       if (!mounted) {
         return;
       }
+      await _recordExportHistory(savePath, exportFormat);
+      if (!mounted) {
+        return;
+      }
+      final exportDirectory = p.dirname(savePath);
       setState(() {
+        _lastExportDirectory = exportDirectory;
         _exportProgress = 1;
         _statusMessage = 'Export complete: $savePath';
       });
+      await _persistSettings();
     } on VideoExportException catch (error) {
       if (!mounted) {
         return;
@@ -563,10 +834,36 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                       child: ListView(
                         padding: const EdgeInsets.all(20),
                         children: <Widget>[
-                          Text(
-                            'Perfect Collage',
-                            style: Theme.of(context).textTheme.headlineMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                          Row(
+                            children: <Widget>[
+                              DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: const <BoxShadow>[
+                                    BoxShadow(
+                                      color: Color(0x22000000),
+                                      blurRadius: 14,
+                                      offset: Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Image.asset(
+                                    'macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png',
+                                    width: 44,
+                                    height: 44,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Perfect Collage',
+                                style: Theme.of(context).textTheme.headlineMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 20),
                           _SectionCard(
@@ -760,7 +1057,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 const SizedBox(height: 8),
                                 SwitchListTile.adaptive(
                                   contentPadding: EdgeInsets.zero,
-                                  title: const Text('Include clip labels'),
+                                  title: const Text('Show clip labels'),
                                   value: _includeClipLabelsInOutput,
                                   onChanged: (value) {
                                     _setStateAndSave(() {
@@ -850,9 +1147,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                     ),
                     DecoratedBox(
                       decoration: const BoxDecoration(
-                        color: Color(0xFFE7D6C0),
+                        color: Color(0xFFDBC29F),
                         border: Border(
-                          top: BorderSide(color: Color(0xFFD8C9B5)),
+                          top: BorderSide(color: Color(0xFFCDAF86)),
                         ),
                       ),
                       child: Padding(
@@ -860,16 +1157,57 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            Center(
-                              child: SizedBox(
-                                width: 240,
-                              child: _ExportButton(
-                                  onPressed: _isExporting ? null : _export,
-                                  isExporting: _isExporting,
-                                  progress: _exportProgress,
-                                  exportFormat: exportFormat,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: <Widget>[
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: IconButton(
+                                      onPressed: () {
+                                        _setStateAndSave(() {
+                                          _appendDateTimeToExportName =
+                                              !_appendDateTimeToExportName;
+                                        });
+                                      },
+                                      tooltip: _appendDateTimeToExportName
+                                          ? 'Datetime in filename: On'
+                                          : 'Datetime in filename: Off',
+                                      isSelected: _appendDateTimeToExportName,
+                                      selectedIcon: const Icon(
+                                        Icons.more_time_rounded,
+                                        color: Color(0xFFA0563D),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.more_time_outlined,
+                                        color: Color(0xFF6A452D),
+                                      ),
+                                      iconSize: 24,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                SizedBox(
+                                  width: 220,
+                                  child: _ExportButton(
+                                    onPressed: _isExporting ? null : _export,
+                                    isExporting: _isExporting,
+                                    progress: _exportProgress,
+                                    exportFormat: exportFormat,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: IconButton(
+                                      onPressed: _showExportHistory,
+                                      tooltip: 'History',
+                                      icon: const Icon(Icons.history_rounded),
+                                      color: const Color(0xFF6A452D),
+                                      iconSize: 24,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 12),
                             Center(
@@ -1095,23 +1433,41 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.64),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFFD8D0C4)),
-                          ),
-                          child: Text(
-                            _statusMessage ?? 'Ready',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: const Color(0xFF364152)),
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () {
+                                final message = _statusMessage ?? 'Ready';
+                                Clipboard.setData(ClipboardData(text: message));
+                                _showToast('Copied to clipboard');
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.64),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0xFFD8D0C4),
+                                  ),
+                                ),
+                                child: Text(
+                                  _statusMessage ?? 'Ready',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: const Color(0xFF364152),
+                                      ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -1627,6 +1983,19 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
     });
   }
+}
+
+String _formatHistoryTimestamp(int timestampMillis) {
+  if (timestampMillis <= 0) {
+    return 'Unknown time';
+  }
+  final dateTime = DateTime.fromMillisecondsSinceEpoch(timestampMillis);
+  final year = dateTime.year.toString().padLeft(4, '0');
+  final month = dateTime.month.toString().padLeft(2, '0');
+  final day = dateTime.day.toString().padLeft(2, '0');
+  final hour = dateTime.hour.toString().padLeft(2, '0');
+  final minute = dateTime.minute.toString().padLeft(2, '0');
+  return '$year-$month-$day $hour:$minute';
 }
 
 class _ExportButton extends StatelessWidget {

@@ -32,6 +32,8 @@ class SystemDialogService {
 
   Future<String?> pickSavePath({
     required ExportFormat format,
+    required String suggestedName,
+    String? initialDirectory,
   }) async {
     final location = await getSaveLocation(
       acceptedTypeGroups: <XTypeGroup>[
@@ -46,7 +48,8 @@ class SystemDialogService {
           ),
         },
       ],
-      suggestedName: format.suggestedFileName,
+      initialDirectory: initialDirectory,
+      suggestedName: suggestedName,
       confirmButtonText: 'Export',
     );
     return location?.path;
