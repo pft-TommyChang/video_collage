@@ -14,10 +14,10 @@ import 'services/system_dialog_service.dart';
 import 'services/video_export_service.dart';
 
 const _aspectPresets = <AspectRatioPreset>[
-  AspectRatioPreset(label: '1:1', widthFactor: 1, heightFactor: 1),
-  AspectRatioPreset(label: '4:5', widthFactor: 4, heightFactor: 5),
   AspectRatioPreset(label: '9:16', widthFactor: 9, heightFactor: 16),
+  AspectRatioPreset(label: '4:5', widthFactor: 4, heightFactor: 5),
   AspectRatioPreset(label: '3:4', widthFactor: 3, heightFactor: 4),
+  AspectRatioPreset(label: '1:1', widthFactor: 1, heightFactor: 1),
   AspectRatioPreset(label: '16:9', widthFactor: 16, heightFactor: 9),
 ];
 
@@ -222,6 +222,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   void _setStateAndSave(VoidCallback update) {
     setState(update);
     _scheduleSettingsSave();
+  }
+
+  String _defaultClipNameForPath(String path) {
+    return p.basenameWithoutExtension(path);
   }
 
   Future<void> _pickVideos() async {
@@ -487,9 +491,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 12,
+                                Row(
                                   children: <Widget>[
                                     FilledButton.icon(
                                       onPressed: _isImporting
@@ -504,6 +506,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                             : 'Add Videos',
                                       ),
                                     ),
+                                    const Spacer(),
                                     IconButton.outlined(
                                       onPressed: _clips.isEmpty
                                           ? null
@@ -518,6 +521,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                         size: 18,
                                       ),
                                     ),
+                                    const SizedBox(width: 12),
                                     IconButton.outlined(
                                       onPressed: _clips.isEmpty
                                           ? null
@@ -617,16 +621,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     });
                                   },
                                 ),
-                                SwitchListTile.adaptive(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Include clip labels'),
-                                  value: _includeClipLabelsInOutput,
-                                  onChanged: (value) {
-                                    _setStateAndSave(() {
-                                      _includeClipLabelsInOutput = value;
-                                    });
-                                  },
-                                ),
                                 const SizedBox(height: 6),
                                 _ColorSelector(
                                   label: 'Border',
@@ -647,6 +641,17 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     });
                                   },
                                 ),
+                                const SizedBox(height: 8),
+                                SwitchListTile.adaptive(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('Include clip labels'),
+                                  value: _includeClipLabelsInOutput,
+                                  onChanged: (value) {
+                                    _setStateAndSave(() {
+                                      _includeClipLabelsInOutput = value;
+                                    });
+                                  },
+                                ),
                               ],
                             ),
                           ),
@@ -657,46 +662,22 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                Text(
-                                  'Aspect ratio',
-                                  style: Theme.of(context).textTheme.titleSmall,
-                                ),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: _aspectPresets.map((preset) {
-                                    return ChoiceChip(
-                                      selected: identical(
-                                        preset,
-                                        _selectedAspect,
-                                      ),
-                                      label: Text(preset.label),
-                                      onSelected: (_) =>
-                                          _applyAspectPreset(preset),
-                                    );
-                                  }).toList(),
+                                _SelectionDropdown<AspectRatioPreset>(
+                                  label: 'Aspect ratio',
+                                  selected: _selectedAspect,
+                                  options: _aspectPresets,
+                                  itemLabel: (preset) => preset.label,
+                                  itemBuilder: (preset) =>
+                                      _AspectRatioDropdownItem(preset: preset),
+                                  onSelected: _applyAspectPreset,
                                 ),
                                 const SizedBox(height: 16),
-                                Text(
-                                  'Resolution preset',
-                                  style: Theme.of(context).textTheme.titleSmall,
-                                ),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: _resolutionPresets.map((preset) {
-                                    return ChoiceChip(
-                                      selected: identical(
-                                        preset,
-                                        _selectedResolution,
-                                      ),
-                                      label: Text(preset.label),
-                                      onSelected: (_) =>
-                                          _applyResolutionPreset(preset),
-                                    );
-                                  }).toList(),
+                                _SelectionDropdown<ResolutionPreset>(
+                                  label: 'Resolution',
+                                  selected: _selectedResolution,
+                                  options: _resolutionPresets,
+                                  itemLabel: (preset) => preset.label,
+                                  onSelected: _applyResolutionPreset,
                                 ),
                                 const SizedBox(height: 16),
                                 Row(
@@ -731,14 +712,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                       ),
                                     ),
                                   ],
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  'More than $_gridCapacity videos is supported. The current export uses the first $_gridCapacity clips in order.',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(
-                                        color: const Color(0xFF5A6270),
-                                      ),
                                 ),
                               ],
                             ),
@@ -959,6 +932,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                 dragData: clip == null
                                                     ? null
                                                     : index,
+                                                showLabel:
+                                                    _includeClipLabelsInOutput,
+                                                onEditLabel: clip == null
+                                                    ? null
+                                                    : () => unawaited(
+                                                        _editClipTitle(clip),
+                                                      ),
                                                 isDragTarget:
                                                     candidateData.isNotEmpty ||
                                                     _externalDropHoverSlotIndex ==
@@ -1249,7 +1229,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   VideoClipInfo _placeholderClip(String path) {
     return VideoClipInfo(
       path: path,
-      name: path.split(Platform.pathSeparator).last,
+      name: _defaultClipNameForPath(path),
       duration: Duration.zero,
       width: 0,
       height: 0,
@@ -1276,7 +1256,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         final value = controller.value;
         clip = VideoClipInfo(
           path: path,
-          name: path.split(Platform.pathSeparator).last,
+          name: _defaultClipNameForPath(path),
           duration: value.duration,
           width: value.size.width.round(),
           height: value.size.height.round(),
@@ -1295,11 +1275,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         _clipErrors.remove(path);
         final index = _clips.indexWhere((clip) => clip.path == path);
         if (index >= 0) {
-          _clips[index] = clip;
+          _clips[index] = clip.copyWith(name: _clips[index].name);
+          _statusMessage = 'Loaded ${_clips[index].name}.';
         } else {
           _clips.add(clip);
+          _statusMessage = 'Loaded ${clip.name}.';
         }
-        _statusMessage = 'Loaded ${clip.name}.';
       });
       if (!identical(previousController, controller)) {
         previousController?.dispose();
@@ -1318,6 +1299,65 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
             'Preview failed for ${path.split(Platform.pathSeparator).last}.';
       });
     }
+  }
+
+  Future<void> _editClipTitle(VideoClipInfo clip) async {
+    var draftName = clip.name;
+
+    final updatedName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Edit clip label'),
+          content: TextFormField(
+            initialValue: clip.name,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'Clip label',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (value) {
+              draftName = value;
+            },
+            onFieldSubmitted: (value) {
+              Navigator.of(dialogContext).pop(value.trim());
+            },
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(draftName.trim());
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || updatedName == null) {
+      return;
+    }
+
+    final normalizedName = updatedName.isEmpty
+        ? _defaultClipNameForPath(clip.path)
+        : updatedName;
+    if (normalizedName == clip.name) {
+      return;
+    }
+
+    setState(() {
+      final index = _clips.indexWhere((entry) => entry.path == clip.path);
+      if (index >= 0) {
+        _clips[index] = _clips[index].copyWith(name: normalizedName);
+        _statusMessage = 'Updated clip label to $normalizedName.';
+      }
+    });
   }
 }
 
@@ -1560,6 +1600,8 @@ class _PreviewTile extends StatelessWidget {
     required this.index,
     required this.backgroundColor,
     required this.dragData,
+    required this.showLabel,
+    required this.onEditLabel,
     required this.isDragTarget,
     required this.overlayLabelScale,
   });
@@ -1573,12 +1615,16 @@ class _PreviewTile extends StatelessWidget {
   final int index;
   final Color backgroundColor;
   final int? dragData;
+  final bool showLabel;
+  final VoidCallback? onEditLabel;
   final bool isDragTarget;
   final double overlayLabelScale;
 
   @override
   Widget build(BuildContext context) {
-    final label = clip == null ? null : '#${index + 1} ${clip!.name}';
+    final label = !showLabel || clip == null
+        ? null
+        : '#${index + 1} ${clip!.name}';
     final tile = _PreviewTileBody(
       clip: clip,
       controller: controller,
@@ -1588,6 +1634,7 @@ class _PreviewTile extends StatelessWidget {
       onTap: onPickVideo,
       label: label,
       backgroundColor: backgroundColor,
+      onLabelTap: onEditLabel,
       isDragTarget: isDragTarget,
       overlayLabelScale: overlayLabelScale,
     );
@@ -1625,6 +1672,7 @@ class _PreviewTile extends StatelessWidget {
               onTap: null,
               label: label,
               backgroundColor: backgroundColor,
+              onLabelTap: null,
               isDragTarget: false,
               overlayLabelScale: overlayLabelScale,
             ),
@@ -1647,6 +1695,7 @@ class _PreviewTileBody extends StatelessWidget {
     required this.onTap,
     required this.label,
     required this.backgroundColor,
+    required this.onLabelTap,
     required this.isDragTarget,
     required this.overlayLabelScale,
   });
@@ -1659,6 +1708,7 @@ class _PreviewTileBody extends StatelessWidget {
   final VoidCallback? onTap;
   final String? label;
   final Color backgroundColor;
+  final VoidCallback? onLabelTap;
   final bool isDragTarget;
   final double overlayLabelScale;
 
@@ -1763,24 +1813,35 @@ class _PreviewTileBody extends StatelessWidget {
                   if (label != null)
                     Align(
                       alignment: Alignment.topLeft,
-                      child: Container(
-                        margin: EdgeInsets.all(labelStyle.margin),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: labelStyle.horizontalPadding,
-                          vertical: labelStyle.verticalPadding,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.48),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          label!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: labelStyle.fontSize,
-                            fontWeight: FontWeight.w600,
+                      child: Padding(
+                        padding: EdgeInsets.all(labelStyle.margin),
+                        child: MouseRegion(
+                          cursor: onLabelTap == null
+                              ? MouseCursor.defer
+                              : SystemMouseCursors.click,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: onLabelTap,
+                            child: Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: labelStyle.horizontalPadding,
+                                vertical: labelStyle.verticalPadding,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.48),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                label!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: labelStyle.fontSize,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -1789,6 +1850,130 @@ class _PreviewTileBody extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionDropdown<T> extends StatelessWidget {
+  const _SelectionDropdown({
+    required this.label,
+    required this.selected,
+    required this.options,
+    required this.itemLabel,
+    this.itemBuilder,
+    required this.onSelected,
+  });
+
+  final String label;
+  final T selected;
+  final List<T> options;
+  final String Function(T option) itemLabel;
+  final Widget Function(T option)? itemBuilder;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(label, style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<T>(
+          key: ValueKey<String>(itemLabel(selected)),
+          initialValue: selected,
+          isExpanded: true,
+          selectedItemBuilder: itemBuilder == null
+              ? null
+              : (context) => options
+                    .map((option) => itemBuilder!(option))
+                    .toList(growable: false),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: const BorderSide(color: Color(0xFF171A21), width: 2),
+            ),
+          ),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          items: options
+              .map(
+                (option) => DropdownMenuItem<T>(
+                  value: option,
+                  child: itemBuilder?.call(option) ?? Text(itemLabel(option)),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value != null) {
+              onSelected(value);
+            }
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _AspectRatioDropdownItem extends StatelessWidget {
+  const _AspectRatioDropdownItem({required this.preset});
+
+  final AspectRatioPreset preset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        _AspectRatioSwatch(preset: preset),
+        const SizedBox(width: 12),
+        Text(preset.label, style: Theme.of(context).textTheme.bodyLarge),
+      ],
+    );
+  }
+}
+
+class _AspectRatioSwatch extends StatelessWidget {
+  const _AspectRatioSwatch({required this.preset});
+
+  final AspectRatioPreset preset;
+
+  @override
+  Widget build(BuildContext context) {
+    const outerSize = 26.0;
+    const maxInnerSize = 16.0;
+    final ratio = preset.value;
+    final innerWidth = ratio >= 1 ? maxInnerSize : maxInnerSize * ratio;
+    final innerHeight = ratio >= 1 ? maxInnerSize / ratio : maxInnerSize;
+
+    return Container(
+      width: outerSize,
+      height: outerSize,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F1E9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFDCCFBC)),
+      ),
+      alignment: Alignment.center,
+      child: Container(
+        width: innerWidth,
+        height: innerHeight,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: const Color(0xFF171A21), width: 1.4),
         ),
       ),
     );

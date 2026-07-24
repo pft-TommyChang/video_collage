@@ -47,6 +47,22 @@ class VideoClipInfo {
   final Duration duration;
   final int width;
   final int height;
+
+  VideoClipInfo copyWith({
+    String? path,
+    String? name,
+    Duration? duration,
+    int? width,
+    int? height,
+  }) {
+    return VideoClipInfo(
+      path: path ?? this.path,
+      name: name ?? this.name,
+      duration: duration ?? this.duration,
+      width: width ?? this.width,
+      height: height ?? this.height,
+    );
+  }
 }
 
 class ExportOptions {

@@ -45,7 +45,7 @@ class VideoExportService {
 
     return VideoClipInfo(
       path: filePath,
-      name: p.basename(filePath),
+      name: p.basenameWithoutExtension(filePath),
       duration: Duration(milliseconds: (durationSeconds * 1000).round()),
       width: stream?.getWidth() ?? 0,
       height: stream?.getHeight() ?? 0,
