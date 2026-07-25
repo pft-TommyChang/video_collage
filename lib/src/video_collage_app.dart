@@ -121,11 +121,15 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   late final TextEditingController _heightController;
   Timer? _settingsSaveDebounce;
   Timer? _toastTimer;
+  Timer? _parallelPreviewTimer;
   Timer? _sequentialPreviewTimer;
   OverlayEntry? _toastOverlayEntry;
   bool _isRestoringSettings = false;
   bool _isSyncingSequentialPreview = false;
   int? _externalDropHoverSlotIndex;
+  int? _lastPreviewProgressSecond;
+  Duration _parallelPreviewElapsed = Duration.zero;
+  DateTime? _parallelPreviewStartedAt;
   Duration _sequentialPreviewElapsed = Duration.zero;
   DateTime? _sequentialPreviewStartedAt;
   String? _activeSequentialClipPath;
@@ -173,6 +177,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   void dispose() {
     _settingsSaveDebounce?.cancel();
     _toastTimer?.cancel();
+    _parallelPreviewTimer?.cancel();
     _sequentialPreviewTimer?.cancel();
     _toastOverlayEntry?.remove();
     _widthController.dispose();
@@ -663,6 +668,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       controller.dispose();
     }
     _controllers.clear();
+    _parallelPreviewTimer?.cancel();
+    _parallelPreviewTimer = null;
+    _parallelPreviewElapsed = Duration.zero;
+    _parallelPreviewStartedAt = null;
     _sequentialPreviewTimer?.cancel();
     _sequentialPreviewTimer = null;
     _sequentialPreviewElapsed = Duration.zero;
@@ -712,6 +721,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _statusMessage = 'Output reset to defaults.';
     });
 
+    _parallelPreviewElapsed = Duration.zero;
+    _parallelPreviewStartedAt = null;
+    _parallelPreviewTimer?.cancel();
+    _parallelPreviewTimer = null;
     _sequentialPreviewElapsed = Duration.zero;
     _sequentialPreviewStartedAt = null;
     _sequentialPreviewTimer?.cancel();
@@ -738,6 +751,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     });
 
     if (mode == PlayMode.sequential && !wasSequential) {
+      _parallelPreviewElapsed = Duration.zero;
+      _parallelPreviewStartedAt = null;
+      _parallelPreviewTimer?.cancel();
+      _parallelPreviewTimer = null;
       _sequentialPreviewElapsed = Duration.zero;
       _sequentialPreviewStartedAt = _isPreviewPlaying ? DateTime.now() : null;
       if (_isPreviewPlaying) {
@@ -746,6 +763,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     }
 
     if (mode != PlayMode.sequential) {
+      _parallelPreviewElapsed = Duration.zero;
+      _parallelPreviewStartedAt = _isPreviewPlaying ? DateTime.now() : null;
+      _parallelPreviewTimer?.cancel();
+      _parallelPreviewTimer = null;
+      if (_isPreviewPlaying) {
+        _startParallelPreviewTicker();
+      }
       _sequentialPreviewElapsed = Duration.zero;
       _sequentialPreviewStartedAt = null;
       _sequentialPreviewTimer?.cancel();
@@ -973,7 +997,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final scaledBorderThickness = options.scaledBorderThickness;
     final scaledTileCornerRadius = options.scaledTileCornerRadius;
     final overlayLabelScale = options.scaleFactor * 1.2;
-    final activeCount = slotClips.length;
     final exportFormat = exportFormatForClips(slotClips);
     final resolvedExportFormat = slotClips.isEmpty ? null : exportFormat;
     final hasPreviewMotion = slotClips.any((entry) => entry.clip.isVideo);
@@ -982,6 +1005,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _selectedDurationMode,
       _selectedPlayMode,
     );
+    final previewPosition = _currentPreviewDisplayElapsed(exportDuration);
     final playModeLabel = _selectedPlayMode.label;
     final previewCanvasWidth = options.outputWidth.toDouble().clamp(
       1.0,
@@ -1585,10 +1609,15 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     ),
                                   ),
                                   child: Text(
-                                    '${_clips.length} media • $activeCount active in preview',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
+                                    '${formatDuration(previewPosition)} / ${formatDuration(exportDuration)}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          fontFeatures: const <FontFeature>[
+                                            FontFeature.tabularFigures(),
+                                          ],
+                                        ),
                                   ),
                                 ),
                               ],
@@ -2033,6 +2062,42 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     return _sequentialPreviewElapsed + DateTime.now().difference(startedAt);
   }
 
+  Duration _currentParallelPreviewElapsed() {
+    final startedAt = _parallelPreviewStartedAt;
+    if (!_isPreviewPlaying || startedAt == null) {
+      return _parallelPreviewElapsed;
+    }
+    return _parallelPreviewElapsed + DateTime.now().difference(startedAt);
+  }
+
+  Duration _currentPreviewDisplayElapsed(Duration totalDuration) {
+    if (totalDuration <= Duration.zero) {
+      return Duration.zero;
+    }
+    final elapsed = _isSequentialPlayMode
+        ? _currentSequentialPreviewElapsed()
+        : _currentParallelPreviewElapsed();
+    if (elapsed <= Duration.zero) {
+      return Duration.zero;
+    }
+    if (elapsed >= totalDuration) {
+      return totalDuration;
+    }
+    return elapsed;
+  }
+
+  void _refreshPreviewProgress(Duration elapsed) {
+    if (!mounted || !_isPreviewPlaying) {
+      return;
+    }
+    final elapsedSecond = elapsed.inSeconds;
+    if (_lastPreviewProgressSecond == elapsedSecond) {
+      return;
+    }
+    _lastPreviewProgressSecond = elapsedSecond;
+    setState(() {});
+  }
+
   Duration _lastFramePosition(VideoClipInfo clip) {
     final durationMs = clip.duration.inMilliseconds;
     if (durationMs <= 34) {
@@ -2063,13 +2128,74 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       });
     }
 
-    for (final controller in _controllers.values) {
-      if (!controller.value.isInitialized) {
+    final parallelClips = _slotClipsForExport()
+        .where(
+          (entry) => entry.clip.isVideo && entry.clip.duration > Duration.zero,
+        )
+        .toList(growable: false);
+
+    if (parallelClips.isEmpty) {
+      _parallelPreviewTimer?.cancel();
+      _parallelPreviewTimer = null;
+      _parallelPreviewStartedAt = null;
+      _parallelPreviewElapsed = Duration.zero;
+      if (_isPreviewPlaying && mounted) {
+        setState(() {
+          _isPreviewPlaying = false;
+        });
+      }
+      return;
+    }
+
+    final totalDuration = exportDurationForClips(
+      parallelClips,
+      _selectedDurationMode,
+      PlayMode.parallel,
+    );
+    final elapsed = _currentParallelPreviewElapsed();
+    _refreshPreviewProgress(elapsed);
+    if (elapsed >= totalDuration) {
+      _parallelPreviewTimer?.cancel();
+      _parallelPreviewTimer = null;
+      _parallelPreviewStartedAt = null;
+      _parallelPreviewElapsed = totalDuration;
+      _lastPreviewProgressSecond = null;
+      if (mounted) {
+        setState(() {
+          _isPreviewPlaying = false;
+          _statusMessage = 'Preview playback finished.';
+        });
+      }
+
+      for (final entry in parallelClips) {
+        final controller = _controllers[entry.clip.path];
+        if (controller == null || !controller.value.isInitialized) {
+          continue;
+        }
+        await controller.setLooping(false);
+        await controller.setVolume(0);
+        await controller.pause();
+        final target = totalDuration >= entry.clip.duration
+            ? _lastFramePosition(entry.clip)
+            : totalDuration;
+        await _seekControllerIfNeeded(controller, target);
+      }
+      return;
+    }
+
+    for (final entry in parallelClips) {
+      final controller = _controllers[entry.clip.path];
+      if (controller == null || !controller.value.isInitialized) {
         continue;
       }
-      await controller.setLooping(true);
+      final clip = entry.clip;
+      final isClipFinished = elapsed >= clip.duration;
+      final target = isClipFinished ? _lastFramePosition(clip) : elapsed;
+
+      await controller.setLooping(false);
       await controller.setVolume(0);
-      if (_isPreviewPlaying) {
+      await _seekControllerIfNeeded(controller, target);
+      if (_isPreviewPlaying && !isClipFinished) {
         await controller.play();
       } else {
         await controller.pause();
@@ -2109,11 +2235,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         (total, entry) => total + entry.clip.duration,
       );
       final elapsed = _currentSequentialPreviewElapsed();
+      _refreshPreviewProgress(elapsed);
       if (elapsed >= totalDuration) {
         _sequentialPreviewTimer?.cancel();
         _sequentialPreviewTimer = null;
         _sequentialPreviewStartedAt = null;
         _sequentialPreviewElapsed = totalDuration;
+        _lastPreviewProgressSecond = null;
         if (mounted) {
           setState(() {
             _activeSequentialClipPath = null;
@@ -2202,6 +2330,16 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       const Duration(milliseconds: 120),
       (_) {
         unawaited(_syncSequentialPreviewControllers());
+      },
+    );
+  }
+
+  void _startParallelPreviewTicker() {
+    _parallelPreviewTimer?.cancel();
+    _parallelPreviewTimer = Timer.periodic(
+      const Duration(milliseconds: 120),
+      (_) {
+        unawaited(_syncParallelPreviewControllers());
       },
     );
   }
@@ -2426,8 +2564,24 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
           ? 'Preview playback started.'
           : 'Preview playback paused.';
     });
+    if (!shouldPlay) {
+      _lastPreviewProgressSecond = null;
+    }
 
     if (!_isSequentialPlayMode) {
+      if (!shouldPlay) {
+        _parallelPreviewElapsed = _currentParallelPreviewElapsed();
+        _parallelPreviewStartedAt = null;
+        _parallelPreviewTimer?.cancel();
+        _parallelPreviewTimer = null;
+        await _syncParallelPreviewControllers();
+        return;
+      }
+
+      _parallelPreviewElapsed = Duration.zero;
+      _parallelPreviewStartedAt = DateTime.now();
+      _lastPreviewProgressSecond = null;
+      _startParallelPreviewTicker();
       await _syncParallelPreviewControllers();
       return;
     }
@@ -2450,6 +2604,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _sequentialPreviewElapsed = Duration.zero;
     }
     _sequentialPreviewStartedAt = DateTime.now();
+    _lastPreviewProgressSecond = null;
     _startSequentialPreviewTicker();
     await _syncSequentialPreviewControllers();
   }
@@ -2523,13 +2678,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     try {
       controller = VideoPlayerController.file(File(path));
       await controller.initialize().timeout(const Duration(seconds: 12));
-      await controller.setLooping(!_isSequentialPlayMode);
+      await controller.setLooping(false);
       await controller.setVolume(0);
-      if (_isPreviewPlaying && !_isSequentialPlayMode) {
-        await controller.play();
-      } else {
-        await controller.pause();
-      }
+      await controller.pause();
 
       VideoClipInfo clip;
       try {
