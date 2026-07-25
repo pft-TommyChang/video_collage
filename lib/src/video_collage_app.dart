@@ -2681,17 +2681,34 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
             ],
           ),
           actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(_ClipLabelEditResult.rename(draftName.trim()));
-              },
-              child: const Text('Save'),
+            SizedBox(
+              width: double.infinity,
+              child: Row(
+                children: <Widget>[
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(
+                        dialogContext,
+                      ).pop(const _ClipLabelEditResult.clearAll());
+                    },
+                    child: const Text('Clean all labels'),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () {
+                      Navigator.of(
+                        dialogContext,
+                      ).pop(_ClipLabelEditResult.rename(draftName.trim()));
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
             ),
           ],
         );
@@ -2700,6 +2717,16 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     textController.dispose();
 
     if (!mounted || result == null) {
+      return;
+    }
+
+    if (result.clearAll) {
+      _setStateAndSave(() {
+        for (var index = 0; index < _clips.length; index += 1) {
+          _clips[index] = _clips[index].copyWith(name: '');
+        }
+        _statusMessage = 'Cleared all clip labels.';
+      });
       return;
     }
 
@@ -2737,29 +2764,37 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       return;
     }
 
-    final normalizedName = updatedName.isEmpty
-        ? _defaultClipNameForPath(clip.path)
-        : updatedName;
-    if (normalizedName == clip.name) {
+    if (updatedName == clip.name) {
       return;
     }
 
     setState(() {
       final index = _clips.indexWhere((entry) => entry.path == clip.path);
       if (index >= 0) {
-        _clips[index] = _clips[index].copyWith(name: normalizedName);
-        _statusMessage = 'Updated clip label to $normalizedName.';
+        _clips[index] = _clips[index].copyWith(name: updatedName);
+        _statusMessage = updatedName.isEmpty
+            ? 'Cleared clip label.'
+            : 'Updated clip label to $updatedName.';
       }
     });
   }
 }
 
 class _ClipLabelEditResult {
-  const _ClipLabelEditResult.rename(this.name) : preset = null;
-  const _ClipLabelEditResult.preset(this.preset) : name = null;
+  const _ClipLabelEditResult.rename(this.name)
+    : preset = null,
+      clearAll = false;
+  const _ClipLabelEditResult.preset(this.preset)
+    : name = null,
+      clearAll = false;
+  const _ClipLabelEditResult.clearAll()
+    : name = null,
+      preset = null,
+      clearAll = true;
 
   final String? name;
   final _TwoClipLabelPreset? preset;
+  final bool clearAll;
 }
 
 class _TwoClipLabelPreset {
@@ -3062,7 +3097,6 @@ class _ClipListTile extends StatelessWidget {
       width: 56,
       height: 56,
       decoration: BoxDecoration(
-        color: Colors.white,
         borderRadius: borderRadius,
         border: Border.all(
           color: isUsed ? activeBorderColor : inactiveBorderColor,
@@ -3070,7 +3104,7 @@ class _ClipListTile extends StatelessWidget {
         ),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(14),
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
@@ -3209,13 +3243,14 @@ class _PreviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = !showLabel || clip == null
+    final rawLabel = !showLabel || clip == null
         ? null
         : buildClipLabelText(
             slotIndex: index,
             clipName: clip!.name,
             includeIndex: showLabelIndex,
           );
+    final label = rawLabel == null || rawLabel.isEmpty ? null : rawLabel;
     final tile = _PreviewTileBody(
       clip: clip,
       controller: controller,

@@ -230,6 +230,9 @@ String buildClipLabelText({
   if (!includeIndex) {
     return clipName;
   }
+  if (clipName.isEmpty) {
+    return '#${slotIndex + 1}';
+  }
   return '#${slotIndex + 1} $clipName';
 }
 
@@ -244,7 +247,7 @@ ExportFormat exportFormatForClips(Iterable<CollageSlotClip> slotClips) {
 Duration exportDurationForClips(
   Iterable<CollageSlotClip> slotClips,
   ExportDurationMode mode,
-  PlayMode playMode
+  PlayMode playMode,
 ) {
   final videoDurations = slotClips
       .map((entry) => entry.clip)
