@@ -115,11 +115,10 @@ class VideoExportService {
     final exportFormat = exportFormatForClips(slotClips);
     final targetDurationMs = math.max(
       1000,
-      slotClips.fold<int>(
-        0,
-        (current, entry) =>
-            math.max(current, entry.clip.duration.inMilliseconds),
-      ),
+      exportDurationForClips(
+        slotClips,
+        options.durationMode,
+      ).inMilliseconds,
     );
     final targetDurationSeconds = (targetDurationMs / 1000).toStringAsFixed(3);
     Directory? labelTempDirectory;

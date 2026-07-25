@@ -49,6 +49,16 @@ enum AudioMode {
   };
 }
 
+enum ExportDurationMode {
+  longest,
+  shortest;
+
+  String get label => switch (this) {
+    ExportDurationMode.longest => 'Longest clip',
+    ExportDurationMode.shortest => 'Shortest clip',
+  };
+}
+
 enum ExportFormat {
   mp4,
   jpg;
@@ -123,6 +133,7 @@ class ExportOptions {
     required this.showClipLabelIndex,
     required this.clipLabelFontSize,
     required this.audioMode,
+    required this.durationMode,
   });
 
   final int rows;
@@ -137,6 +148,7 @@ class ExportOptions {
   final bool showClipLabelIndex;
   final double clipLabelFontSize;
   final AudioMode audioMode;
+  final ExportDurationMode durationMode;
 
   double get aspectRatio => outputWidth / outputHeight;
   double get shortEdge => outputWidth < outputHeight
@@ -215,4 +227,28 @@ ExportFormat exportFormatForClips(Iterable<CollageSlotClip> slotClips) {
     return ExportFormat.jpg;
   }
   return ExportFormat.mp4;
+}
+
+Duration exportDurationForClips(
+  Iterable<CollageSlotClip> slotClips,
+  ExportDurationMode mode,
+) {
+  final videoDurations = slotClips
+      .map((entry) => entry.clip)
+      .where((clip) => clip.isVideo && clip.duration > Duration.zero)
+      .map((clip) => clip.duration)
+      .toList(growable: false);
+
+  if (videoDurations.isEmpty) {
+    return Duration.zero;
+  }
+
+  return switch (mode) {
+    ExportDurationMode.longest => videoDurations.reduce(
+      (current, next) => next > current ? next : current,
+    ),
+    ExportDurationMode.shortest => videoDurations.reduce(
+      (current, next) => next < current ? next : current,
+    ),
+  };
 }

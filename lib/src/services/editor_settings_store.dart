@@ -45,6 +45,7 @@ class PersistedEditorSettings {
     required this.aspectLabel,
     required this.resolutionLabel,
     required this.audioMode,
+    required this.durationMode,
     required this.appendDateTimeToExportName,
     required this.lastExportDirectory,
     required this.borderColorLabel,
@@ -63,6 +64,7 @@ class PersistedEditorSettings {
   final String aspectLabel;
   final String resolutionLabel;
   final String audioMode;
+  final String durationMode;
   final bool appendDateTimeToExportName;
   final String lastExportDirectory;
   final String borderColorLabel;
@@ -82,6 +84,7 @@ class PersistedEditorSettings {
       'aspectLabel': aspectLabel,
       'resolutionLabel': resolutionLabel,
       'audioMode': audioMode,
+      'durationMode': durationMode,
       'appendDateTimeToExportName': appendDateTimeToExportName,
       'lastExportDirectory': lastExportDirectory,
       'borderColorLabel': borderColorLabel,
@@ -104,6 +107,7 @@ class PersistedEditorSettings {
       aspectLabel: json['aspectLabel'] as String? ?? '16:9',
       resolutionLabel: json['resolutionLabel'] as String? ?? 'Full HD 1080',
       audioMode: json['audioMode'] as String? ?? 'firstClip',
+      durationMode: json['durationMode'] as String? ?? 'longest',
       appendDateTimeToExportName:
           json['appendDateTimeToExportName'] as bool? ?? false,
       lastExportDirectory: json['lastExportDirectory'] as String? ?? '',

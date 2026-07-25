@@ -113,6 +113,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   ColorChoice _selectedBorderColor = _colorChoices[0];
   ColorChoice _selectedBackgroundColor = _colorChoices[1];
   AudioMode _selectedAudioMode = AudioMode.firstClip;
+  ExportDurationMode _selectedDurationMode = ExportDurationMode.longest;
 
   int _rows = 2;
   int _columns = 2;
@@ -171,6 +172,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       showClipLabelIndex: _showClipLabelIndex,
       clipLabelFontSize: _clipLabelFontSize,
       audioMode: _selectedAudioMode,
+      durationMode: _selectedDurationMode,
     );
   }
 
@@ -207,6 +209,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _selectedAudioMode = AudioMode.values.firstWhere(
         (mode) => mode.name == savedSettings.audioMode,
         orElse: () => _selectedAudioMode,
+      );
+      _selectedDurationMode = ExportDurationMode.values.firstWhere(
+        (mode) => mode.name == savedSettings.durationMode,
+        orElse: () => _selectedDurationMode,
       );
       _lastExportDirectory = savedSettings.lastExportDirectory;
       _selectedBorderColor = _colorChoices.firstWhere(
@@ -261,6 +267,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         aspectLabel: _selectedAspect.label,
         resolutionLabel: _selectedResolution.label,
         audioMode: _selectedAudioMode.name,
+        durationMode: _selectedDurationMode.name,
         appendDateTimeToExportName: _appendDateTimeToExportName,
         lastExportDirectory: _lastExportDirectory,
         borderColorLabel: _selectedBorderColor.label,
@@ -687,6 +694,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _selectedAspect = resolvedChoice.aspectPreset;
       _widthController.text = '${size.$1}';
       _heightController.text = '${size.$2}';
+      _backfillVisibleSlotsFromOverflow();
       _statusMessage =
           'Auto layout picked ${resolvedChoice.rows}×${resolvedChoice.columns} • ${resolvedChoice.aspectPreset.label}.';
     });
@@ -841,10 +849,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final activeCount = slotClips.length;
     final exportFormat = exportFormatForClips(slotClips);
     final hasPreviewMotion = slotClips.any((entry) => entry.clip.isVideo);
-    final exportDuration = slotClips.fold<Duration>(
-      Duration.zero,
-      (current, entry) =>
-          entry.clip.duration > current ? entry.clip.duration : current,
+    final exportDuration = exportDurationForClips(
+      slotClips,
+      _selectedDurationMode,
     );
     final previewCanvasWidth = options.outputWidth.toDouble().clamp(
       1.0,
@@ -1009,15 +1016,19 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 _StepperRow(
                                   label: 'Rows',
                                   value: _rows,
-                                  onChanged: (value) =>
-                                      _setStateAndSave(() => _rows = value),
+                                  onChanged: (value) => _setStateAndSave(() {
+                                    _rows = value;
+                                    _backfillVisibleSlotsFromOverflow();
+                                  }),
                                 ),
                                 const SizedBox(height: 12),
                                 _StepperRow(
                                   label: 'Columns',
                                   value: _columns,
-                                  onChanged: (value) =>
-                                      _setStateAndSave(() => _columns = value),
+                                  onChanged: (value) => _setStateAndSave(() {
+                                    _columns = value;
+                                    _backfillVisibleSlotsFromOverflow();
+                                  }),
                                 ),
                                 const SizedBox(height: 12),
                                 Row(
@@ -1138,6 +1149,18 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   onSelected: (mode) {
                                     _setStateAndSave(() {
                                       _selectedAudioMode = mode;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _SelectionDropdown<ExportDurationMode>(
+                                  label: 'Duration',
+                                  selected: _selectedDurationMode,
+                                  options: ExportDurationMode.values,
+                                  itemLabel: (mode) => mode.label,
+                                  onSelected: (mode) {
+                                    _setStateAndSave(() {
+                                      _selectedDurationMode = mode;
                                     });
                                   },
                                 ),
@@ -1586,6 +1609,43 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       );
   }
 
+  void _backfillVisibleSlotsFromOverflow() {
+    final emptyVisibleSlots = <int>[
+      for (var slotIndex = 0; slotIndex < _gridCapacity; slotIndex += 1)
+        if (!_slotAssignments.containsKey(slotIndex)) slotIndex,
+    ];
+    if (emptyVisibleSlots.isEmpty) {
+      return;
+    }
+
+    final overflowPaths = <String>[];
+    final seenPaths = <String>{};
+    final sortedOverflowEntries = _slotAssignments.entries
+        .where((entry) => entry.key >= _gridCapacity)
+        .toList()
+      ..sort((left, right) => left.key.compareTo(right.key));
+    for (final entry in sortedOverflowEntries) {
+      if (seenPaths.add(entry.value) &&
+          _clips.any((clip) => clip.path == entry.value)) {
+        overflowPaths.add(entry.value);
+      }
+    }
+
+    final assignedPaths = _slotAssignments.values.toSet();
+    for (final clip in _clips) {
+      if (seenPaths.add(clip.path) && !assignedPaths.contains(clip.path)) {
+        overflowPaths.add(clip.path);
+      }
+    }
+
+    final fillCount = math.min(emptyVisibleSlots.length, overflowPaths.length);
+    for (var index = 0; index < fillCount; index += 1) {
+      final path = overflowPaths[index];
+      _slotAssignments.removeWhere((_, assignedPath) => assignedPath == path);
+      _slotAssignments[emptyVisibleSlots[index]] = path;
+    }
+  }
+
   double _clipAspectRatio(VideoClipInfo clip) {
     if (clip.width > 0 && clip.height > 0) {
       return clip.width / clip.height;
@@ -1730,6 +1790,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
       if (targetPath == null) {
         _slotAssignments[toSlotIndex] = sourcePath;
+        _backfillVisibleSlotsFromOverflow();
         _statusMessage = 'Moved clip to slot ${toSlotIndex + 1}.';
         return;
       }
