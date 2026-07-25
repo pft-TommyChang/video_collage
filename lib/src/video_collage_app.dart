@@ -104,14 +104,20 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   late final TextEditingController _heightController;
   Timer? _settingsSaveDebounce;
   Timer? _toastTimer;
+  Timer? _sequentialPreviewTimer;
   OverlayEntry? _toastOverlayEntry;
   bool _isRestoringSettings = false;
+  bool _isSyncingSequentialPreview = false;
   int? _externalDropHoverSlotIndex;
+  Duration _sequentialPreviewElapsed = Duration.zero;
+  DateTime? _sequentialPreviewStartedAt;
+  String? _activeSequentialClipPath;
 
   AspectRatioPreset _selectedAspect = _aspectPresets[4];
   ResolutionPreset _selectedResolution = _resolutionPresets[1];
   ColorChoice _selectedBorderColor = _colorChoices[0];
   ColorChoice _selectedBackgroundColor = _colorChoices[1];
+  PlayMode _selectedPlayMode = PlayMode.parallel;
   AudioMode _selectedAudioMode = AudioMode.firstClip;
   ExportDurationMode _selectedDurationMode = ExportDurationMode.longest;
 
@@ -147,6 +153,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   void dispose() {
     _settingsSaveDebounce?.cancel();
     _toastTimer?.cancel();
+    _sequentialPreviewTimer?.cancel();
     _toastOverlayEntry?.remove();
     _widthController.dispose();
     _heightController.dispose();
@@ -171,12 +178,15 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       includeClipLabelsInOutput: _includeClipLabelsInOutput,
       showClipLabelIndex: _showClipLabelIndex,
       clipLabelFontSize: _clipLabelFontSize,
+      playMode: _selectedPlayMode,
       audioMode: _selectedAudioMode,
       durationMode: _selectedDurationMode,
     );
   }
 
   int get _gridCapacity => _rows * _columns;
+
+  bool get _isSequentialPlayMode => _selectedPlayMode == PlayMode.sequential;
 
   Future<void> _restoreSettings() async {
     final savedSettings = await _settingsStore.load();
@@ -206,6 +216,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         (preset) => preset.label == savedSettings.resolutionLabel,
         orElse: () => _selectedResolution,
       );
+      _selectedPlayMode = PlayMode.values.firstWhere(
+        (mode) => mode.name == savedSettings.playMode,
+        orElse: () => _selectedPlayMode,
+      );
       _selectedAudioMode = AudioMode.values.firstWhere(
         (mode) => mode.name == savedSettings.audioMode,
         orElse: () => _selectedAudioMode,
@@ -227,6 +241,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _heightController.text = '${_ensureEven(savedSettings.outputHeight)}';
     });
     _isRestoringSettings = false;
+    unawaited(_syncPreviewPlaybackMode());
   }
 
   void _scheduleSettingsSave() {
@@ -266,6 +281,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         outputHeight: height,
         aspectLabel: _selectedAspect.label,
         resolutionLabel: _selectedResolution.label,
+        playMode: _selectedPlayMode.name,
         audioMode: _selectedAudioMode.name,
         durationMode: _selectedDurationMode.name,
         appendDateTimeToExportName: _appendDateTimeToExportName,
@@ -603,6 +619,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
       _statusMessage = 'Removed ${clip.name}.';
     });
+    unawaited(_syncPreviewPlaybackMode());
   }
 
   void _clearClips() {
@@ -610,12 +627,17 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       controller.dispose();
     }
     _controllers.clear();
+    _sequentialPreviewTimer?.cancel();
+    _sequentialPreviewTimer = null;
+    _sequentialPreviewElapsed = Duration.zero;
+    _sequentialPreviewStartedAt = null;
     setState(() {
       _clips.clear();
       _slotAssignments.clear();
       _loadingClipPaths.clear();
       _clipErrors.clear();
       _isPreviewPlaying = false;
+      _activeSequentialClipPath = null;
       _statusMessage = 'Cleared all media.';
     });
   }
@@ -627,6 +649,33 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _widthController.text = '${size.$1}';
       _heightController.text = '${size.$2}';
     });
+  }
+
+  Future<void> _handlePlayModeSelected(PlayMode mode) async {
+    final wasSequential = _isSequentialPlayMode;
+    _setStateAndSave(() {
+      _selectedPlayMode = mode;
+      if (mode != PlayMode.sequential) {
+        _activeSequentialClipPath = null;
+      }
+    });
+
+    if (mode == PlayMode.sequential && !wasSequential) {
+      _sequentialPreviewElapsed = Duration.zero;
+      _sequentialPreviewStartedAt = _isPreviewPlaying ? DateTime.now() : null;
+      if (_isPreviewPlaying) {
+        _startSequentialPreviewTicker();
+      }
+    }
+
+    if (mode != PlayMode.sequential) {
+      _sequentialPreviewElapsed = Duration.zero;
+      _sequentialPreviewStartedAt = null;
+      _sequentialPreviewTimer?.cancel();
+      _sequentialPreviewTimer = null;
+    }
+
+    await _syncPreviewPlaybackMode();
   }
 
   void _applyAspectPreset(AspectRatioPreset preset) {
@@ -848,11 +897,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final overlayLabelScale = options.scaleFactor * 1.2;
     final activeCount = slotClips.length;
     final exportFormat = exportFormatForClips(slotClips);
+    final resolvedExportFormat = slotClips.isEmpty ? null : exportFormat;
     final hasPreviewMotion = slotClips.any((entry) => entry.clip.isVideo);
     final exportDuration = exportDurationForClips(
       slotClips,
       _selectedDurationMode,
+      _selectedPlayMode,
     );
+    final playModeLabel = _selectedPlayMode.label;
     final previewCanvasWidth = options.outputWidth.toDouble().clamp(
       1.0,
       double.infinity,
@@ -909,10 +961,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              Text(
-                                'Perfect Collage',
-                                style: Theme.of(context).textTheme.headlineMedium
-                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              Expanded(
+                                child: Text(
+                                  'Perfect Collage',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.headlineMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
                               ),
                             ],
                           ),
@@ -926,20 +982,25 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                               children: <Widget>[
                                 Row(
                                   children: <Widget>[
-                                    FilledButton.icon(
-                                      onPressed: _isImporting
-                                          ? null
-                                          : _pickMedia,
-                                      icon: const Icon(
-                                        Icons.video_library_outlined,
-                                      ),
-                                      label: Text(
-                                        _isImporting
-                                            ? 'Loading...'
-                                            : 'Add Media',
+                                    Expanded(
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: FilledButton.icon(
+                                          onPressed: _isImporting
+                                              ? null
+                                              : _pickMedia,
+                                          icon: const Icon(
+                                            Icons.video_library_outlined,
+                                          ),
+                                          label: Text(
+                                            _isImporting
+                                                ? 'Loading...'
+                                                : 'Add Media',
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                    const Spacer(),
+                                    const SizedBox(width: 12),
                                     IconButton.outlined(
                                       onPressed: _clips.isEmpty
                                           ? null
@@ -1137,34 +1198,46 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           const SizedBox(height: 16),
                           _SectionCard(
                             title: 'Output',
-                            subtitle: 'Resolution and render size',
+                            subtitle: '$playModeLabel mode',
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                _SelectionDropdown<AudioMode>(
-                                  label: 'Audio',
-                                  selected: _selectedAudioMode,
-                                  options: AudioMode.values,
+                                _SelectionDropdown<PlayMode>(
+                                  label: 'Play mode',
+                                  selected: _selectedPlayMode,
+                                  options: PlayMode.values,
                                   itemLabel: (mode) => mode.label,
                                   onSelected: (mode) {
-                                    _setStateAndSave(() {
-                                      _selectedAudioMode = mode;
-                                    });
+                                    unawaited(_handlePlayModeSelected(mode));
                                   },
                                 ),
                                 const SizedBox(height: 16),
-                                _SelectionDropdown<ExportDurationMode>(
-                                  label: 'Duration',
-                                  selected: _selectedDurationMode,
-                                  options: ExportDurationMode.values,
-                                  itemLabel: (mode) => mode.label,
-                                  onSelected: (mode) {
-                                    _setStateAndSave(() {
-                                      _selectedDurationMode = mode;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 16),
+                                if (!_isSequentialPlayMode) ...<Widget>[
+                                  _SelectionDropdown<AudioMode>(
+                                    label: 'Audio',
+                                    selected: _selectedAudioMode,
+                                    options: AudioMode.values,
+                                    itemLabel: (mode) => mode.label,
+                                    onSelected: (mode) {
+                                      _setStateAndSave(() {
+                                        _selectedAudioMode = mode;
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _SelectionDropdown<ExportDurationMode>(
+                                    label: 'Duration',
+                                    selected: _selectedDurationMode,
+                                    options: ExportDurationMode.values,
+                                    itemLabel: (mode) => mode.label,
+                                    onSelected: (mode) {
+                                      _setStateAndSave(() {
+                                        _selectedDurationMode = mode;
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 16),
+                                ],
                                 _SelectionDropdown<ResolutionPreset>(
                                   label: 'Resolution',
                                   selected: _selectedResolution,
@@ -1266,7 +1339,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     ),
                                     isExporting: _isExporting,
                                     progress: _exportProgress,
-                                    exportFormat: exportFormat,
+                                    exportFormat: resolvedExportFormat,
                                   ),
                                 ),
                                 Expanded(
@@ -1289,8 +1362,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                             Center(
                               child: Text(
                                 exportFormat == ExportFormat.jpg
-                                    ? 'Output: ${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • ${exportFormat.label}'
-                                    : 'Output: ${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • ${formatDuration(exportDuration)} • ${exportFormat.label}',
+                                    ? '${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • $playModeLabel'
+                                    : '${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • $playModeLabel • ${formatDuration(exportDuration)}',
                                 textAlign: TextAlign.center,
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
@@ -1493,6 +1566,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                     : () => unawaited(
                                                         _editClipTitle(clip),
                                                       ),
+                                                isActiveLabel:
+                                                    _isSequentialPlayMode &&
+                                                    _isPreviewPlaying &&
+                                                    _activeSequentialClipPath ==
+                                                        clip?.path,
                                                 clipLabelFontSize:
                                                     _clipLabelFontSize,
                                                 isDragTarget:
@@ -1753,6 +1831,192 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     return entries;
   }
 
+  List<CollageSlotClip> _sequentialVideoSlotClips() {
+    return _slotClipsForExport()
+        .where((entry) => entry.clip.isVideo && entry.clip.duration > Duration.zero)
+        .toList(growable: false);
+  }
+
+  Duration _currentSequentialPreviewElapsed() {
+    final startedAt = _sequentialPreviewStartedAt;
+    if (!_isPreviewPlaying || startedAt == null) {
+      return _sequentialPreviewElapsed;
+    }
+    return _sequentialPreviewElapsed + DateTime.now().difference(startedAt);
+  }
+
+  Duration _lastFramePosition(VideoClipInfo clip) {
+    final durationMs = clip.duration.inMilliseconds;
+    if (durationMs <= 34) {
+      return Duration.zero;
+    }
+    return Duration(milliseconds: durationMs - 34);
+  }
+
+  Future<void> _seekControllerIfNeeded(
+    VideoPlayerController controller,
+    Duration target,
+  ) async {
+    final current = controller.value.position;
+    if ((current - target).abs() < const Duration(milliseconds: 80)) {
+      return;
+    }
+    await controller.seekTo(target);
+  }
+
+  Future<void> _syncParallelPreviewControllers() async {
+    _sequentialPreviewTimer?.cancel();
+    _sequentialPreviewTimer = null;
+    _sequentialPreviewStartedAt = null;
+    _sequentialPreviewElapsed = Duration.zero;
+    if (_activeSequentialClipPath != null && mounted) {
+      setState(() {
+        _activeSequentialClipPath = null;
+      });
+    }
+
+    for (final controller in _controllers.values) {
+      if (!controller.value.isInitialized) {
+        continue;
+      }
+      await controller.setLooping(true);
+      await controller.setVolume(0);
+      if (_isPreviewPlaying) {
+        await controller.play();
+      } else {
+        await controller.pause();
+      }
+    }
+  }
+
+  Future<void> _syncSequentialPreviewControllers() async {
+    if (_isSyncingSequentialPreview || !mounted) {
+      return;
+    }
+    _isSyncingSequentialPreview = true;
+    try {
+      final segments = _sequentialVideoSlotClips();
+      if (segments.isEmpty) {
+        _sequentialPreviewTimer?.cancel();
+        _sequentialPreviewTimer = null;
+        for (final controller in _controllers.values) {
+          if (!controller.value.isInitialized) {
+            continue;
+          }
+          await controller.pause();
+        }
+        if (_activeSequentialClipPath != null || _isPreviewPlaying) {
+          setState(() {
+            _activeSequentialClipPath = null;
+            _isPreviewPlaying = false;
+          });
+        }
+        return;
+      }
+
+      final totalDuration = segments.fold(
+        Duration.zero,
+        (total, entry) => total + entry.clip.duration,
+      );
+      final elapsed = _currentSequentialPreviewElapsed();
+      if (elapsed >= totalDuration) {
+        _sequentialPreviewTimer?.cancel();
+        _sequentialPreviewTimer = null;
+        _sequentialPreviewStartedAt = null;
+        _sequentialPreviewElapsed = totalDuration;
+        for (final entry in segments) {
+          final controller = _controllers[entry.clip.path];
+          if (controller == null || !controller.value.isInitialized) {
+            continue;
+          }
+          await controller.setLooping(false);
+          await controller.pause();
+          await _seekControllerIfNeeded(
+            controller,
+            _lastFramePosition(entry.clip),
+          );
+        }
+        if (mounted) {
+          setState(() {
+            _activeSequentialClipPath = null;
+            _isPreviewPlaying = false;
+            _statusMessage = 'Preview playback finished.';
+          });
+        }
+        return;
+      }
+
+      var remaining = elapsed;
+      var activeSegmentIndex = 0;
+      while (
+          activeSegmentIndex < segments.length &&
+          remaining >= segments[activeSegmentIndex].clip.duration) {
+        remaining -= segments[activeSegmentIndex].clip.duration;
+        activeSegmentIndex++;
+      }
+
+      final activeEntry = segments[activeSegmentIndex];
+      final activeClipPath = activeEntry.clip.path;
+      final activeOffset = remaining;
+      final sequentialOrder = <String, int>{
+        for (var index = 0; index < segments.length; index += 1)
+          segments[index].clip.path: index,
+      };
+
+      if (_activeSequentialClipPath != activeClipPath && mounted) {
+        setState(() {
+          _activeSequentialClipPath = activeClipPath;
+        });
+      }
+
+      for (final clip in _slotClipsForExport()) {
+        if (!clip.clip.isVideo) {
+          continue;
+        }
+        final controller = _controllers[clip.clip.path];
+        if (controller == null || !controller.value.isInitialized) {
+          continue;
+        }
+
+        await controller.setLooping(false);
+        await controller.setVolume(0);
+
+        final clipOrder = sequentialOrder[clip.clip.path];
+        if (clip.clip.path == activeClipPath) {
+          await _seekControllerIfNeeded(controller, activeOffset);
+          if (_isPreviewPlaying) {
+            await controller.play();
+          } else {
+            await controller.pause();
+          }
+          continue;
+        }
+
+        await controller.pause();
+        if (clipOrder != null && clipOrder < activeSegmentIndex) {
+          await _seekControllerIfNeeded(
+            controller,
+            _lastFramePosition(clip.clip),
+          );
+        } else {
+          await _seekControllerIfNeeded(controller, Duration.zero);
+        }
+      }
+    } finally {
+      _isSyncingSequentialPreview = false;
+    }
+  }
+
+  void _startSequentialPreviewTicker() {
+    _sequentialPreviewTimer?.cancel();
+    _sequentialPreviewTimer = Timer.periodic(
+      const Duration(milliseconds: 120),
+      (_) {
+        unawaited(_syncSequentialPreviewControllers());
+      },
+    );
+  }
+
   double _previewCellAspectRatio(ExportOptions options) {
     final border = options.scaledBorderThickness;
     final cellWidth =
@@ -1800,6 +2064,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _statusMessage =
           'Swapped slot ${fromSlotIndex + 1} with slot ${toSlotIndex + 1}.';
     });
+    unawaited(_syncPreviewPlaybackMode());
   }
 
   Future<void> _handleExternalDropToSlot(
@@ -1837,6 +2102,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         _statusMessage =
             'Assigned ${existingClip!.name} to slot ${slotIndex + 1}.';
       });
+      unawaited(_syncPreviewPlaybackMode());
       return;
     }
 
@@ -1977,8 +2243,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   Future<void> _setPreviewPlayback(bool shouldPlay) async {
-    final controllers = _controllers.values.toList(growable: false);
-
     setState(() {
       _isPreviewPlaying = shouldPlay;
       _statusMessage = shouldPlay
@@ -1986,16 +2250,39 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
           : 'Preview playback paused.';
     });
 
-    for (final controller in controllers) {
-      if (!controller.value.isInitialized) {
-        continue;
-      }
-      if (shouldPlay) {
-        await controller.play();
-      } else {
-        await controller.pause();
-      }
+    if (!_isSequentialPlayMode) {
+      await _syncParallelPreviewControllers();
+      return;
     }
+
+    if (!shouldPlay) {
+      _sequentialPreviewElapsed = _currentSequentialPreviewElapsed();
+      _sequentialPreviewStartedAt = null;
+      _sequentialPreviewTimer?.cancel();
+      _sequentialPreviewTimer = null;
+      await _syncSequentialPreviewControllers();
+      return;
+    }
+
+    final totalDuration = exportDurationForClips(
+      _slotClipsForExport(),
+      _selectedDurationMode,
+      PlayMode.sequential,
+    );
+    if (_sequentialPreviewElapsed >= totalDuration) {
+      _sequentialPreviewElapsed = Duration.zero;
+    }
+    _sequentialPreviewStartedAt = DateTime.now();
+    _startSequentialPreviewTicker();
+    await _syncSequentialPreviewControllers();
+  }
+
+  Future<void> _syncPreviewPlaybackMode() async {
+    if (!_isSequentialPlayMode) {
+      await _syncParallelPreviewControllers();
+      return;
+    }
+    await _syncSequentialPreviewControllers();
   }
 
   int _ensureEven(int value) {
@@ -2038,6 +2325,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
             _statusMessage = 'Loaded ${clip.name}.';
           }
         });
+        unawaited(_syncPreviewPlaybackMode());
       } catch (error) {
         if (!mounted) {
           return;
@@ -2056,9 +2344,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     try {
       controller = VideoPlayerController.file(File(path));
       await controller.initialize().timeout(const Duration(seconds: 12));
-      await controller.setLooping(true);
+      await controller.setLooping(!_isSequentialPlayMode);
       await controller.setVolume(0);
-      if (_isPreviewPlaying) {
+      if (_isPreviewPlaying && !_isSequentialPlayMode) {
         await controller.play();
       } else {
         await controller.pause();
@@ -2102,6 +2390,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       if (!identical(previousController, controller)) {
         previousController?.dispose();
       }
+      unawaited(_syncPreviewPlaybackMode());
       controller = null;
     } catch (error) {
       controller?.dispose();
@@ -2333,7 +2622,7 @@ class _ExportButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool isExporting;
   final double progress;
-  final ExportFormat exportFormat;
+  final ExportFormat? exportFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -2383,7 +2672,9 @@ class _ExportButton extends StatelessWidget {
                       Text(
                         isExporting
                             ? 'Exporting... $percent%'
-                            : 'Export ${exportFormat.label}',
+                            : exportFormat == null
+                            ? 'Export'
+                            : 'Export ${exportFormat!.label}',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               color: foregroundColor,
@@ -2695,6 +2986,7 @@ class _PreviewTile extends StatelessWidget {
     required this.showLabel,
     required this.showLabelIndex,
     required this.onEditLabel,
+    required this.isActiveLabel,
     required this.clipLabelFontSize,
     required this.isDragTarget,
     required this.overlayLabelScale,
@@ -2712,6 +3004,7 @@ class _PreviewTile extends StatelessWidget {
   final bool showLabel;
   final bool showLabelIndex;
   final VoidCallback? onEditLabel;
+  final bool isActiveLabel;
   final double clipLabelFontSize;
   final bool isDragTarget;
   final double overlayLabelScale;
@@ -2735,6 +3028,7 @@ class _PreviewTile extends StatelessWidget {
       label: label,
       backgroundColor: backgroundColor,
       onLabelTap: onEditLabel,
+      isActiveLabel: isActiveLabel,
       clipLabelFontSize: clipLabelFontSize,
       isDragTarget: isDragTarget,
       overlayLabelScale: overlayLabelScale,
@@ -2774,6 +3068,7 @@ class _PreviewTile extends StatelessWidget {
               label: label,
               backgroundColor: backgroundColor,
               onLabelTap: null,
+              isActiveLabel: isActiveLabel,
               clipLabelFontSize: clipLabelFontSize,
               isDragTarget: false,
               overlayLabelScale: overlayLabelScale,
@@ -2798,6 +3093,7 @@ class _PreviewTileBody extends StatelessWidget {
     required this.label,
     required this.backgroundColor,
     required this.onLabelTap,
+    required this.isActiveLabel,
     required this.clipLabelFontSize,
     required this.isDragTarget,
     required this.overlayLabelScale,
@@ -2812,6 +3108,7 @@ class _PreviewTileBody extends StatelessWidget {
   final String? label;
   final Color backgroundColor;
   final VoidCallback? onLabelTap;
+  final bool isActiveLabel;
   final double clipLabelFontSize;
   final bool isDragTarget;
   final double overlayLabelScale;
@@ -2961,7 +3258,9 @@ class _PreviewTileBody extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: isActiveLabel
+                                      ? const Color(0xFFFACC15)
+                                      : Colors.white,
                                   fontSize: labelStyle.fontSize,
                                   fontWeight: FontWeight.w600,
                                 ),

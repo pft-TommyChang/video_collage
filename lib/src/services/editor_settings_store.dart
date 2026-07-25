@@ -44,6 +44,7 @@ class PersistedEditorSettings {
     required this.outputHeight,
     required this.aspectLabel,
     required this.resolutionLabel,
+    required this.playMode,
     required this.audioMode,
     required this.durationMode,
     required this.appendDateTimeToExportName,
@@ -63,6 +64,7 @@ class PersistedEditorSettings {
   final int outputHeight;
   final String aspectLabel;
   final String resolutionLabel;
+  final String playMode;
   final String audioMode;
   final String durationMode;
   final bool appendDateTimeToExportName;
@@ -83,6 +85,7 @@ class PersistedEditorSettings {
       'outputHeight': outputHeight,
       'aspectLabel': aspectLabel,
       'resolutionLabel': resolutionLabel,
+      'playMode': playMode,
       'audioMode': audioMode,
       'durationMode': durationMode,
       'appendDateTimeToExportName': appendDateTimeToExportName,
@@ -106,6 +109,7 @@ class PersistedEditorSettings {
       outputHeight: (json['outputHeight'] as num?)?.toInt() ?? 1080,
       aspectLabel: json['aspectLabel'] as String? ?? '16:9',
       resolutionLabel: json['resolutionLabel'] as String? ?? 'Full HD 1080',
+      playMode: json['playMode'] as String? ?? 'parallel',
       audioMode: json['audioMode'] as String? ?? 'firstClip',
       durationMode: json['durationMode'] as String? ?? 'longest',
       appendDateTimeToExportName:

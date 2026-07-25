@@ -49,6 +49,16 @@ enum AudioMode {
   };
 }
 
+enum PlayMode {
+  parallel,
+  sequential;
+
+  String get label => switch (this) {
+    PlayMode.parallel => 'Together',
+    PlayMode.sequential => 'One by one',
+  };
+}
+
 enum ExportDurationMode {
   longest,
   shortest;
@@ -132,6 +142,7 @@ class ExportOptions {
     required this.includeClipLabelsInOutput,
     required this.showClipLabelIndex,
     required this.clipLabelFontSize,
+    required this.playMode,
     required this.audioMode,
     required this.durationMode,
   });
@@ -147,6 +158,7 @@ class ExportOptions {
   final bool includeClipLabelsInOutput;
   final bool showClipLabelIndex;
   final double clipLabelFontSize;
+  final PlayMode playMode;
   final AudioMode audioMode;
   final ExportDurationMode durationMode;
 
@@ -232,6 +244,7 @@ ExportFormat exportFormatForClips(Iterable<CollageSlotClip> slotClips) {
 Duration exportDurationForClips(
   Iterable<CollageSlotClip> slotClips,
   ExportDurationMode mode,
+  PlayMode playMode
 ) {
   final videoDurations = slotClips
       .map((entry) => entry.clip)
@@ -241,6 +254,13 @@ Duration exportDurationForClips(
 
   if (videoDurations.isEmpty) {
     return Duration.zero;
+  }
+
+  if (playMode == PlayMode.sequential) {
+    return videoDurations.fold(
+      Duration.zero,
+      (total, duration) => total + duration,
+    );
   }
 
   return switch (mode) {

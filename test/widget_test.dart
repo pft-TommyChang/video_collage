@@ -14,7 +14,7 @@ void main() {
     await tester.pumpWidget(const VideoCollageApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Video Collage Studio'), findsWidgets);
+    expect(find.text('Perfect Collage'), findsWidgets);
     expect(find.text('Preview'), findsOneWidget);
   });
 }
