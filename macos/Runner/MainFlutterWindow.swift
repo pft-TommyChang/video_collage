@@ -3,7 +3,7 @@ import FlutterMacOS
 
 class MainFlutterWindow: NSWindow, NSWindowDelegate {
   private let initialContentSize = NSSize(width: 1080, height: 840)
-  private let minimumContentSize = NSSize(width: 840, height: 600)
+  private let minimumContentSize = NSSize(width: 800, height: 600)
   private let savedContentWidthKey = "video_collage.window.contentWidth"
   private let savedContentHeightKey = "video_collage.window.contentHeight"
 

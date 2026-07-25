@@ -1006,6 +1006,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _selectedPlayMode,
     );
     final previewPosition = _currentPreviewDisplayElapsed(exportDuration);
+    final canStopPreview =
+        hasPreviewMotion && previewPosition > Duration.zero;
     final playModeLabel = _selectedPlayMode.label;
     final previewCanvasWidth = options.outputWidth.toDouble().clamp(
       1.0,
@@ -1565,28 +1567,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           children: <Widget>[
                             Row(
                               children: <Widget>[
-                                IconButton.filledTonal(
-                                  onPressed: !hasPreviewMotion
-                                      ? null
-                                      : () {
-                                          unawaited(
-                                            _setPreviewPlayback(
-                                              !_isPreviewPlaying,
-                                            ),
-                                          );
-                                        },
-                                  tooltip: !hasPreviewMotion
-                                      ? 'Preview playback unavailable for photos only'
-                                      : _isPreviewPlaying
-                                      ? 'Pause preview'
-                                      : 'Play preview',
-                                  icon: Icon(
-                                    hasPreviewMotion && _isPreviewPlaying
-                                        ? Icons.pause_rounded
-                                        : Icons.play_arrow_rounded,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
                                     'Preview',
@@ -1598,8 +1578,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 8,
+                                    horizontal: 10,
+                                    vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
                                     color: Colors.white.withValues(alpha: 0.74),
@@ -1608,16 +1588,80 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                       color: const Color(0xFFD0C5B5),
                                     ),
                                   ),
-                                  child: Text(
-                                    '${formatDuration(previewPosition)} / ${formatDuration(exportDuration)}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          fontFeatures: const <FontFeature>[
-                                            FontFeature.tabularFigures(),
-                                          ],
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      IconButton(
+                                        onPressed: !hasPreviewMotion
+                                            ? null
+                                            : () {
+                                                unawaited(
+                                                  _setPreviewPlayback(
+                                                    !_isPreviewPlaying,
+                                                  ),
+                                                );
+                                              },
+                                        tooltip: !hasPreviewMotion
+                                            ? 'Preview playback unavailable for photos only'
+                                            : _isPreviewPlaying
+                                            ? 'Pause preview'
+                                            : 'Play preview',
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 24,
+                                          minHeight: 24,
                                         ),
+                                        visualDensity: VisualDensity.compact,
+                                        iconSize: 24,
+                                        splashRadius: 16,
+                                        icon: Icon(
+                                          _isPreviewPlaying
+                                              ? Icons.pause_rounded
+                                              : Icons.play_arrow_rounded,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        onPressed: !canStopPreview
+                                            ? null
+                                            : () {
+                                                unawaited(
+                                                  _stopPreviewPlayback(),
+                                                );
+                                              },
+                                        tooltip: 'Reset preview to start',
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 24,
+                                          minHeight: 24,
+                                        ),
+                                        visualDensity: VisualDensity.compact,
+                                        iconSize: 23,
+                                        splashRadius: 16,
+                                        icon: const Icon(
+                                          Icons.refresh,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '${formatDuration(previewPosition)} / ${formatDuration(exportDuration)}',
+                                        style: (() {
+                                          final baseStyle = Theme.of(
+                                            context,
+                                          ).textTheme.bodyMedium;
+                                          final baseFontSize =
+                                              baseStyle?.fontSize ?? 14;
+                                          return baseStyle?.copyWith(
+                                            fontSize: baseFontSize * 1.17,
+                                            fontFeatures:
+                                                const <FontFeature>[
+                                                  FontFeature.tabularFigures(),
+                                                ],
+                                          );
+                                        })(),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -2558,7 +2602,22 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   Future<void> _setPreviewPlayback(bool shouldPlay) async {
+    final parallelPausePosition = !shouldPlay && !_isSequentialPlayMode
+        ? _currentParallelPreviewElapsed()
+        : null;
+    final sequentialPausePosition = !shouldPlay && _isSequentialPlayMode
+        ? _currentSequentialPreviewElapsed()
+        : null;
+
     setState(() {
+      if (parallelPausePosition != null) {
+        _parallelPreviewElapsed = parallelPausePosition;
+        _parallelPreviewStartedAt = null;
+      }
+      if (sequentialPausePosition != null) {
+        _sequentialPreviewElapsed = sequentialPausePosition;
+        _sequentialPreviewStartedAt = null;
+      }
       _isPreviewPlaying = shouldPlay;
       _statusMessage = shouldPlay
           ? 'Preview playback started.'
@@ -2570,15 +2629,20 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
     if (!_isSequentialPlayMode) {
       if (!shouldPlay) {
-        _parallelPreviewElapsed = _currentParallelPreviewElapsed();
-        _parallelPreviewStartedAt = null;
         _parallelPreviewTimer?.cancel();
         _parallelPreviewTimer = null;
         await _syncParallelPreviewControllers();
         return;
       }
 
-      _parallelPreviewElapsed = Duration.zero;
+      final totalDuration = exportDurationForClips(
+        _slotClipsForExport(),
+        _selectedDurationMode,
+        PlayMode.parallel,
+      );
+      if (_parallelPreviewElapsed >= totalDuration) {
+        _parallelPreviewElapsed = Duration.zero;
+      }
       _parallelPreviewStartedAt = DateTime.now();
       _lastPreviewProgressSecond = null;
       _startParallelPreviewTicker();
@@ -2587,8 +2651,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     }
 
     if (!shouldPlay) {
-      _sequentialPreviewElapsed = _currentSequentialPreviewElapsed();
-      _sequentialPreviewStartedAt = null;
       _sequentialPreviewTimer?.cancel();
       _sequentialPreviewTimer = null;
       await _syncSequentialPreviewControllers();
@@ -2607,6 +2669,26 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     _lastPreviewProgressSecond = null;
     _startSequentialPreviewTicker();
     await _syncSequentialPreviewControllers();
+  }
+
+  Future<void> _stopPreviewPlayback() async {
+    setState(() {
+      _isPreviewPlaying = false;
+      _statusMessage = 'Preview playback stopped.';
+    });
+
+    _lastPreviewProgressSecond = null;
+    _parallelPreviewTimer?.cancel();
+    _parallelPreviewTimer = null;
+    _parallelPreviewStartedAt = null;
+    _parallelPreviewElapsed = Duration.zero;
+    _sequentialPreviewTimer?.cancel();
+    _sequentialPreviewTimer = null;
+    _sequentialPreviewStartedAt = null;
+    _sequentialPreviewElapsed = Duration.zero;
+    _activeSequentialClipPath = null;
+
+    await _syncPreviewPlaybackMode();
   }
 
   Future<void> _syncPreviewPlaybackMode() async {
