@@ -137,6 +137,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   List<ExportHistoryEntry> _exportHistory = const <ExportHistoryEntry>[];
   String _lastExportDirectory = '';
 
+  ExportHistoryEntry? get _lastExportEntry =>
+      _exportHistory.isEmpty ? null : _exportHistory.first;
+
   @override
   void initState() {
     super.initState();
@@ -342,6 +345,20 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         _statusMessage = 'Unable to open export: $resolvedPath';
       });
     }
+  }
+
+  Future<void> _openLastExport() async {
+    final lastExportEntry = _lastExportEntry;
+    if (lastExportEntry == null) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _statusMessage = 'No export history yet.';
+      });
+      return;
+    }
+    await _openExportHistoryEntry(lastExportEntry);
   }
 
   Future<void> _openExportHistoryFolder(ExportHistoryEntry entry) async {
@@ -557,7 +574,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
             _clipErrors.remove(path);
             _slotAssignments[_nextAvailableSlot()] = path;
           }
-          _statusMessage = 'Queued ${newPaths.length} media item(s) for import.';
+          _statusMessage =
+              'Queued ${newPaths.length} media item(s) for import.';
         });
       }
 
@@ -770,7 +788,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final savePath = await _dialogService.pickSavePath(
       format: exportFormat,
       suggestedName: _suggestedExportFileName(exportFormat),
-      initialDirectory: _lastExportDirectory.isEmpty ? null : _lastExportDirectory,
+      initialDirectory: _lastExportDirectory.isEmpty
+          ? null
+          : _lastExportDirectory,
     );
     if (savePath == null || savePath.isEmpty) {
       if (!mounted) {
@@ -805,8 +825,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
               : ' • ${progress.speed!.toStringAsFixed(2)}x';
           setState(() {
             _exportProgress = progress.progress;
-            _statusMessage =
-                exportFormat == ExportFormat.jpg
+            _statusMessage = exportFormat == ExportFormat.jpg
                 ? 'Exporting collage image... $percent%'
                 : 'Exporting collage video... $percent% • ${formatDuration(progress.processed)} / ${formatDuration(progress.total)}$speedText';
           });
@@ -914,6 +933,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       double.infinity,
     );
     final previewCellAspectRatio = _previewCellAspectRatio(options);
+    final lastExportEntry = _lastExportEntry;
+    final hasLastExport =
+        lastExportEntry != null &&
+        File(_resolveHistoryPath(lastExportEntry.path)).existsSync();
 
     return Scaffold(
       body: SafeArea(
@@ -937,351 +960,395 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           child: ListView(
                             padding: const EdgeInsets.all(20),
                             children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              DecoratedBox(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: const <BoxShadow>[
-                                    BoxShadow(
-                                      color: Color(0x22000000),
-                                      blurRadius: 14,
-                                      offset: Offset(0, 6),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: Image.asset(
-                                    'macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png',
-                                    width: 44,
-                                    height: 44,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Perfect Collage',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.headlineMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          _SectionCard(
-                            title: 'Media',
-                            subtitle:
-                                '${_clips.length} loaded • capacity $_gridCapacity',
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Row(
-                                  children: <Widget>[
-                                    Expanded(
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: FilledButton.icon(
-                                          onPressed: _isImporting
-                                              ? null
-                                              : _pickMedia,
-                                          icon: const Icon(
-                                            Icons.video_library_outlined,
-                                          ),
-                                          label: Text(
-                                            _isImporting
-                                                ? 'Loading...'
-                                                : 'Add Media',
-                                          ),
+                              Row(
+                                children: <Widget>[
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: const <BoxShadow>[
+                                        BoxShadow(
+                                          color: Color(0x22000000),
+                                          blurRadius: 14,
+                                          offset: Offset(0, 6),
                                         ),
+                                      ],
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Image.asset(
+                                        'macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png',
+                                        width: 44,
+                                        height: 44,
+                                        fit: BoxFit.cover,
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
-                                    IconButton.outlined(
-                                      onPressed: _clips.isEmpty
-                                          ? null
-                                          : _autoLayout,
-                                      tooltip: 'Auto Layout',
-                                      style: IconButton.styleFrom(
-                                        minimumSize: const Size(34, 34),
-                                        maximumSize: const Size(34, 34),
-                                      ),
-                                      icon: const Icon(
-                                        Icons.auto_fix_high,
-                                        size: 18,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    IconButton.outlined(
-                                      onPressed: _clips.isEmpty
-                                          ? null
-                                          : _clearClips,
-                                      tooltip: 'Clear',
-                                      style: IconButton.styleFrom(
-                                        minimumSize: const Size(34, 34),
-                                        maximumSize: const Size(34, 34),
-                                      ),
-                                      icon: const Icon(
-                                        Icons.cleaning_services_outlined,
-                                        size: 18,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                if (_clips.isEmpty)
-                                  const _EmptyListState()
-                                else
-                                  ..._clips.asMap().entries.map((entry) {
-                                    final clip = entry.value;
-                                    return Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 10,
-                                      ),
-                                      child: _ClipListTile(
-                                        clip: clip,
-                                        controller: _controllers[clip.path],
-                                        isUsed: _isClipVisibleInGrid(clip.path),
-                                        isLoading: _loadingClipPaths.contains(
-                                          clip.path,
-                                        ),
-                                        errorMessage: _clipErrors[clip.path],
-                                        onRemove: () => _removeClip(clip),
-                                      ),
-                                    );
-                                  }),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          _SectionCard(
-                            title: 'Layout',
-                            subtitle:
-                                'Aspect ratio, rows, columns, and styling',
-                            child: Column(
-                              children: <Widget>[
-                                _SelectionDropdown<AspectRatioPreset>(
-                                  label: 'Aspect ratio',
-                                  selected: _selectedAspect,
-                                  options: _aspectPresets,
-                                  itemLabel: (preset) => preset.label,
-                                  itemBuilder: (preset) =>
-                                      _AspectRatioDropdownItem(preset: preset),
-                                  onSelected: _applyAspectPreset,
-                                ),
-                                const SizedBox(height: 16),
-                                _StepperRow(
-                                  label: 'Rows',
-                                  value: _rows,
-                                  onChanged: (value) => _setStateAndSave(() {
-                                    _rows = value;
-                                    _backfillVisibleSlotsFromOverflow();
-                                  }),
-                                ),
-                                const SizedBox(height: 12),
-                                _StepperRow(
-                                  label: 'Columns',
-                                  value: _columns,
-                                  onChanged: (value) => _setStateAndSave(() {
-                                    _columns = value;
-                                    _backfillVisibleSlotsFromOverflow();
-                                  }),
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: <Widget>[
-                                    Expanded(
-                                      child: Text('Border thickness', style: Theme.of(context).textTheme.titleSmall),
-                                    ),
-                                    Text('${_borderThickness.round()} px'),
-                                  ],
-                                ),
-                                Slider(
-                                  value: _borderThickness,
-                                  min: 0,
-                                  max: 48,
-                                  divisions: 24,
-                                  onChanged: (value) {
-                                    _setStateAndSave(() {
-                                      _borderThickness = value;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: <Widget>[
-                                    Expanded(
-                                      child: Text('Tile corner radius', style: Theme.of(context).textTheme.titleSmall),
-                                    ),
-                                    Text('${_tileCornerRadius.round()} px'),
-                                  ],
-                                ),
-                                Slider(
-                                  value: _tileCornerRadius,
-                                  min: 0,
-                                  max: 48,
-                                  divisions: 24,
-                                  onChanged: (value) {
-                                    _setStateAndSave(() {
-                                      _tileCornerRadius = value;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: <Widget>[
-                                    Expanded(
-                                      child: Text('Clip label font size', style: Theme.of(context).textTheme.titleSmall),
-                                    ),
-                                    Text('${_clipLabelFontSize.round()} px'),
-                                  ],
-                                ),
-                                Slider(
-                                  value: _clipLabelFontSize,
-                                  min: 8,
-                                  max: 24,
-                                  divisions: 16,
-                                  onChanged: (value) {
-                                    _setStateAndSave(() {
-                                      _clipLabelFontSize = value;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 6),
-                                _ColorSelector(
-                                  label: 'Border',
-                                  selected: _selectedBorderColor,
-                                  onSelected: (choice) {
-                                    _setStateAndSave(() {
-                                      _selectedBorderColor = choice;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 12),
-                                _ColorSelector(
-                                  label: 'Background',
-                                  selected: _selectedBackgroundColor,
-                                  onSelected: (choice) {
-                                    _setStateAndSave(() {
-                                      _selectedBackgroundColor = choice;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 8),
-                                SwitchListTile.adaptive(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Show clip labels'),
-                                  value: _includeClipLabelsInOutput,
-                                  onChanged: (value) {
-                                    _setStateAndSave(() {
-                                      _includeClipLabelsInOutput = value;
-                                    });
-                                  },
-                                ),
-                                SwitchListTile.adaptive(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text('Show label index'),
-                                  value: _showClipLabelIndex,
-                                  onChanged: (value) {
-                                    _setStateAndSave(() {
-                                      _showClipLabelIndex = value;
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          _SectionCard(
-                            title: 'Output',
-                            subtitle: '$playModeLabel mode',
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                _SelectionDropdown<PlayMode>(
-                                  label: 'Play mode',
-                                  selected: _selectedPlayMode,
-                                  options: PlayMode.values,
-                                  itemLabel: (mode) => mode.label,
-                                  onSelected: (mode) {
-                                    unawaited(_handlePlayModeSelected(mode));
-                                  },
-                                ),
-                                const SizedBox(height: 16),
-                                if (!_isSequentialPlayMode) ...<Widget>[
-                                  _SelectionDropdown<AudioMode>(
-                                    label: 'Audio',
-                                    selected: _selectedAudioMode,
-                                    options: AudioMode.values,
-                                    itemLabel: (mode) => mode.label,
-                                    onSelected: (mode) {
-                                      _setStateAndSave(() {
-                                        _selectedAudioMode = mode;
-                                      });
-                                    },
                                   ),
-                                  const SizedBox(height: 16),
-                                  _SelectionDropdown<ExportDurationMode>(
-                                    label: 'Duration',
-                                    selected: _selectedDurationMode,
-                                    options: ExportDurationMode.values,
-                                    itemLabel: (mode) => mode.label,
-                                    onSelected: (mode) {
-                                      _setStateAndSave(() {
-                                        _selectedDurationMode = mode;
-                                      });
-                                    },
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Perfect Collage',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
                                   ),
-                                  const SizedBox(height: 16),
                                 ],
-                                _SelectionDropdown<ResolutionPreset>(
-                                  label: 'Resolution',
-                                  selected: _selectedResolution,
-                                  options: _resolutionPresets,
-                                  itemLabel: (preset) => preset.label,
-                                  onSelected: _applyResolutionPreset,
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
+                              ),
+                              const SizedBox(height: 20),
+                              _SectionCard(
+                                title: 'Media',
+                                subtitle:
+                                    '${_clips.length} loaded • capacity $_gridCapacity',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    Expanded(
-                                      child: TextField(
-                                        controller: _widthController,
-                                        keyboardType: TextInputType.number,
-                                        inputFormatters: <TextInputFormatter>[
-                                          FilteringTextInputFormatter
-                                              .digitsOnly,
-                                        ],
-                                        decoration: const InputDecoration(
-                                          labelText: 'Width',
-                                          border: OutlineInputBorder(),
+                                    Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: FilledButton.icon(
+                                              onPressed: _isImporting
+                                                  ? null
+                                                  : _pickMedia,
+                                              icon: const Icon(
+                                                Icons.video_library_outlined,
+                                              ),
+                                              label: Text(
+                                                _isImporting
+                                                    ? 'Loading...'
+                                                    : 'Add Media',
+                                              ),
+                                            ),
+                                          ),
                                         ),
-                                      ),
+                                        const SizedBox(width: 12),
+                                        IconButton.outlined(
+                                          onPressed: _clips.isEmpty
+                                              ? null
+                                              : _autoLayout,
+                                          tooltip: 'Auto Layout',
+                                          style: IconButton.styleFrom(
+                                            minimumSize: const Size(34, 34),
+                                            maximumSize: const Size(34, 34),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.auto_fix_high,
+                                            size: 18,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        IconButton.outlined(
+                                          onPressed: _clips.isEmpty
+                                              ? null
+                                              : _clearClips,
+                                          tooltip: 'Clear',
+                                          style: IconButton.styleFrom(
+                                            minimumSize: const Size(34, 34),
+                                            maximumSize: const Size(34, 34),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.cleaning_services_outlined,
+                                            size: 18,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: TextField(
-                                        controller: _heightController,
-                                        keyboardType: TextInputType.number,
-                                        inputFormatters: <TextInputFormatter>[
-                                          FilteringTextInputFormatter
-                                              .digitsOnly,
-                                        ],
-                                        decoration: const InputDecoration(
-                                          labelText: 'Height',
-                                          border: OutlineInputBorder(),
+                                    const SizedBox(height: 16),
+                                    if (_clips.isEmpty)
+                                      const _EmptyListState()
+                                    else
+                                      ..._clips.asMap().entries.map((entry) {
+                                        final clip = entry.value;
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 10,
+                                          ),
+                                          child: _ClipListTile(
+                                            clip: clip,
+                                            controller: _controllers[clip.path],
+                                            isUsed: _isClipVisibleInGrid(
+                                              clip.path,
+                                            ),
+                                            isLoading: _loadingClipPaths
+                                                .contains(clip.path),
+                                            errorMessage:
+                                                _clipErrors[clip.path],
+                                            onRemove: () => _removeClip(clip),
+                                          ),
+                                        );
+                                      }),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              _SectionCard(
+                                title: 'Layout',
+                                subtitle:
+                                    'Aspect ratio, rows, columns, and styling',
+                                child: Column(
+                                  children: <Widget>[
+                                    _SelectionDropdown<AspectRatioPreset>(
+                                      label: 'Aspect ratio',
+                                      selected: _selectedAspect,
+                                      options: _aspectPresets,
+                                      itemLabel: (preset) => preset.label,
+                                      itemBuilder: (preset) =>
+                                          _AspectRatioDropdownItem(
+                                            preset: preset,
+                                          ),
+                                      onSelected: _applyAspectPreset,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    _StepperRow(
+                                      label: 'Rows',
+                                      value: _rows,
+                                      onChanged: (value) =>
+                                          _setStateAndSave(() {
+                                            _rows = value;
+                                            _backfillVisibleSlotsFromOverflow();
+                                          }),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _StepperRow(
+                                      label: 'Columns',
+                                      value: _columns,
+                                      onChanged: (value) =>
+                                          _setStateAndSave(() {
+                                            _columns = value;
+                                            _backfillVisibleSlotsFromOverflow();
+                                          }),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Text(
+                                            'Border thickness',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleSmall,
+                                          ),
                                         ),
-                                      ),
+                                        Text('${_borderThickness.round()} px'),
+                                      ],
+                                    ),
+                                    Slider(
+                                      value: _borderThickness,
+                                      min: 0,
+                                      max: 48,
+                                      divisions: 24,
+                                      onChanged: (value) {
+                                        _setStateAndSave(() {
+                                          _borderThickness = value;
+                                        });
+                                      },
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Text(
+                                            'Tile corner radius',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleSmall,
+                                          ),
+                                        ),
+                                        Text('${_tileCornerRadius.round()} px'),
+                                      ],
+                                    ),
+                                    Slider(
+                                      value: _tileCornerRadius,
+                                      min: 0,
+                                      max: 48,
+                                      divisions: 24,
+                                      onChanged: (value) {
+                                        _setStateAndSave(() {
+                                          _tileCornerRadius = value;
+                                        });
+                                      },
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Text(
+                                            'Clip label font size',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleSmall,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${_clipLabelFontSize.round()} px',
+                                        ),
+                                      ],
+                                    ),
+                                    Slider(
+                                      value: _clipLabelFontSize,
+                                      min: 8,
+                                      max: 24,
+                                      divisions: 16,
+                                      onChanged: (value) {
+                                        _setStateAndSave(() {
+                                          _clipLabelFontSize = value;
+                                        });
+                                      },
+                                    ),
+                                    const SizedBox(height: 6),
+                                    _ColorSelector(
+                                      label: 'Border',
+                                      selected: _selectedBorderColor,
+                                      onSelected: (choice) {
+                                        _setStateAndSave(() {
+                                          _selectedBorderColor = choice;
+                                        });
+                                      },
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _ColorSelector(
+                                      label: 'Background',
+                                      selected: _selectedBackgroundColor,
+                                      onSelected: (choice) {
+                                        _setStateAndSave(() {
+                                          _selectedBackgroundColor = choice;
+                                        });
+                                      },
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SwitchListTile.adaptive(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Show clip labels'),
+                                      value: _includeClipLabelsInOutput,
+                                      onChanged: (value) {
+                                        _setStateAndSave(() {
+                                          _includeClipLabelsInOutput = value;
+                                        });
+                                      },
+                                    ),
+                                    SwitchListTile.adaptive(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text('Show label index'),
+                                      value: _showClipLabelIndex,
+                                      onChanged: (value) {
+                                        _setStateAndSave(() {
+                                          _showClipLabelIndex = value;
+                                        });
+                                      },
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
+                              const SizedBox(height: 16),
+                              _SectionCard(
+                                title: 'Output',
+                                subtitle: '$playModeLabel mode',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    _SelectionDropdown<PlayMode>(
+                                      label: 'Play mode',
+                                      selected: _selectedPlayMode,
+                                      options: PlayMode.values,
+                                      itemLabel: (mode) => mode.label,
+                                      onSelected: (mode) {
+                                        unawaited(
+                                          _handlePlayModeSelected(mode),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 16),
+                                    if (!_isSequentialPlayMode) ...<Widget>[
+                                      _SelectionDropdown<AudioMode>(
+                                        label: 'Audio',
+                                        selected: _selectedAudioMode,
+                                        options: AudioMode.values,
+                                        itemLabel: (mode) => mode.label,
+                                        onSelected: (mode) {
+                                          _setStateAndSave(() {
+                                            _selectedAudioMode = mode;
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(height: 16),
+                                      _SelectionDropdown<ExportDurationMode>(
+                                        label: 'Duration',
+                                        selected: _selectedDurationMode,
+                                        options: ExportDurationMode.values,
+                                        itemLabel: (mode) => mode.label,
+                                        onSelected: (mode) {
+                                          _setStateAndSave(() {
+                                            _selectedDurationMode = mode;
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(height: 16),
+                                    ],
+                                    _SelectionDropdown<ResolutionPreset>(
+                                      label: 'Resolution',
+                                      selected: _selectedResolution,
+                                      options: _resolutionPresets,
+                                      itemLabel: (preset) => preset.label,
+                                      onSelected: _applyResolutionPreset,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _widthController,
+                                            keyboardType: TextInputType.number,
+                                            inputFormatters:
+                                                <TextInputFormatter>[
+                                                  FilteringTextInputFormatter
+                                                      .digitsOnly,
+                                                ],
+                                            decoration: const InputDecoration(
+                                              labelText: 'Width',
+                                              border: OutlineInputBorder(),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _heightController,
+                                            keyboardType: TextInputType.number,
+                                            inputFormatters:
+                                                <TextInputFormatter>[
+                                                  FilteringTextInputFormatter
+                                                      .digitsOnly,
+                                                ],
+                                            decoration: const InputDecoration(
+                                              labelText: 'Height',
+                                              border: OutlineInputBorder(),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SwitchListTile.adaptive(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: const Text(
+                                        'Add datetime to filename',
+                                      ),
+                                      value: _appendDateTimeToExportName,
+                                      onChanged: (value) {
+                                        _setStateAndSave(() {
+                                          _appendDateTimeToExportName = value;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
                               const SizedBox(height: 20),
                             ],
                           ),
@@ -1309,24 +1376,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     child: IconButton(
                                       onPressed: _isExporting
                                           ? null
-                                          : () {
-                                              _setStateAndSave(() {
-                                                _appendDateTimeToExportName =
-                                                    !_appendDateTimeToExportName;
-                                              });
-                                            },
-                                      tooltip: _appendDateTimeToExportName
-                                          ? 'Datetime in filename: On'
-                                          : 'Datetime in filename: Off',
-                                      isSelected: _appendDateTimeToExportName,
-                                      selectedIcon: const Icon(
-                                        Icons.shuffle_rounded,
-                                        color: Color(0xFFA0563D),
-                                      ),
-                                      icon: const Icon(
-                                        Icons.shuffle_outlined,
-                                        color: Color(0x446A452D),
-                                      ),
+                                          : _showExportHistory,
+                                      tooltip: 'History',
+                                      icon: const Icon(Icons.history_rounded),
+                                      color: const Color(0xFF6A452D),
                                       iconSize: 24,
                                     ),
                                   ),
@@ -1334,9 +1387,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 SizedBox(
                                   width: 220,
                                   child: _ExportButton(
-                                    onPressed: () => unawaited(
-                                      _handleExportButtonPressed(),
-                                    ),
+                                    onPressed: () =>
+                                        unawaited(_handleExportButtonPressed()),
                                     isExporting: _isExporting,
                                     progress: _exportProgress,
                                     exportFormat: resolvedExportFormat,
@@ -1346,13 +1398,17 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   child: Align(
                                     alignment: Alignment.centerRight,
                                     child: IconButton(
-                                      onPressed: _isExporting
+                                      onPressed: _isExporting || !hasLastExport
                                           ? null
-                                          : _showExportHistory,
-                                      tooltip: 'History',
-                                      icon: const Icon(Icons.history_rounded),
+                                          : () => unawaited(_openLastExport()),
+                                      tooltip: hasLastExport
+                                          ? 'Last export'
+                                          : 'No last export yet',
+                                      icon: const Icon(
+                                        Icons.play_circle_rounded,
+                                      ),
                                       color: const Color(0xFF6A452D),
-                                      iconSize: 24,
+                                      iconSize: 28,
                                     ),
                                   ),
                                 ),
@@ -1398,238 +1454,266 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                       child: Padding(
                         padding: const EdgeInsets.all(28),
                         child: Column(
-                      children: <Widget>[
-                        Row(
                           children: <Widget>[
-                            IconButton.filledTonal(
-                              onPressed: !hasPreviewMotion
-                                  ? null
-                                  : () {
-                                      unawaited(
-                                        _setPreviewPlayback(!_isPreviewPlaying),
-                                      );
-                                    },
-                              tooltip: !hasPreviewMotion
-                                  ? 'Preview playback unavailable for photos only'
-                                  : _isPreviewPlaying
-                                  ? 'Pause preview'
-                                  : 'Play preview',
-                              icon: Icon(
-                                hasPreviewMotion && _isPreviewPlaying
-                                    ? Icons.pause_rounded
-                                    : Icons.play_arrow_rounded,
-                              ),
+                            Row(
+                              children: <Widget>[
+                                IconButton.filledTonal(
+                                  onPressed: !hasPreviewMotion
+                                      ? null
+                                      : () {
+                                          unawaited(
+                                            _setPreviewPlayback(
+                                              !_isPreviewPlaying,
+                                            ),
+                                          );
+                                        },
+                                  tooltip: !hasPreviewMotion
+                                      ? 'Preview playback unavailable for photos only'
+                                      : _isPreviewPlaying
+                                      ? 'Pause preview'
+                                      : 'Play preview',
+                                  icon: Icon(
+                                    hasPreviewMotion && _isPreviewPlaying
+                                        ? Icons.pause_rounded
+                                        : Icons.play_arrow_rounded,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Preview',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.74),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: const Color(0xFFD0C5B5),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${_clips.length} media • $activeCount active in preview',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(height: 20),
                             Expanded(
-                              child: Text(
-                                'Preview',
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.74),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: const Color(0xFFD0C5B5),
+                              child: Center(
+                                child: FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: SizedBox(
+                                    width: previewCanvasWidth,
+                                    height: previewCanvasHeight,
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: _selectedBorderColor.color,
+                                        boxShadow: const <BoxShadow>[
+                                          BoxShadow(
+                                            color: Color(0x2A000000),
+                                            blurRadius: 28,
+                                            offset: Offset(0, 18),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Padding(
+                                        padding: EdgeInsets.all(
+                                          scaledBorderThickness,
+                                        ),
+                                        child: GridView.builder(
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          itemCount: _gridCapacity,
+                                          gridDelegate:
+                                              SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: _columns,
+                                                crossAxisSpacing:
+                                                    scaledBorderThickness,
+                                                mainAxisSpacing:
+                                                    scaledBorderThickness,
+                                                childAspectRatio:
+                                                    previewCellAspectRatio,
+                                              ),
+                                          itemBuilder: (context, index) {
+                                            final clip = _clipForSlot(index);
+                                            return DragTarget<int>(
+                                              onWillAcceptWithDetails:
+                                                  (details) =>
+                                                      details.data != index,
+                                              onAcceptWithDetails: (details) {
+                                                _moveOrSwapPreviewSlot(
+                                                  details.data,
+                                                  index,
+                                                );
+                                              },
+                                              builder:
+                                                  (
+                                                    context,
+                                                    candidateData,
+                                                    rejectedData,
+                                                  ) {
+                                                    return DropTarget(
+                                                      onDragEntered: (_) {
+                                                        if (_externalDropHoverSlotIndex !=
+                                                            index) {
+                                                          setState(() {
+                                                            _externalDropHoverSlotIndex =
+                                                                index;
+                                                          });
+                                                        }
+                                                      },
+                                                      onDragExited: (_) {
+                                                        if (_externalDropHoverSlotIndex ==
+                                                            index) {
+                                                          setState(() {
+                                                            _externalDropHoverSlotIndex =
+                                                                null;
+                                                          });
+                                                        }
+                                                      },
+                                                      onDragDone: (details) {
+                                                        if (_externalDropHoverSlotIndex ==
+                                                            index) {
+                                                          setState(() {
+                                                            _externalDropHoverSlotIndex =
+                                                                null;
+                                                          });
+                                                        }
+                                                        unawaited(
+                                                          _handleExternalDropToSlot(
+                                                            index,
+                                                            details.files,
+                                                          ),
+                                                        );
+                                                      },
+                                                      child: _PreviewTile(
+                                                        clip: clip,
+                                                        controller: clip == null
+                                                            ? null
+                                                            : _controllers[clip
+                                                                  .path],
+                                                        cornerRadius:
+                                                            scaledTileCornerRadius,
+                                                        isLoading:
+                                                            clip != null &&
+                                                            _loadingClipPaths
+                                                                .contains(
+                                                                  clip.path,
+                                                                ),
+                                                        errorMessage:
+                                                            clip == null
+                                                            ? null
+                                                            : _clipErrors[clip
+                                                                  .path],
+                                                        onPickMedia:
+                                                            clip == null
+                                                            ? () =>
+                                                                  _pickMediaForSlot(
+                                                                    index,
+                                                                  )
+                                                            : null,
+                                                        index: index,
+                                                        backgroundColor:
+                                                            _selectedBackgroundColor
+                                                                .color,
+                                                        dragData: clip == null
+                                                            ? null
+                                                            : index,
+                                                        showLabel:
+                                                            _includeClipLabelsInOutput,
+                                                        showLabelIndex:
+                                                            _showClipLabelIndex,
+                                                        onEditLabel:
+                                                            clip == null
+                                                            ? null
+                                                            : () => unawaited(
+                                                                _editClipTitle(
+                                                                  clip,
+                                                                ),
+                                                              ),
+                                                        isActiveLabel:
+                                                            _isSequentialPlayMode &&
+                                                            _isPreviewPlaying &&
+                                                            _activeSequentialClipPath ==
+                                                                clip?.path,
+                                                        clipLabelFontSize:
+                                                            _clipLabelFontSize,
+                                                        isDragTarget:
+                                                            candidateData
+                                                                .isNotEmpty ||
+                                                            _externalDropHoverSlotIndex ==
+                                                                index,
+                                                        overlayLabelScale:
+                                                            overlayLabelScale,
+                                                      ),
+                                                    );
+                                                  },
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                              child: Text(
-                                '${_clips.length} media • $activeCount active in preview',
-                                style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 16),
+                            MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(14),
+                                  onTap: () {
+                                    final message = _statusMessage ?? 'Ready';
+                                    Clipboard.setData(
+                                      ClipboardData(text: message),
+                                    );
+                                    _showToast('Copied to clipboard');
+                                  },
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.64,
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: const Color(0xFFD8D0C4),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _statusMessage ?? 'Ready',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: const Color(0xFF364152),
+                                          ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 20),
-                        Expanded(
-                          child: Center(
-                            child: FittedBox(
-                              fit: BoxFit.contain,
-                              child: SizedBox(
-                                width: previewCanvasWidth,
-                                height: previewCanvasHeight,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: _selectedBorderColor.color,
-                                    boxShadow: const <BoxShadow>[
-                                      BoxShadow(
-                                        color: Color(0x2A000000),
-                                        blurRadius: 28,
-                                        offset: Offset(0, 18),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Padding(
-                                    padding: EdgeInsets.all(
-                                      scaledBorderThickness,
-                                    ),
-                                    child: GridView.builder(
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      itemCount: _gridCapacity,
-                                      gridDelegate:
-                                          SliverGridDelegateWithFixedCrossAxisCount(
-                                            crossAxisCount: _columns,
-                                            crossAxisSpacing:
-                                                scaledBorderThickness,
-                                            mainAxisSpacing:
-                                                scaledBorderThickness,
-                                            childAspectRatio:
-                                                previewCellAspectRatio,
-                                          ),
-                                      itemBuilder: (context, index) {
-                                        final clip = _clipForSlot(index);
-                                        return DragTarget<int>(
-                                          onWillAcceptWithDetails: (details) =>
-                                              details.data != index,
-                                          onAcceptWithDetails: (details) {
-                                            _moveOrSwapPreviewSlot(
-                                              details.data,
-                                              index,
-                                            );
-                                          },
-                                          builder: (context, candidateData, rejectedData) {
-                                            return DropTarget(
-                                              onDragEntered: (_) {
-                                                if (_externalDropHoverSlotIndex !=
-                                                    index) {
-                                                  setState(() {
-                                                    _externalDropHoverSlotIndex =
-                                                        index;
-                                                  });
-                                                }
-                                              },
-                                              onDragExited: (_) {
-                                                if (_externalDropHoverSlotIndex ==
-                                                    index) {
-                                                  setState(() {
-                                                    _externalDropHoverSlotIndex =
-                                                        null;
-                                                  });
-                                                }
-                                              },
-                                              onDragDone: (details) {
-                                                if (_externalDropHoverSlotIndex ==
-                                                    index) {
-                                                  setState(() {
-                                                    _externalDropHoverSlotIndex =
-                                                        null;
-                                                  });
-                                                }
-                                                unawaited(
-                                                  _handleExternalDropToSlot(
-                                                    index,
-                                                    details.files,
-                                                  ),
-                                                );
-                                              },
-                                              child: _PreviewTile(
-                                                clip: clip,
-                                                controller: clip == null
-                                                    ? null
-                                                    : _controllers[clip.path],
-                                                cornerRadius:
-                                                    scaledTileCornerRadius,
-                                                isLoading:
-                                                    clip != null &&
-                                                    _loadingClipPaths.contains(
-                                                      clip.path,
-                                                    ),
-                                                errorMessage: clip == null
-                                                    ? null
-                                                    : _clipErrors[clip.path],
-                                                onPickMedia: clip == null
-                                                    ? () => _pickMediaForSlot(
-                                                        index,
-                                                      )
-                                                    : null,
-                                                index: index,
-                                                backgroundColor:
-                                                    _selectedBackgroundColor
-                                                        .color,
-                                                dragData: clip == null
-                                                    ? null
-                                                    : index,
-                                                showLabel:
-                                                    _includeClipLabelsInOutput,
-                                                showLabelIndex:
-                                                    _showClipLabelIndex,
-                                                onEditLabel: clip == null
-                                                    ? null
-                                                    : () => unawaited(
-                                                        _editClipTitle(clip),
-                                                      ),
-                                                isActiveLabel:
-                                                    _isSequentialPlayMode &&
-                                                    _isPreviewPlaying &&
-                                                    _activeSequentialClipPath ==
-                                                        clip?.path,
-                                                clipLabelFontSize:
-                                                    _clipLabelFontSize,
-                                                isDragTarget:
-                                                    candidateData.isNotEmpty ||
-                                                    _externalDropHoverSlotIndex ==
-                                                        index,
-                                                overlayLabelScale:
-                                                    overlayLabelScale,
-                                              ),
-                                            );
-                                          },
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(14),
-                              onTap: () {
-                                final message = _statusMessage ?? 'Ready';
-                                Clipboard.setData(ClipboardData(text: message));
-                                _showToast('Copied to clipboard');
-                              },
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.64),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: const Color(0xFFD8D0C4),
-                                  ),
-                                ),
-                                child: Text(
-                                  _statusMessage ?? 'Ready',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: const Color(0xFF364152),
-                                      ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
                         ),
                       ),
                     ),
@@ -1698,10 +1782,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
     final overflowPaths = <String>[];
     final seenPaths = <String>{};
-    final sortedOverflowEntries = _slotAssignments.entries
-        .where((entry) => entry.key >= _gridCapacity)
-        .toList()
-      ..sort((left, right) => left.key.compareTo(right.key));
+    final sortedOverflowEntries =
+        _slotAssignments.entries
+            .where((entry) => entry.key >= _gridCapacity)
+            .toList()
+          ..sort((left, right) => left.key.compareTo(right.key));
     for (final entry in sortedOverflowEntries) {
       if (seenPaths.add(entry.value) &&
           _clips.any((clip) => clip.path == entry.value)) {
@@ -1833,7 +1918,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
   List<CollageSlotClip> _sequentialVideoSlotClips() {
     return _slotClipsForExport()
-        .where((entry) => entry.clip.isVideo && entry.clip.duration > Duration.zero)
+        .where(
+          (entry) => entry.clip.isVideo && entry.clip.duration > Duration.zero,
+        )
         .toList(growable: false);
   }
 
@@ -1948,8 +2035,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
       var remaining = elapsed;
       var activeSegmentIndex = 0;
-      while (
-          activeSegmentIndex < segments.length &&
+      while (activeSegmentIndex < segments.length &&
           remaining >= segments[activeSegmentIndex].clip.duration) {
         remaining -= segments[activeSegmentIndex].clip.duration;
         activeSegmentIndex++;
@@ -2300,7 +2386,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       width: 0,
       height: 0,
       hasAudio: false,
-      mediaKind: _isSupportedPhotoPath(path) ? MediaKind.photo : MediaKind.video,
+      mediaKind: _isSupportedPhotoPath(path)
+          ? MediaKind.photo
+          : MediaKind.video,
     );
   }
 
@@ -2413,11 +2501,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final showTwoClipPresets =
         visibleSlotClips.length == 2 &&
         visibleSlotClips.any((entry) => entry.clip.path == clip.path);
-    final textController = TextEditingController(text: clip.name)
-      ..selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: clip.name.length,
-      );
+    final textController = TextEditingController(
+      text: clip.name,
+    )..selection = TextSelection(baseOffset: 0, extentOffset: clip.name.length);
 
     final result = await showDialog<_ClipLabelEditResult>(
       context: context,
@@ -2453,25 +2539,29 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
               const SizedBox(height: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: _singleClipLabelPresetRows.map((presetRow) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: presetRow.map((preset) {
-                        return OutlinedButton(
-                          onPressed: () {
-                            Navigator.of(dialogContext).pop(
-                              _ClipLabelEditResult.rename(preset),
-                            );
-                          },
-                          child: Text(preset),
-                        );
-                      }).toList(growable: false),
-                    ),
-                  );
-                }).toList(growable: false),
+                children: _singleClipLabelPresetRows
+                    .map((presetRow) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: presetRow
+                              .map((preset) {
+                                return OutlinedButton(
+                                  onPressed: () {
+                                    Navigator.of(
+                                      dialogContext,
+                                    ).pop(_ClipLabelEditResult.rename(preset));
+                                  },
+                                  child: Text(preset),
+                                );
+                              })
+                              .toList(growable: false),
+                        ),
+                      );
+                    })
+                    .toList(growable: false),
               ),
               if (showTwoClipPresets) ...<Widget>[
                 const SizedBox(height: 16),
@@ -2483,18 +2573,20 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: _twoClipLabelPresets.map((preset) {
-                    return OutlinedButton(
-                      onPressed: () {
-                        Navigator.of(
-                          dialogContext,
-                        ).pop(_ClipLabelEditResult.preset(preset));
-                      },
-                      child: Text(
-                        '${preset.firstLabel} / ${preset.secondLabel}',
-                      ),
-                    );
-                  }).toList(growable: false),
+                  children: _twoClipLabelPresets
+                      .map((preset) {
+                        return OutlinedButton(
+                          onPressed: () {
+                            Navigator.of(
+                              dialogContext,
+                            ).pop(_ClipLabelEditResult.preset(preset));
+                          },
+                          child: Text(
+                            '${preset.firstLabel} / ${preset.secondLabel}',
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
               ],
             ],
@@ -2536,7 +2628,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         ];
         for (var index = 0; index < latestVisibleSlotClips.length; index += 1) {
           final clipPath = latestVisibleSlotClips[index].clip.path;
-          final clipIndex = _clips.indexWhere((entry) => entry.path == clipPath);
+          final clipIndex = _clips.indexWhere(
+            (entry) => entry.path == clipPath,
+          );
           if (clipIndex >= 0) {
             _clips[clipIndex] = _clips[clipIndex].copyWith(
               name: presetLabels[index],
@@ -2921,7 +3015,9 @@ class _ClipListTile extends StatelessWidget {
                     vertical: 2,
                   ),
                   child: Icon(
-                    isUsed ? Icons.visibility_rounded : Icons.crop_square_rounded,
+                    isUsed
+                        ? Icons.visibility_rounded
+                        : Icons.crop_square_rounded,
                     size: 11,
                     color: Colors.white,
                   ),
@@ -3190,8 +3286,8 @@ class _PreviewTileBody extends StatelessWidget {
                                 ? Icons.add
                                 : errorMessage == null
                                 ? clip!.isPhoto
-                                    ? Icons.photo_outlined
-                                    : Icons.movie_creation_outlined
+                                      ? Icons.photo_outlined
+                                      : Icons.movie_creation_outlined
                                 : Icons.warning_amber_rounded,
                             size: clip == null ? 68 : 34,
                             color: Colors.black.withValues(alpha: 0.28),
