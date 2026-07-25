@@ -55,6 +55,23 @@ const _supportedPhotoExtensions = <String>{
   '.heif',
 };
 
+final AspectRatioPreset _defaultAspectPreset = _aspectPresets[6];
+final ResolutionPreset _defaultResolutionPreset = _resolutionPresets[1];
+final ColorChoice _defaultBorderColor = _colorChoices[0];
+final ColorChoice _defaultBackgroundColor = _colorChoices[1];
+
+const int _defaultRows = 1;
+const int _defaultColumns = 3;
+const double _defaultBorderThickness = 12;
+const double _defaultTileCornerRadius = 12;
+const double _defaultClipLabelFontSize = 16;
+const bool _defaultIncludeClipLabelsInOutput = true;
+const bool _defaultShowClipLabelIndex = false;
+const bool _defaultAppendDateTimeToExportName = true;
+const PlayMode _defaultPlayMode = PlayMode.parallel;
+const AudioMode _defaultAudioMode = AudioMode.firstClip;
+const ExportDurationMode _defaultDurationMode = ExportDurationMode.longest;
+
 class VideoCollageApp extends StatelessWidget {
   const VideoCollageApp({super.key});
 
@@ -113,22 +130,22 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   DateTime? _sequentialPreviewStartedAt;
   String? _activeSequentialClipPath;
 
-  AspectRatioPreset _selectedAspect = _aspectPresets[4];
-  ResolutionPreset _selectedResolution = _resolutionPresets[1];
-  ColorChoice _selectedBorderColor = _colorChoices[0];
-  ColorChoice _selectedBackgroundColor = _colorChoices[1];
-  PlayMode _selectedPlayMode = PlayMode.parallel;
-  AudioMode _selectedAudioMode = AudioMode.firstClip;
-  ExportDurationMode _selectedDurationMode = ExportDurationMode.longest;
+  AspectRatioPreset _selectedAspect = _defaultAspectPreset;
+  ResolutionPreset _selectedResolution = _defaultResolutionPreset;
+  ColorChoice _selectedBorderColor = _defaultBorderColor;
+  ColorChoice _selectedBackgroundColor = _defaultBackgroundColor;
+  PlayMode _selectedPlayMode = _defaultPlayMode;
+  AudioMode _selectedAudioMode = _defaultAudioMode;
+  ExportDurationMode _selectedDurationMode = _defaultDurationMode;
 
-  int _rows = 2;
-  int _columns = 2;
-  double _borderThickness = 12;
-  double _tileCornerRadius = 12;
-  double _clipLabelFontSize = 12;
-  bool _includeClipLabelsInOutput = false;
-  bool _showClipLabelIndex = false;
-  bool _appendDateTimeToExportName = false;
+  int _rows = _defaultRows;
+  int _columns = _defaultColumns;
+  double _borderThickness = _defaultBorderThickness;
+  double _tileCornerRadius = _defaultTileCornerRadius;
+  double _clipLabelFontSize = _defaultClipLabelFontSize;
+  bool _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
+  bool _showClipLabelIndex = _defaultShowClipLabelIndex;
+  bool _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
   bool _isImporting = false;
   bool _isExporting = false;
   double _exportProgress = 0;
@@ -415,11 +432,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Export History'),
+          title: const Text('Recent Exports'),
           content: SizedBox(
             width: 520,
             child: _exportHistory.isEmpty
-                ? const Text('No export history yet.')
+                ? const Text('No recent exports.')
                 : ListView.separated(
                     shrinkWrap: true,
                     itemCount: _exportHistory.length,
@@ -658,6 +675,47 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _activeSequentialClipPath = null;
       _statusMessage = 'Cleared all media.';
     });
+  }
+
+  void _resetLayoutDefaults() {
+    final size = _sizeFromPreset(_defaultAspectPreset, _selectedResolution);
+    _setStateAndSave(() {
+      _selectedAspect = _defaultAspectPreset;
+      _rows = _defaultRows;
+      _columns = _defaultColumns;
+      _borderThickness = _defaultBorderThickness;
+      _tileCornerRadius = _defaultTileCornerRadius;
+      _clipLabelFontSize = _defaultClipLabelFontSize;
+      _selectedBorderColor = _defaultBorderColor;
+      _selectedBackgroundColor = _defaultBackgroundColor;
+      _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
+      _showClipLabelIndex = _defaultShowClipLabelIndex;
+      _widthController.text = '${size.$1}';
+      _heightController.text = '${size.$2}';
+      _backfillVisibleSlotsFromOverflow();
+      _statusMessage = 'Layout reset to defaults.';
+    });
+  }
+
+  Future<void> _resetOutputDefaults() async {
+    final size = _sizeFromPreset(_selectedAspect, _defaultResolutionPreset);
+    _setStateAndSave(() {
+      _selectedPlayMode = _defaultPlayMode;
+      _selectedAudioMode = _defaultAudioMode;
+      _selectedDurationMode = _defaultDurationMode;
+      _selectedResolution = _defaultResolutionPreset;
+      _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
+      _widthController.text = '${size.$1}';
+      _heightController.text = '${size.$2}';
+      _activeSequentialClipPath = null;
+      _statusMessage = 'Output reset to defaults.';
+    });
+
+    _sequentialPreviewElapsed = Duration.zero;
+    _sequentialPreviewStartedAt = null;
+    _sequentialPreviewTimer?.cancel();
+    _sequentialPreviewTimer = null;
+    await _syncPreviewPlaybackMode();
   }
 
   void _applyResolutionPreset(ResolutionPreset preset) {
@@ -1004,6 +1062,20 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 title: 'Media',
                                 subtitle:
                                     '${_clips.length} loaded • capacity $_gridCapacity',
+                                action: IconButton.outlined(
+                                  onPressed: _clips.isEmpty
+                                      ? null
+                                      : _clearClips,
+                                  tooltip: 'Reset media',
+                                  style: IconButton.styleFrom(
+                                    minimumSize: const Size(34, 34),
+                                    maximumSize: const Size(34, 34),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.restart_alt_rounded,
+                                    size: 18,
+                                  ),
+                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
@@ -1043,20 +1115,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           ),
                                         ),
                                         const SizedBox(width: 12),
-                                        IconButton.outlined(
-                                          onPressed: _clips.isEmpty
-                                              ? null
-                                              : _clearClips,
-                                          tooltip: 'Clear',
-                                          style: IconButton.styleFrom(
-                                            minimumSize: const Size(34, 34),
-                                            maximumSize: const Size(34, 34),
-                                          ),
-                                          icon: const Icon(
-                                            Icons.cleaning_services_outlined,
-                                            size: 18,
-                                          ),
-                                        ),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
@@ -1091,6 +1149,18 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 title: 'Layout',
                                 subtitle:
                                     'Aspect ratio, rows, columns, and styling',
+                                action: IconButton.outlined(
+                                  onPressed: _resetLayoutDefaults,
+                                  tooltip: 'Reset layout defaults',
+                                  style: IconButton.styleFrom(
+                                    minimumSize: const Size(34, 34),
+                                    maximumSize: const Size(34, 34),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.restart_alt_rounded,
+                                    size: 18,
+                                  ),
+                                ),
                                 child: Column(
                                   children: <Widget>[
                                     _SelectionDropdown<AspectRatioPreset>(
@@ -1249,6 +1319,19 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                               _SectionCard(
                                 title: 'Output',
                                 subtitle: '$playModeLabel mode',
+                                action: IconButton.outlined(
+                                  onPressed: () =>
+                                      unawaited(_resetOutputDefaults()),
+                                  tooltip: 'Reset output defaults',
+                                  style: IconButton.styleFrom(
+                                    minimumSize: const Size(34, 34),
+                                    maximumSize: const Size(34, 34),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.restart_alt_rounded,
+                                    size: 18,
+                                  ),
+                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
@@ -2832,11 +2915,13 @@ class _SectionCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
+    this.action,
   });
 
   final String title;
   final String subtitle;
   final Widget child;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -2851,11 +2936,22 @@ class _SectionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (action != null) ...<Widget>[
+                  const SizedBox(width: 12),
+                  action!,
+                ],
+              ],
             ),
             const SizedBox(height: 4),
             Text(

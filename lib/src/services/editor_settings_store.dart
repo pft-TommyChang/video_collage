@@ -113,7 +113,7 @@ class PersistedEditorSettings {
       audioMode: json['audioMode'] as String? ?? 'firstClip',
       durationMode: json['durationMode'] as String? ?? 'longest',
       appendDateTimeToExportName:
-          json['appendDateTimeToExportName'] as bool? ?? false,
+          json['appendDateTimeToExportName'] as bool? ?? true,
       lastExportDirectory: json['lastExportDirectory'] as String? ?? '',
       borderColorLabel: json['borderColorLabel'] as String? ?? 'White',
       backgroundColorLabel: json['backgroundColorLabel'] as String? ?? 'Grey',
@@ -181,9 +181,8 @@ class EditorSettingsStore {
       return decoded
           .whereType<Map>()
           .map(
-            (entry) => ExportHistoryEntry.fromJson(
-              Map<String, dynamic>.from(entry),
-            ),
+            (entry) =>
+                ExportHistoryEntry.fromJson(Map<String, dynamic>.from(entry)),
           )
           .where((entry) => entry.path.isNotEmpty)
           .toList(growable: false);
@@ -205,7 +204,9 @@ class EditorSettingsStore {
       final historyFile = await _exportHistoryFile();
       await historyFile.parent.create(recursive: true);
       await historyFile.writeAsString(
-        jsonEncode(updated.map((item) => item.toJson()).toList(growable: false)),
+        jsonEncode(
+          updated.map((item) => item.toJson()).toList(growable: false),
+        ),
       );
       return updated;
     } catch (_) {
@@ -218,7 +219,9 @@ class EditorSettingsStore {
   }
 
   Future<File> _exportHistoryFile() async {
-    return File(p.join((await _supportDirectory()).path, _exportHistoryFileName));
+    return File(
+      p.join((await _supportDirectory()).path, _exportHistoryFileName),
+    );
   }
 
   Future<Directory> _supportDirectory() async {
