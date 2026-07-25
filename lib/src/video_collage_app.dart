@@ -647,6 +647,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _clips.removeWhere((candidate) => candidate.path == clip.path);
       _slotAssignments.removeWhere((_, path) => path == clip.path);
       _compactSlotAssignments();
+      _backfillVisibleSlotsFromOverflow();
       _loadingClipPaths.remove(clip.path);
       _clipErrors.remove(clip.path);
       if (_controllers.isEmpty) {
@@ -1829,12 +1830,29 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     return (_ensureEven(width), _ensureEven(height));
   }
 
-  int _nextAvailableSlot() {
+  int _nextAvailableSlot({int? reservedSlotIndex}) {
     var candidate = 0;
-    while (_slotAssignments.containsKey(candidate)) {
+    while (_slotAssignments.containsKey(candidate) ||
+        candidate == reservedSlotIndex) {
       candidate++;
     }
     return candidate;
+  }
+
+  void _assignPathToSlot(String path, int slotIndex) {
+    final displacedPath = _slotAssignments[slotIndex];
+    _slotAssignments.removeWhere(
+      (assignedSlotIndex, assignedPath) =>
+          assignedSlotIndex != slotIndex && assignedPath == path,
+    );
+    _slotAssignments[slotIndex] = path;
+
+    if (displacedPath != null &&
+        displacedPath != path &&
+        !_slotAssignments.containsValue(displacedPath)) {
+      _slotAssignments[_nextAvailableSlot(reservedSlotIndex: slotIndex)] =
+          displacedPath;
+    }
   }
 
   void _compactSlotAssignments() {
@@ -2263,11 +2281,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         return;
       }
       setState(() {
-        _slotAssignments.removeWhere(
-          (assignedSlotIndex, assignedPath) =>
-              assignedSlotIndex != slotIndex && assignedPath == path,
-        );
-        _slotAssignments[slotIndex] = path;
+        _assignPathToSlot(path, slotIndex);
         _statusMessage =
             'Assigned ${existingClip!.name} to slot ${slotIndex + 1}.';
       });
@@ -2281,7 +2295,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
     setState(() {
       _clips.add(_placeholderClip(path));
-      _slotAssignments[slotIndex] = path;
+      _assignPathToSlot(path, slotIndex);
       _loadingClipPaths.add(path);
       _clipErrors.remove(path);
       _statusMessage = 'Queued ${p.basename(path)} for slot ${slotIndex + 1}.';
@@ -2303,48 +2317,40 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       uniquePaths.add(path);
     }
 
-    final emptySlots = <int>[];
-    for (var slotIndex = 0; slotIndex < _gridCapacity; slotIndex += 1) {
-      if (!_slotAssignments.containsKey(slotIndex)) {
-        emptySlots.add(slotIndex);
-      }
-    }
-
-    final queuedPaths = <String>[];
-    final queuedSlots = <int>[];
-    final assignCount = math.min(uniquePaths.length, emptySlots.length);
-    for (var index = 0; index < assignCount; index += 1) {
-      queuedPaths.add(uniquePaths[index]);
-      queuedSlots.add(emptySlots[index]);
-    }
+    final emptyVisibleSlotCount = Iterable<int>.generate(
+      _gridCapacity,
+    ).where((slotIndex) => !_slotAssignments.containsKey(slotIndex)).length;
 
     if (!mounted) {
       return;
     }
 
-    if (queuedPaths.isEmpty) {
+    if (uniquePaths.isEmpty) {
       setState(() {
-        _statusMessage = emptySlots.isEmpty
-            ? 'No empty slots available for dropped media.'
-            : 'Dropped media was already added.';
+        _statusMessage = 'Dropped media was already added.';
       });
       return;
     }
 
     setState(() {
-      for (var index = 0; index < queuedPaths.length; index += 1) {
-        final path = queuedPaths[index];
-        final slotIndex = queuedSlots[index];
+      for (final path in uniquePaths) {
         _clips.add(_placeholderClip(path));
-        _slotAssignments[slotIndex] = path;
+        _slotAssignments[_nextAvailableSlot()] = path;
         _loadingClipPaths.add(path);
         _clipErrors.remove(path);
       }
-      _statusMessage =
-          'Queued ${queuedPaths.length} media item(s) into empty slots.';
+      final assignedVisibleCount = math.min(
+        uniquePaths.length,
+        emptyVisibleSlotCount,
+      );
+      _statusMessage = assignedVisibleCount == uniquePaths.length
+          ? 'Queued ${uniquePaths.length} media item(s) into empty slots.'
+          : 'Queued ${uniquePaths.length} media item(s). '
+                '$assignedVisibleCount assigned to empty slot(s), '
+                '${uniquePaths.length - assignedVisibleCount} kept in Media.';
     });
 
-    for (final path in queuedPaths) {
+    for (final path in uniquePaths) {
       await _loadClip(path);
     }
   }
@@ -2402,7 +2408,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
     setState(() {
       _clips.add(_placeholderClip(path));
-      _slotAssignments[slotIndex] = path;
+      _assignPathToSlot(path, slotIndex);
       _loadingClipPaths.add(path);
       _clipErrors.remove(path);
       _statusMessage = 'Queued 1 media item for slot ${slotIndex + 1}.';
