@@ -1073,7 +1073,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     maximumSize: const Size(34, 34),
                                   ),
                                   icon: const Icon(
-                                    Icons.restart_alt_rounded,
+                                    Icons.cleaning_services_outlined,
                                     size: 18,
                                   ),
                                 ),
@@ -1158,7 +1158,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     maximumSize: const Size(34, 34),
                                   ),
                                   icon: const Icon(
-                                    Icons.restart_alt_rounded,
+                                    Icons.refresh,
                                     size: 18,
                                   ),
                                 ),
@@ -1329,7 +1329,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     maximumSize: const Size(34, 34),
                                   ),
                                   icon: const Icon(
-                                    Icons.restart_alt_rounded,
+                                    Icons.refresh,
                                     size: 18,
                                   ),
                                 ),
@@ -1489,10 +1489,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           ? 'Last export'
                                           : 'No last export yet',
                                       icon: const Icon(
-                                        Icons.play_circle_rounded,
+                                        Icons.open_in_new_rounded,
                                       ),
                                       color: const Color(0xFF6A452D),
-                                      iconSize: 28,
+                                      iconSize: 22,
                                     ),
                                   ),
                                 ),
@@ -2087,17 +2087,19 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       if (segments.isEmpty) {
         _sequentialPreviewTimer?.cancel();
         _sequentialPreviewTimer = null;
-        for (final controller in _controllers.values) {
-          if (!controller.value.isInitialized) {
-            continue;
-          }
-          await controller.pause();
-        }
+        _sequentialPreviewStartedAt = null;
+        _sequentialPreviewElapsed = Duration.zero;
         if (_activeSequentialClipPath != null || _isPreviewPlaying) {
           setState(() {
             _activeSequentialClipPath = null;
             _isPreviewPlaying = false;
           });
+        }
+        for (final controller in _controllers.values) {
+          if (!controller.value.isInitialized) {
+            continue;
+          }
+          await controller.pause();
         }
         return;
       }
@@ -2112,6 +2114,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         _sequentialPreviewTimer = null;
         _sequentialPreviewStartedAt = null;
         _sequentialPreviewElapsed = totalDuration;
+        if (mounted) {
+          setState(() {
+            _activeSequentialClipPath = null;
+            _isPreviewPlaying = false;
+            _statusMessage = 'Preview playback finished.';
+          });
+        }
         for (final entry in segments) {
           final controller = _controllers[entry.clip.path];
           if (controller == null || !controller.value.isInitialized) {
@@ -2123,13 +2132,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
             controller,
             _lastFramePosition(entry.clip),
           );
-        }
-        if (mounted) {
-          setState(() {
-            _activeSequentialClipPath = null;
-            _isPreviewPlaying = false;
-            _statusMessage = 'Preview playback finished.';
-          });
         }
         return;
       }
