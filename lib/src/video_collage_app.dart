@@ -3203,7 +3203,9 @@ class _ClipListTile extends StatelessWidget {
 }
 
 class _PreviewTile extends StatelessWidget {
-  static const Size _dragFeedbackSize = Size(240, 160);
+  static const Size _dragFeedbackFallbackSize = Size(240, 160);
+  static const double _dragFeedbackMaxSide = 240;
+  static const double _dragFeedbackMinSide = 120;
 
   const _PreviewTile({
     required this.clip,
@@ -3241,6 +3243,38 @@ class _PreviewTile extends StatelessWidget {
   final bool isDragTarget;
   final double overlayLabelScale;
 
+  Size _dragFeedbackSize() {
+    Size? mediaSize;
+    if (controller != null && controller!.value.isInitialized) {
+      mediaSize = controller!.value.size;
+    } else if (clip != null && clip!.width > 0 && clip!.height > 0) {
+      mediaSize = Size(clip!.width.toDouble(), clip!.height.toDouble());
+    }
+
+    if (mediaSize == null || mediaSize.width <= 0 || mediaSize.height <= 0) {
+      return _dragFeedbackFallbackSize;
+    }
+
+    final aspectRatio = mediaSize.width / mediaSize.height;
+    if (aspectRatio >= 1) {
+      return Size(
+        _dragFeedbackMaxSide,
+        (_dragFeedbackMaxSide / aspectRatio).clamp(
+          _dragFeedbackMinSide,
+          _dragFeedbackMaxSide,
+        ),
+      );
+    }
+
+    return Size(
+      (_dragFeedbackMaxSide * aspectRatio).clamp(
+        _dragFeedbackMinSide,
+        _dragFeedbackMaxSide,
+      ),
+      _dragFeedbackMaxSide,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rawLabel = !showLabel || clip == null
@@ -3271,21 +3305,23 @@ class _PreviewTile extends StatelessWidget {
       return tile;
     }
 
+    final dragFeedbackSize = _dragFeedbackSize();
+
     return LongPressDraggable<int>(
       data: dragData!,
       delay: const Duration(milliseconds: 220),
       dragAnchorStrategy:
           (Draggable<Object> draggable, BuildContext context, Offset position) {
             return Offset(
-              _dragFeedbackSize.width / 2,
-              _dragFeedbackSize.height / 2,
+              dragFeedbackSize.width / 2,
+              dragFeedbackSize.height / 2,
             );
           },
       feedback: Transform.scale(
         scale: 1.04,
         child: SizedBox(
-          width: _dragFeedbackSize.width,
-          height: _dragFeedbackSize.height,
+          width: dragFeedbackSize.width,
+          height: dragFeedbackSize.height,
           child: Material(
             color: Colors.transparent,
             elevation: 24,
@@ -3298,7 +3334,7 @@ class _PreviewTile extends StatelessWidget {
               isLoading: isLoading,
               errorMessage: errorMessage,
               onTap: null,
-              label: label,
+              label: null,
               backgroundColor: backgroundColor,
               onLabelTap: null,
               isActiveLabel: isActiveLabel,
