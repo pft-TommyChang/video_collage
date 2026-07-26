@@ -193,6 +193,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     super.dispose();
   }
 
+  @override
+  void reassemble() {
+    super.reassemble();
+    for (final clip in _clips) {
+      unawaited(_refreshClipMetadata(clip.path));
+    }
+  }
+
   ExportOptions get _options {
     final width = int.tryParse(_widthController.text) ?? 1080;
     final height = int.tryParse(_heightController.text) ?? 1920;
@@ -606,7 +614,16 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     });
 
     try {
-      final paths = await _dialogService.pickMedia();
+      final selections = await _dialogService.pickMedia();
+      final paths = selections.map((selection) => selection.path).toList(
+        growable: false,
+      );
+      final selectionByPath = <String, PickedMediaFile>{
+        for (final selection in selections) selection.path: selection,
+      };
+      final existingPaths = paths
+          .where((path) => _clips.any((clip) => clip.path == path))
+          .toList(growable: false);
       final newPaths = paths
           .where((path) => !_clips.any((clip) => clip.path == path))
           .toList();
@@ -614,7 +631,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       if (newPaths.isNotEmpty && mounted) {
         setState(() {
           for (final path in newPaths) {
-            _clips.add(_placeholderClip(path));
+            final initialClip = selectionByPath[path]?.clipInfo;
+            _clips.add(initialClip ?? _placeholderClip(path));
             _loadingClipPaths.add(path);
             _clipErrors.remove(path);
             _slotAssignments[_nextAvailableSlot()] = path;
@@ -625,7 +643,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
 
       for (final path in newPaths) {
-        unawaited(_loadClip(path));
+        unawaited(_loadClip(path, initialClip: selectionByPath[path]?.clipInfo));
+      }
+      for (final path in existingPaths) {
+        unawaited(_refreshClipMetadata(path));
       }
 
       if (!mounted) {
@@ -636,7 +657,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         _statusMessage = paths.isEmpty
             ? 'No media was selected.'
             : newPaths.isEmpty
-            ? 'Selected media was already added.'
+            ? 'Refreshing selected media metadata...'
             : 'Added ${newPaths.length} media item(s). Initializing previews...';
       });
     } on PlatformException catch (error) {
@@ -3044,7 +3065,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     );
   }
 
-  Future<void> _loadClip(String path) async {
+  Future<void> _loadClip(String path, {VideoClipInfo? initialClip}) async {
     if (_isSupportedPhotoPath(path)) {
       try {
         final clip = await _exportService.probeMedia(path);
@@ -3081,19 +3102,32 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     }
 
     VideoPlayerController? controller;
+    var probedClip = initialClip;
     try {
+      if (probedClip == null) {
+        try {
+          probedClip = await _exportService.probeMedia(path);
+          if (mounted) {
+            setState(() {
+              final index = _clips.indexWhere((clip) => clip.path == path);
+              if (index >= 0) {
+                _clips[index] = probedClip!.copyWith(name: _clips[index].name);
+              }
+            });
+          }
+        } catch (_) {}
+      }
+
       controller = VideoPlayerController.file(File(path));
       await controller.initialize().timeout(const Duration(seconds: 12));
       await controller.setLooping(false);
       await controller.setVolume(0);
       await controller.pause();
 
-      VideoClipInfo clip;
-      try {
-        clip = await _exportService.probeMedia(path);
-      } catch (_) {
-        final value = controller.value;
-        clip = VideoClipInfo(
+      final initializedController = controller;
+      final clip = probedClip ?? (() {
+        final value = initializedController.value;
+        return VideoClipInfo(
           path: path,
           name: _defaultClipNameForPath(path),
           duration: value.duration,
@@ -3102,7 +3136,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
           hasAudio: false,
           mediaKind: MediaKind.video,
         );
-      }
+      })();
 
       if (!mounted) {
         controller.dispose();
@@ -3111,7 +3145,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
       final previousController = _controllers[path];
       setState(() {
-        _controllers[path] = controller!;
+        _controllers[path] = initializedController;
         _loadingClipPaths.remove(path);
         _clipErrors.remove(path);
         final index = _clips.indexWhere((clip) => clip.path == path);
@@ -3136,10 +3170,45 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
       setState(() {
         _loadingClipPaths.remove(path);
-        _clipErrors[path] = '$error';
+        if (probedClip == null) {
+          _clipErrors[path] = '$error';
+          _statusMessage =
+              'Preview failed for ${path.split(Platform.pathSeparator).last}.';
+          return;
+        }
+        _clipErrors.remove(path);
         _statusMessage =
-            'Preview failed for ${path.split(Platform.pathSeparator).last}.';
+            'Loaded metadata for ${probedClip.name}, but preview failed.';
       });
+    }
+  }
+
+  Future<void> _refreshClipMetadata(String path) async {
+    if (_loadingClipPaths.contains(path)) {
+      return;
+    }
+
+    final existingIndex = _clips.indexWhere((clip) => clip.path == path);
+    if (existingIndex < 0) {
+      return;
+    }
+
+    try {
+      final refreshed = await _exportService.probeMedia(path);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        final currentIndex = _clips.indexWhere((clip) => clip.path == path);
+        if (currentIndex < 0) {
+          return;
+        }
+        final current = _clips[currentIndex];
+        _clips[currentIndex] = refreshed.copyWith(name: current.name);
+      });
+    } catch (_) {
+      // Keep the existing metadata if refresh fails.
     }
   }
 

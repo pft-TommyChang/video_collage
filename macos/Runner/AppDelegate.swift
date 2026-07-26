@@ -1,13 +1,170 @@
 import Cocoa
+import AVFoundation
 import FlutterMacOS
 
 @main
 class AppDelegate: FlutterAppDelegate {
+  private let mediaProbeChannelName = "video_collage/media_probe"
+  private let mediaDialogChannelName = "video_collage/media_dialogs"
+
+  override func applicationDidFinishLaunching(_ notification: Notification) {
+    guard let flutterViewController = mainFlutterWindow?.contentViewController as? FlutterViewController else {
+      super.applicationDidFinishLaunching(notification)
+      return
+    }
+
+    let channel = FlutterMethodChannel(
+      name: mediaProbeChannelName,
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    let dialogChannel = FlutterMethodChannel(
+      name: mediaDialogChannelName,
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "probeVideoMetadata" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard
+        let arguments = call.arguments as? [String: Any],
+        let path = arguments["path"] as? String
+      else {
+        result(
+          FlutterError(
+            code: "invalid-arguments",
+            message: "Expected a file path.",
+            details: nil
+          )
+        )
+        return
+      }
+
+      self?.probeVideoMetadata(path: path, result: result)
+    }
+
+    dialogChannel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "pickMediaWithMetadata" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      self?.pickMediaWithMetadata(result: result)
+    }
+
+    super.applicationDidFinishLaunching(notification)
+  }
+
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     return true
   }
 
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     return true
+  }
+
+  private func probeVideoMetadata(path: String, result: @escaping FlutterResult) {
+    let url = URL(fileURLWithPath: path)
+    let accessed = url.startAccessingSecurityScopedResource()
+    defer {
+      if accessed {
+        url.stopAccessingSecurityScopedResource()
+      }
+    }
+
+    let asset = AVURLAsset(url: url)
+    guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+      result(
+        FlutterError(
+          code: "no-video-track",
+          message: "No video track found.",
+          details: path
+        )
+      )
+      return
+    }
+
+    let transformedSize = videoTrack.naturalSize.applying(videoTrack.preferredTransform)
+    let width = Int(abs(transformedSize.width).rounded())
+    let height = Int(abs(transformedSize.height).rounded())
+    let durationSeconds = CMTimeGetSeconds(asset.duration)
+    let hasAudio = !asset.tracks(withMediaType: .audio).isEmpty
+
+    result([
+      "width": width,
+      "height": height,
+      "durationSeconds": durationSeconds.isFinite ? durationSeconds : 0,
+      "hasAudio": hasAudio,
+    ])
+  }
+
+  private func pickMediaWithMetadata(result: @escaping FlutterResult) {
+    let panel = NSOpenPanel()
+    panel.allowsMultipleSelection = true
+    panel.canChooseDirectories = false
+    panel.canChooseFiles = true
+    panel.prompt = "Add Media"
+    panel.allowedFileTypes = [
+      "mp4", "mov", "m4v", "avi", "mkv", "webm",
+      "jpg", "jpeg", "png", "webp", "heic", "heif"
+    ]
+
+    guard panel.runModal() == .OK else {
+      result([[String: Any]]())
+      return
+    }
+
+    let metadata = panel.urls.map { url in
+      probeSelectedMedia(url: url)
+    }
+    result(metadata)
+  }
+
+  private func probeSelectedMedia(url: URL) -> [String: Any] {
+    let accessed = url.startAccessingSecurityScopedResource()
+    defer {
+      if accessed {
+        url.stopAccessingSecurityScopedResource()
+      }
+    }
+
+    if let videoMetadata = probeSelectedVideo(url: url) {
+      return videoMetadata
+    }
+
+    if let imageRep = NSImageRep(contentsOf: url) {
+      return [
+        "path": url.path,
+        "width": imageRep.pixelsWide,
+        "height": imageRep.pixelsHigh,
+        "durationMilliseconds": 0,
+        "hasAudio": false,
+        "mediaKind": "photo",
+      ]
+    }
+
+    return ["path": url.path]
+  }
+
+  private func probeSelectedVideo(url: URL) -> [String: Any]? {
+    let asset = AVURLAsset(url: url)
+    guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+      return nil
+    }
+
+    let transformedSize = videoTrack.naturalSize.applying(videoTrack.preferredTransform)
+    let width = Int(abs(transformedSize.width).rounded())
+    let height = Int(abs(transformedSize.height).rounded())
+    let durationSeconds = CMTimeGetSeconds(asset.duration)
+    let hasAudio = !asset.tracks(withMediaType: .audio).isEmpty
+
+    return [
+      "path": url.path,
+      "width": width,
+      "height": height,
+      "durationMilliseconds": Int((durationSeconds.isFinite ? durationSeconds : 0) * 1000),
+      "hasAudio": hasAudio,
+      "mediaKind": "video",
+    ]
   }
 }

@@ -1,9 +1,24 @@
+import 'dart:io';
+
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 import '../models.dart';
 
+class PickedMediaFile {
+  const PickedMediaFile({required this.path, this.clipInfo});
+
+  final String path;
+  final VideoClipInfo? clipInfo;
+}
+
 class SystemDialogService {
   const SystemDialogService();
+
+  static const MethodChannel _mediaDialogChannel = MethodChannel(
+    'video_collage/media_dialogs',
+  );
 
   static const XTypeGroup _videoTypeGroup = XTypeGroup(
     label: 'Videos',
@@ -14,12 +29,32 @@ class SystemDialogService {
     extensions: <String>['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'],
   );
 
-  Future<List<String>> pickMedia() async {
+  Future<List<PickedMediaFile>> pickMedia() async {
+    if (Platform.isMacOS) {
+      try {
+        final result = await _mediaDialogChannel.invokeListMethod<Object?>(
+          'pickMediaWithMetadata',
+        );
+        if (result != null) {
+          return result
+              .whereType<Map<Object?, Object?>>()
+              .map(_pickedMediaFromMap)
+              .toList(growable: false);
+        }
+      } on MissingPluginException {
+        // Fall back to file_selector below.
+      } on PlatformException {
+        // Fall back to file_selector below.
+      }
+    }
+
     final files = await openFiles(
       acceptedTypeGroups: <XTypeGroup>[_videoTypeGroup, _photoTypeGroup],
       confirmButtonText: 'Add Media',
     );
-    return files.map((file) => file.path).toList(growable: false);
+    return files
+        .map((file) => PickedMediaFile(path: file.path))
+        .toList(growable: false);
   }
 
   Future<String?> pickSingleMedia() async {
@@ -53,5 +88,40 @@ class SystemDialogService {
       confirmButtonText: 'Export',
     );
     return location?.path;
+  }
+
+  PickedMediaFile _pickedMediaFromMap(Map<Object?, Object?> map) {
+    final path = map['path'] as String;
+    final width = map['width'];
+    final height = map['height'];
+    final durationMilliseconds = map['durationMilliseconds'];
+    final hasAudio = map['hasAudio'];
+    final mediaKindName = map['mediaKind'];
+
+    if (width is! int ||
+        height is! int ||
+        durationMilliseconds is! int ||
+        hasAudio is! bool ||
+        mediaKindName is! String) {
+      return PickedMediaFile(path: path);
+    }
+
+    final mediaKind = switch (mediaKindName) {
+      'photo' => MediaKind.photo,
+      _ => MediaKind.video,
+    };
+
+    return PickedMediaFile(
+      path: path,
+      clipInfo: VideoClipInfo(
+        path: path,
+        name: p.basenameWithoutExtension(path),
+        duration: Duration(milliseconds: durationMilliseconds),
+        width: width,
+        height: height,
+        hasAudio: hasAudio,
+        mediaKind: mediaKind,
+      ),
+    );
   }
 }

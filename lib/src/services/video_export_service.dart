@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
@@ -12,6 +11,7 @@ import 'package:ffmpeg_kit_flutter_new/media_information.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:ffmpeg_kit_flutter_new/statistics.dart';
 import 'package:ffmpeg_kit_flutter_new/stream_information.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../models.dart';
@@ -28,6 +28,10 @@ class VideoExportException implements Exception {
 class VideoExportService {
   VideoExportService();
 
+  static const MethodChannel _metadataChannel = MethodChannel(
+    'video_collage/media_probe',
+  );
+
   Future<void> cancelActiveExport() {
     return FFmpegKit.cancel();
   }
@@ -40,6 +44,21 @@ class VideoExportService {
   }
 
   Future<VideoClipInfo> _probeVideo(String filePath) async {
+    final nativeProbe = await _probeVideoWithNativeMetadata(filePath);
+    if (nativeProbe != null) {
+      return VideoClipInfo(
+        path: filePath,
+        name: p.basenameWithoutExtension(filePath),
+        duration: Duration(
+          milliseconds: (nativeProbe.durationSeconds * 1000).round(),
+        ),
+        width: nativeProbe.width,
+        height: nativeProbe.height,
+        hasAudio: nativeProbe.hasAudio,
+        mediaKind: MediaKind.video,
+      );
+    }
+
     final session = await FFprobeKit.getMediaInformation(filePath);
     final returnCode = await session.getReturnCode();
     final information = session.getMediaInformation();
@@ -54,16 +73,52 @@ class VideoExportService {
     final stream = _findPrimaryVideoStream(information);
     final durationSeconds =
         double.tryParse(information.getDuration() ?? '0') ?? 0;
+    final fallbackWidth = stream?.getWidth() ?? 0;
+    final fallbackHeight = stream?.getHeight() ?? 0;
 
     return VideoClipInfo(
       path: filePath,
       name: p.basenameWithoutExtension(filePath),
       duration: Duration(milliseconds: (durationSeconds * 1000).round()),
-      width: stream?.getWidth() ?? 0,
-      height: stream?.getHeight() ?? 0,
+      width: fallbackWidth,
+      height: fallbackHeight,
       hasAudio: _hasAudioStream(information),
       mediaKind: MediaKind.video,
     );
+  }
+
+  Future<_VideoDisplayMetadata?> _probeVideoWithNativeMetadata(
+    String filePath,
+  ) async {
+    try {
+      final result = await _metadataChannel.invokeMapMethod<String, Object?>(
+        'probeVideoMetadata',
+        <String, Object?>{'path': filePath},
+      );
+      if (result == null) {
+        return null;
+      }
+
+      final width = result['width'];
+      final height = result['height'];
+      final durationSeconds = result['durationSeconds'];
+      final hasAudio = result['hasAudio'];
+
+      if (width is! int || height is! int || durationSeconds is! num) {
+        return null;
+      }
+
+      return _VideoDisplayMetadata(
+        width: width,
+        height: height,
+        durationSeconds: durationSeconds.toDouble(),
+        hasAudio: hasAudio == true,
+      );
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
   }
 
   Future<VideoClipInfo> _probePhoto(String filePath) async {
@@ -490,7 +545,9 @@ class VideoExportService {
     reportProgress,
   }) async {
     final sequentialEntries = slotClips
-        .where((entry) => entry.clip.isVideo && entry.clip.duration > Duration.zero)
+        .where(
+          (entry) => entry.clip.isVideo && entry.clip.duration > Duration.zero,
+        )
         .toList(growable: false);
     if (sequentialEntries.isEmpty) {
       throw const VideoExportException(
@@ -557,13 +614,25 @@ class VideoExportService {
           'color=c=${options.borderColor.ffmpegHex}:s=${options.outputWidth}x${options.outputHeight}:d=$segmentDurationSeconds[base]',
         ];
 
-        for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex += 1) {
+        for (
+          var inputIndex = 0;
+          inputIndex < slotClips.length;
+          inputIndex += 1
+        ) {
           final slotClip = slotClips[inputIndex];
           final videoOrder = videoOrderByPath[slotClip.clip.path];
           final tileLabel = 'tile$inputIndex';
-          filters.add(
-            switch (slotClip.clip.mediaKind) {
-              MediaKind.photo => _scaledPhotoFilter(
+          filters.add(switch (slotClip.clip.mediaKind) {
+            MediaKind.photo => _scaledPhotoFilter(
+              inputIndex: inputIndex,
+              durationSeconds: segmentDurationSeconds,
+              cellWidth: cellWidth,
+              cellHeight: cellHeight,
+              roundedCornerFilter: roundedCornerFilter,
+              outputLabel: tileLabel,
+            ),
+            MediaKind.video when inputIndex == activeInputIndex =>
+              _sequentialActiveVideoFilter(
                 inputIndex: inputIndex,
                 durationSeconds: segmentDurationSeconds,
                 cellWidth: cellWidth,
@@ -571,29 +640,11 @@ class VideoExportService {
                 roundedCornerFilter: roundedCornerFilter,
                 outputLabel: tileLabel,
               ),
-              MediaKind.video when inputIndex == activeInputIndex =>
-                _sequentialActiveVideoFilter(
-                  inputIndex: inputIndex,
-                  durationSeconds: segmentDurationSeconds,
-                  cellWidth: cellWidth,
-                  cellHeight: cellHeight,
-                  roundedCornerFilter: roundedCornerFilter,
-                  outputLabel: tileLabel,
-                ),
-              MediaKind.video when videoOrder != null && videoOrder < segmentIndex =>
-                _sequentialFrozenVideoFilter(
-                  inputIndex: inputIndex,
-                  freezeAtEnd: true,
-                  clipDuration: slotClip.clip.duration,
-                  durationSeconds: segmentDurationSeconds,
-                  cellWidth: cellWidth,
-                  cellHeight: cellHeight,
-                  roundedCornerFilter: roundedCornerFilter,
-                  outputLabel: tileLabel,
-                ),
-              MediaKind.video => _sequentialFrozenVideoFilter(
+            MediaKind.video
+                when videoOrder != null && videoOrder < segmentIndex =>
+              _sequentialFrozenVideoFilter(
                 inputIndex: inputIndex,
-                freezeAtEnd: false,
+                freezeAtEnd: true,
                 clipDuration: slotClip.clip.duration,
                 durationSeconds: segmentDurationSeconds,
                 cellWidth: cellWidth,
@@ -601,12 +652,25 @@ class VideoExportService {
                 roundedCornerFilter: roundedCornerFilter,
                 outputLabel: tileLabel,
               ),
-            },
-          );
+            MediaKind.video => _sequentialFrozenVideoFilter(
+              inputIndex: inputIndex,
+              freezeAtEnd: false,
+              clipDuration: slotClip.clip.duration,
+              durationSeconds: segmentDurationSeconds,
+              cellWidth: cellWidth,
+              cellHeight: cellHeight,
+              roundedCornerFilter: roundedCornerFilter,
+              outputLabel: tileLabel,
+            ),
+          });
         }
 
         var stageLabel = 'base';
-        for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex += 1) {
+        for (
+          var inputIndex = 0;
+          inputIndex < slotClips.length;
+          inputIndex += 1
+        ) {
           final position = tilePositions[inputIndex];
           final nextStageLabel = inputIndex == slotClips.length - 1
               ? 'merged'
@@ -621,7 +685,11 @@ class VideoExportService {
 
         if (options.includeClipLabelsInOutput) {
           var labeledStageLabel = stageLabel;
-          for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex += 1) {
+          for (
+            var inputIndex = 0;
+            inputIndex < slotClips.length;
+            inputIndex += 1
+          ) {
             final labelOverlay = segmentLabelOverlays[inputIndex];
             final labelInputIndex = slotClips.length + inputIndex;
             final position = tilePositions[inputIndex];
@@ -723,15 +791,10 @@ class VideoExportService {
       }
 
       final concatListPath = p.join(segmentDirectory.path, 'segments.txt');
-      final concatList = segmentPaths
-          .map((path) => "file '$path'")
-          .join('\n');
+      final concatList = segmentPaths.map((path) => "file '$path'").join('\n');
       await File(concatListPath).writeAsString('$concatList\n');
 
-      reportProgress(
-        progress: 0.99,
-        processedMs: targetDurationMs - 1,
-      );
+      reportProgress(progress: 0.99, processedMs: targetDurationMs - 1);
       await _runFfmpegCommand(
         arguments: <String>[
           '-y',
@@ -951,23 +1014,20 @@ class VideoExportService {
     required String roundedCornerFilter,
     required String outputLabel,
   }) {
-    final tailSampleSeconds = math.min(
-      0.5,
-      clipDuration.inMilliseconds / 1000,
-    );
+    final tailSampleSeconds = math.min(0.5, clipDuration.inMilliseconds / 1000);
     final freezeStartSeconds = freezeAtEnd
         ? math.max(0, clipDuration.inMilliseconds / 1000 - tailSampleSeconds)
         : 0.0;
     final freezeSelectionFilter = freezeAtEnd
         ? 'trim=start=${freezeStartSeconds.toStringAsFixed(3)},'
-          'setpts=PTS-STARTPTS,'
-          'reverse,'
-          'trim=duration=0.034,'
-          'setpts=PTS-STARTPTS,'
-          'reverse,'
-          'setpts=PTS-STARTPTS,'
+              'setpts=PTS-STARTPTS,'
+              'reverse,'
+              'trim=duration=0.034,'
+              'setpts=PTS-STARTPTS,'
+              'reverse,'
+              'setpts=PTS-STARTPTS,'
         : 'trim=duration=0.034,'
-          'setpts=PTS-STARTPTS,';
+              'setpts=PTS-STARTPTS,';
     return '[$inputIndex:v]'
         'setpts=PTS-STARTPTS,'
         'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
@@ -1146,6 +1206,20 @@ class _ClipLabelOverlay {
   final String filePath;
   final int x;
   final int y;
+}
+
+class _VideoDisplayMetadata {
+  const _VideoDisplayMetadata({
+    required this.width,
+    required this.height,
+    required this.durationSeconds,
+    required this.hasAudio,
+  });
+
+  final int width;
+  final int height;
+  final double durationSeconds;
+  final bool hasAudio;
 }
 
 class VideoExportProgress {
