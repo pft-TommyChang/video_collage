@@ -688,6 +688,34 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     });
   }
 
+  Future<void> _confirmClearClips() async {
+    final shouldClear = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Reset media?'),
+          content: const Text(
+            'This will remove all loaded media from the current collage.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Reset'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldClear == true && mounted) {
+      _clearClips();
+    }
+  }
+
   void _resetLayoutDefaults() {
     final size = _sizeFromPreset(_defaultAspectPreset, _selectedResolution);
     _setStateAndSave(() {
@@ -1110,7 +1138,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 action: IconButton.outlined(
                                   onPressed: _clips.isEmpty
                                       ? null
-                                      : _clearClips,
+                                      : () => unawaited(_confirmClearClips()),
                                   tooltip: 'Reset media',
                                   style: IconButton.styleFrom(
                                     minimumSize: const Size(34, 34),
@@ -1182,6 +1210,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                 .contains(clip.path),
                                             errorMessage:
                                                 _clipErrors[clip.path],
+                                            onTap: () => unawaited(
+                                              _toggleClipActive(clip),
+                                            ),
                                             onEditLabel: () => unawaited(
                                               _editClipTitle(clip),
                                             ),
@@ -1946,6 +1977,23 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     _slotAssignments[slotIndex] = path;
   }
 
+  int? _firstEmptyVisibleSlot() {
+    for (var slotIndex = 0; slotIndex < _gridCapacity; slotIndex += 1) {
+      if (!_slotAssignments.containsKey(slotIndex)) {
+        return slotIndex;
+      }
+    }
+    return null;
+  }
+
+  int _nextOverflowSlot() {
+    var slotIndex = _gridCapacity;
+    while (_slotAssignments.containsKey(slotIndex)) {
+      slotIndex += 1;
+    }
+    return slotIndex;
+  }
+
   void _compactSlotAssignments() {
     if (_slotAssignments.isEmpty) {
       return;
@@ -2470,6 +2518,35 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
     }
     return false;
+  }
+
+  Future<void> _toggleClipActive(VideoClipInfo clip) async {
+    if (_isClipVisibleInGrid(clip.path)) {
+      setState(() {
+        _slotAssignments.removeWhere((_, path) => path == clip.path);
+        _slotAssignments[_nextOverflowSlot()] = clip.path;
+        _statusMessage = 'Marked ${clip.name} as non-active.';
+      });
+      await _syncPreviewPlaybackMode();
+      return;
+    }
+
+    final emptySlot = _firstEmptyVisibleSlot();
+    if (emptySlot == null) {
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'No empty slots available.';
+        });
+      }
+      _showToast('Grid is full.');
+      return;
+    }
+
+    setState(() {
+      _assignPathToSlot(clip.path, emptySlot);
+      _statusMessage = 'Added ${clip.name} to slot ${emptySlot + 1}.';
+    });
+    await _syncPreviewPlaybackMode();
   }
 
   void _moveOrSwapPreviewSlot(int fromSlotIndex, int toSlotIndex) {
@@ -3345,6 +3422,7 @@ class _ClipListTile extends StatelessWidget {
     required this.isUsed,
     required this.isLoading,
     required this.errorMessage,
+    required this.onTap,
     required this.onEditLabel,
     required this.onRemove,
   });
@@ -3354,88 +3432,107 @@ class _ClipListTile extends StatelessWidget {
   final bool isUsed;
   final bool isLoading;
   final String? errorMessage;
+  final VoidCallback onTap;
   final VoidCallback onEditLabel;
   final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
+    final itemBorderColor = isUsed
+        ? const Color(0xFFFF7A59)
+        : const Color(0xFFE7DED1);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xFFF9F6F1),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE7DED1)),
+        border: Border.all(
+          color: itemBorderColor,
+          width: isUsed ? 2 : 1,
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _buildThumbnail(),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _buildThumbnail(),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Flexible(
-                        child: Text(
-                          clip.name,
-                          maxLines: 1,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Flexible(
+                            child: Text(
+                              clip.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          IconButton(
+                            tooltip: 'Edit clip label',
+                            onPressed: onEditLabel,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            visualDensity: VisualDensity.compact,
+                            iconSize: 15,
+                            splashRadius: 14,
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                              color: Colors.black45,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _clipDetails,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: errorMessage == null
+                              ? const Color(0xFF697180)
+                              : const Color(0xFFB42318),
+                        ),
+                      ),
+                      if (errorMessage != null) ...<Widget>[
+                        const SizedBox(height: 4),
+                        Text(
+                          errorMessage!,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(
                             context,
-                          ).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
+                          ).textTheme.bodySmall?.copyWith(
+                            color: const Color(0xFFB42318),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      IconButton(
-                        tooltip: 'Edit clip label',
-                        onPressed: onEditLabel,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 15,
-                        splashRadius: 14,
-                        icon: const Icon(Icons.edit_outlined, color: Colors.black45,),
-                      ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _clipDetails,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: errorMessage == null
-                          ? const Color(0xFF697180)
-                          : const Color(0xFFB42318),
-                    ),
-                  ),
-                  if (errorMessage != null) ...<Widget>[
-                    const SizedBox(height: 4),
-                    Text(
-                      errorMessage!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFFB42318),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+                ),
+                IconButton(
+                  tooltip: 'Remove',
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
             ),
-            IconButton(
-              tooltip: 'Remove',
-              onPressed: onRemove,
-              icon: const Icon(Icons.close),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -3443,7 +3540,6 @@ class _ClipListTile extends StatelessWidget {
 
   Widget _buildThumbnail() {
     const borderRadius = BorderRadius.all(Radius.circular(14));
-    const activeBorderColor = Color(0xFFFF7A59);
     const inactiveBorderColor = Color(0xFFD6DCE4);
 
     return Container(
@@ -3452,8 +3548,8 @@ class _ClipListTile extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: borderRadius,
         border: Border.all(
-          color: isUsed ? activeBorderColor : inactiveBorderColor,
-          width: isUsed ? 2 : 1.25,
+          color: inactiveBorderColor,
+          width: 1.25,
         ),
       ),
       child: ClipRRect(
