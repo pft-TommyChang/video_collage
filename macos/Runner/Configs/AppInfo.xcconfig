@@ -8,7 +8,7 @@
 PRODUCT_NAME = Perfect Collage
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.videoCollageMac
+PRODUCT_BUNDLE_IDENTIFIER = com.tommychang.perfectcollage
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 Tommy Chang. All rights reserved.

@@ -347,6 +347,25 @@ flutter run -d macos
 flutter build macos
 ```
 
+## Release 流程
+
+專案已包含 GitHub Release 自動打包流程。
+
+- 當你在 GitHub 發布一個新的 Release 時，GitHub Actions 會自動:
+  - 驗證 release tag 是否對應 `pubspec.yaml` 版本
+  - 建置 macOS release app
+  - 打包成 `.dmg`
+  - 產生 `.sha256`
+  - 上傳回該 GitHub Release 當成 asset
+
+本機也可直接產生 release 檔案:
+
+```bash
+./scripts/build_release_artifacts.sh
+```
+
+更完整的 release 說明請看 [docs/releasing.md](/Users/rdapp/git/video_collage/docs/releasing.md)。
+
 ## 專案定位
 
 `Perfect Collage` 適合做為一個快速、直覺、可視化的拼貼編輯工具。  
