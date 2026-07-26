@@ -75,6 +75,7 @@ jobs:
             --depth 1 \
             --branch "${FLUTTER_VERSION}" \
             "${HOME}/flutter"
+          export PATH="${HOME}/flutter/bin:${PATH}"
           echo "${HOME}/flutter/bin" >> "${GITHUB_PATH}"
           flutter --disable-analytics --version
 
