@@ -1172,22 +1172,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 12),
-                                        IconButton.outlined(
-                                          onPressed: _clips.isEmpty
-                                              ? null
-                                              : _autoLayout,
-                                          tooltip: 'Auto Layout',
-                                          style: IconButton.styleFrom(
-                                            minimumSize: const Size(34, 34),
-                                            maximumSize: const Size(34, 34),
-                                          ),
-                                          icon: const Icon(
-                                            Icons.auto_fix_high,
-                                            size: 18,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
@@ -1619,15 +1603,27 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           children: <Widget>[
                             Row(
                               children: <Widget>[
-                                Expanded(
-                                  child: Text(
-                                    'Preview',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineSmall
-                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                Text(
+                                  'Preview',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(width: 12),
+                                IconButton.outlined(
+                                  onPressed: _clips.isEmpty ? null : _autoLayout,
+                                  tooltip: 'Auto Layout',
+                                  style: IconButton.styleFrom(
+                                    minimumSize: const Size(34, 34),
+                                    maximumSize: const Size(34, 34),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.auto_fix_high,
+                                    size: 18,
                                   ),
                                 ),
+                                const Spacer(),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 10,
