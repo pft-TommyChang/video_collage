@@ -124,6 +124,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   Timer? _toastTimer;
   Timer? _parallelPreviewTimer;
   Timer? _sequentialPreviewTimer;
+  Timer? _exportCompletionTimer;
   OverlayEntry? _toastOverlayEntry;
   bool _isRestoringSettings = false;
   bool _isSyncingSequentialPreview = false;
@@ -153,6 +154,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   bool _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
   bool _isImporting = false;
   bool _isExporting = false;
+  bool _showExportComplete = false;
   double _exportProgress = 0;
   bool _isPreviewPlaying = false;
   bool _isPreviewMuted = false;
@@ -181,6 +183,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     _toastTimer?.cancel();
     _parallelPreviewTimer?.cancel();
     _sequentialPreviewTimer?.cancel();
+    _exportCompletionTimer?.cancel();
     _toastOverlayEntry?.remove();
     _widthController.dispose();
     _heightController.dispose();
@@ -214,6 +217,24 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   int get _gridCapacity => _rows * _columns;
 
   bool get _isSequentialPlayMode => _selectedPlayMode == PlayMode.sequential;
+
+  void _cancelExportCompletionTimer() {
+    _exportCompletionTimer?.cancel();
+    _exportCompletionTimer = null;
+  }
+
+  void _scheduleExportButtonReset() {
+    _cancelExportCompletionTimer();
+    _exportCompletionTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showExportComplete = false;
+        _exportProgress = 0;
+      });
+    });
+  }
 
   Future<void> _restoreSettings() async {
     final savedSettings = await _settingsStore.load();
@@ -915,8 +936,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       return;
     }
 
+    var completedSuccessfully = false;
     setState(() {
+      _cancelExportCompletionTimer();
       _isExporting = true;
+      _showExportComplete = false;
       _exportProgress = 0;
       _statusMessage = exportFormat == ExportFormat.jpg
           ? 'Exporting collage image...'
@@ -954,15 +978,18 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       final exportDirectory = p.dirname(savePath);
       setState(() {
         _lastExportDirectory = exportDirectory;
+        _showExportComplete = true;
         _exportProgress = 1;
         _statusMessage = 'Export complete: $savePath';
       });
+      completedSuccessfully = true;
       await _persistSettings();
     } on VideoExportException catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
+        _showExportComplete = false;
         _statusMessage = error.message;
       });
     } catch (error) {
@@ -970,14 +997,20 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         return;
       }
       setState(() {
+        _showExportComplete = false;
         _statusMessage = 'Export failed: $error';
       });
     } finally {
       if (mounted) {
         setState(() {
           _isExporting = false;
-          _exportProgress = 0;
+          if (!completedSuccessfully) {
+            _exportProgress = 0;
+          }
         });
+        if (completedSuccessfully) {
+          _scheduleExportButtonReset();
+        }
       }
     }
   }
@@ -1545,6 +1578,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                         _handleExportButtonPressed(),
                                       ),
                                       isExporting: _isExporting,
+                                      showCompleted: _showExportComplete,
                                       progress: _exportProgress,
                                       exportFormat: resolvedExportFormat,
                                     ),
@@ -3358,80 +3392,154 @@ class _ExportButton extends StatelessWidget {
   const _ExportButton({
     required this.onPressed,
     required this.isExporting,
+    required this.showCompleted,
     required this.progress,
     required this.exportFormat,
   });
 
   final VoidCallback? onPressed;
   final bool isExporting;
+  final bool showCompleted;
   final double progress;
   final ExportFormat? exportFormat;
 
   @override
   Widget build(BuildContext context) {
     const radius = Radius.circular(999);
-    const idleColor = Color(0xFFA0563D);
-    const trackColor = Color(0xFFD8C8B0);
-    const progressColor = Color(0xFFA0563D);
-    final foregroundColor = isExporting
-        ? const Color(0xFF766658)
-        : Colors.white;
+    final sharedButtonColor = Theme.of(context).colorScheme.primary;
+    const exportingBackground = Color(0xFFE7D6BF);
     final clampedProgress = progress.clamp(0.0, 1.0);
     final percent = (clampedProgress * 100).round().clamp(0, 100);
+    final displayProgress = showCompleted
+        ? 1.0
+        : (isExporting ? clampedProgress : 0.0);
+    final label = showCompleted
+        ? 'Complete'
+        : isExporting
+        ? 'Exporting... $percent%'
+        : exportFormat == null
+        ? 'Export'
+        : 'Export ${exportFormat!.label}';
+    final icon = showCompleted
+        ? Icons.check_rounded
+        : isExporting
+        ? Icons.autorenew_rounded
+        : Icons.file_download_outlined;
+    final backgroundColor = showCompleted
+        ? sharedButtonColor
+        : isExporting
+        ? exportingBackground
+        : sharedButtonColor;
+    final showIcon = !isExporting || showCompleted;
 
     return SizedBox(
       height: 56,
       child: ClipRRect(
         borderRadius: const BorderRadius.all(radius),
         child: Material(
-          color: isExporting ? trackColor : idleColor,
+          color: backgroundColor,
           child: InkWell(
             onTap: onPressed,
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                if (isExporting)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: FractionallySizedBox(
-                      widthFactor: clampedProgress,
-                      child: const DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: progressColor,
-                          borderRadius: BorderRadius.all(radius),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                border: isExporting && !showCompleted
+                    ? null
+                    : Border.all(color: sharedButtonColor),
+                borderRadius: const BorderRadius.all(radius),
+                boxShadow: const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x1F5F2E1E),
+                    blurRadius: 16,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final fillWidth = constraints.maxWidth * displayProgress;
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 240),
+                          curve: Curves.easeOutCubic,
+                          width: fillWidth,
+                          decoration: BoxDecoration(
+                            color: sharedButtonColor,
+                            borderRadius: BorderRadius.horizontal(
+                              left: radius,
+                              right: displayProgress >= 0.999
+                                  ? radius
+                                  : Radius.zero,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Icon(
-                        Icons.file_download_outlined,
-                        color: foregroundColor,
+                      Center(
+                        child: _ExportButtonContent(
+                          icon: showIcon ? icon : null,
+                          label: label,
+                          color: Colors.white,
+                        ),
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        isExporting
-                            ? 'Exporting... $percent%'
-                            : exportFormat == null
-                            ? 'Export'
-                            : 'Export ${exportFormat!.label}',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: foregroundColor,
-                              fontWeight: FontWeight.w700,
+                      if (displayProgress > 0)
+                        ClipRect(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: displayProgress,
+                            child: Center(
+                              child: _ExportButtonContent(
+                                icon: showIcon ? icon : null,
+                                label: label,
+                                color: Colors.white,
+                              ),
                             ),
-                      ),
+                          ),
+                        ),
                     ],
-                  ),
-                ),
-              ],
+                  );
+                },
+              ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ExportButtonContent extends StatelessWidget {
+  const _ExportButtonContent({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData? icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (icon != null) ...<Widget>[
+          Icon(icon, color: color),
+          const SizedBox(width: 12),
+        ],
+        Text(
+          label,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.1,
+          ),
+        ),
+      ],
     );
   }
 }
