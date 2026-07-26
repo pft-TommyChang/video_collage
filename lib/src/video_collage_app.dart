@@ -116,6 +116,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       <String, VideoPlayerController>{};
   final Set<String> _loadingClipPaths = <String>{};
   final Map<String, String> _clipErrors = <String, String>{};
+  final GlobalKey _previewGridKey = GlobalKey();
 
   late final TextEditingController _widthController;
   late final TextEditingController _heightController;
@@ -1025,67 +1026,84 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: Row(
-          children: <Widget>[
-            SizedBox(
-              width: 370,
-              child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  border: Border(right: BorderSide(color: Color(0xFFD8D0C4))),
-                  color: Color(0xFFFFFCF7),
-                ),
-                child: Column(
-                  children: <Widget>[
-                    Expanded(
-                      child: AbsorbPointer(
-                        absorbing: _isExporting,
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 160),
-                          opacity: _isExporting ? 0.58 : 1,
-                          child: ListView(
-                            padding: const EdgeInsets.all(20),
-                            children: <Widget>[
-                              Row(
-                                children: <Widget>[
-                                  DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(14),
-                                      boxShadow: const <BoxShadow>[
-                                        BoxShadow(
-                                          color: Color(0x22000000),
-                                          blurRadius: 14,
-                                          offset: Offset(0, 6),
+        child: DropTarget(
+          onDragExited: (_) {
+            if (_externalDropHoverSlotIndex != null) {
+              setState(() {
+                _externalDropHoverSlotIndex = null;
+              });
+            }
+          },
+          onDragDone: (details) {
+            unawaited(
+              _handleExternalDrop(
+                details.files,
+                preferredSlotIndex: _externalDropHoverSlotIndex,
+                globalPosition: details.globalPosition,
+              ),
+            );
+          },
+          child: Row(
+            children: <Widget>[
+              SizedBox(
+                width: 370,
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(
+                    border: Border(right: BorderSide(color: Color(0xFFD8D0C4))),
+                    color: Color(0xFFFFFCF7),
+                  ),
+                  child: Column(
+                    children: <Widget>[
+                      Expanded(
+                        child: AbsorbPointer(
+                          absorbing: _isExporting,
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 160),
+                            opacity: _isExporting ? 0.58 : 1,
+                            child: ListView(
+                              padding: const EdgeInsets.all(20),
+                              children: <Widget>[
+                                Row(
+                                  children: <Widget>[
+                                    DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(14),
+                                        boxShadow: const <BoxShadow>[
+                                          BoxShadow(
+                                            color: Color(0x22000000),
+                                            blurRadius: 14,
+                                            offset: Offset(0, 6),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: Image.asset(
+                                          'macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png',
+                                          width: 44,
+                                          height: 44,
+                                          fit: BoxFit.cover,
                                         ),
-                                      ],
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(14),
-                                      child: Image.asset(
-                                        'macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png',
-                                        width: 44,
-                                        height: 44,
-                                        fit: BoxFit.cover,
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      'Perfect Collage',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Perfect Collage',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                              _SectionCard(
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                                _SectionCard(
                                 title: 'Media',
                                 subtitle:
                                     '${_clips.length} loaded • capacity $_gridCapacity',
@@ -1164,6 +1182,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                 .contains(clip.path),
                                             errorMessage:
                                                 _clipErrors[clip.path],
+                                            onEditLabel: () => unawaited(
+                                              _editClipTitle(clip),
+                                            ),
                                             onRemove: () => _removeClip(clip),
                                           ),
                                         );
@@ -1537,33 +1558,33 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                           ],
                         ),
                       ),
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Expanded(
-              child: AbsorbPointer(
-                absorbing: _isExporting,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 160),
-                  opacity: _isExporting ? 0.58 : 1,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[
-                          Color(0xFFFFF8EE),
-                          Color(0xFFF4E7D5),
-                          Color(0xFFE7DDD0),
-                        ],
+              Expanded(
+                child: AbsorbPointer(
+                  absorbing: _isExporting,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 160),
+                    opacity: _isExporting ? 0.58 : 1,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: <Color>[
+                            Color(0xFFFFF8EE),
+                            Color(0xFFF4E7D5),
+                            Color(0xFFE7DDD0),
+                          ],
+                        ),
                       ),
-                    ),
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(28),
-                        child: Column(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(28),
+                          child: Column(
                           children: <Widget>[
                             Row(
                               children: <Widget>[
@@ -1689,136 +1710,124 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                         padding: EdgeInsets.all(
                                           scaledBorderThickness,
                                         ),
-                                        child: GridView.builder(
-                                          physics:
-                                              const NeverScrollableScrollPhysics(),
-                                          itemCount: _gridCapacity,
-                                          gridDelegate:
-                                              SliverGridDelegateWithFixedCrossAxisCount(
-                                                crossAxisCount: _columns,
-                                                crossAxisSpacing:
-                                                    scaledBorderThickness,
-                                                mainAxisSpacing:
-                                                    scaledBorderThickness,
-                                                childAspectRatio:
-                                                    previewCellAspectRatio,
-                                              ),
-                                          itemBuilder: (context, index) {
-                                            final clip = _clipForSlot(index);
-                                            return DragTarget<int>(
-                                              onWillAcceptWithDetails:
-                                                  (details) =>
-                                                      details.data != index,
-                                              onAcceptWithDetails: (details) {
-                                                _moveOrSwapPreviewSlot(
-                                                  details.data,
-                                                  index,
-                                                );
-                                              },
-                                              builder:
-                                                  (
-                                                    context,
-                                                    candidateData,
-                                                    rejectedData,
-                                                  ) {
-                                                    return DropTarget(
-                                                      onDragEntered: (_) {
-                                                        if (_externalDropHoverSlotIndex !=
-                                                            index) {
-                                                          setState(() {
-                                                            _externalDropHoverSlotIndex =
-                                                                index;
-                                                          });
-                                                        }
-                                                      },
-                                                      onDragExited: (_) {
-                                                        if (_externalDropHoverSlotIndex ==
-                                                            index) {
-                                                          setState(() {
-                                                            _externalDropHoverSlotIndex =
-                                                                null;
-                                                          });
-                                                        }
-                                                      },
-                                                      onDragDone: (details) {
-                                                        if (_externalDropHoverSlotIndex ==
-                                                            index) {
-                                                          setState(() {
-                                                            _externalDropHoverSlotIndex =
-                                                                null;
-                                                          });
-                                                        }
-                                                        unawaited(
-                                                          _handleExternalDropToSlot(
-                                                            index,
-                                                            details.files,
-                                                          ),
-                                                        );
-                                                      },
-                                                      child: _PreviewTile(
-                                                        clip: clip,
-                                                        controller: clip == null
-                                                            ? null
-                                                            : _controllers[clip
-                                                                  .path],
-                                                        cornerRadius:
-                                                            scaledTileCornerRadius,
-                                                        isLoading:
-                                                            clip != null &&
-                                                            _loadingClipPaths
-                                                                .contains(
-                                                                  clip.path,
+                                        child: SizedBox.expand(
+                                          key: _previewGridKey,
+                                          child: GridView.builder(
+                                            physics:
+                                                const NeverScrollableScrollPhysics(),
+                                            itemCount: _gridCapacity,
+                                            gridDelegate:
+                                                SliverGridDelegateWithFixedCrossAxisCount(
+                                                  crossAxisCount: _columns,
+                                                  crossAxisSpacing:
+                                                      scaledBorderThickness,
+                                                  mainAxisSpacing:
+                                                      scaledBorderThickness,
+                                                  childAspectRatio:
+                                                      previewCellAspectRatio,
+                                                ),
+                                            itemBuilder: (context, index) {
+                                              final clip = _clipForSlot(index);
+                                              return DragTarget<int>(
+                                                onWillAcceptWithDetails:
+                                                    (details) =>
+                                                        details.data != index,
+                                                onAcceptWithDetails: (details) {
+                                                  _moveOrSwapPreviewSlot(
+                                                    details.data,
+                                                    index,
+                                                  );
+                                                },
+                                                builder:
+                                                    (
+                                                      context,
+                                                      candidateData,
+                                                      rejectedData,
+                                                    ) {
+                                                      return DropTarget(
+                                                        onDragEntered: (_) {
+                                                          if (_externalDropHoverSlotIndex !=
+                                                              index) {
+                                                            setState(() {
+                                                              _externalDropHoverSlotIndex =
+                                                                  index;
+                                                            });
+                                                          }
+                                                        },
+                                                        onDragExited: (_) {
+                                                          if (_externalDropHoverSlotIndex ==
+                                                              index) {
+                                                            setState(() {
+                                                              _externalDropHoverSlotIndex =
+                                                                  null;
+                                                            });
+                                                          }
+                                                        },
+                                                        child: _PreviewTile(
+                                                          clip: clip,
+                                                          controller: clip == null
+                                                              ? null
+                                                              : _controllers[clip
+                                                                    .path],
+                                                          cornerRadius:
+                                                              scaledTileCornerRadius,
+                                                          isLoading:
+                                                              clip != null &&
+                                                              _loadingClipPaths
+                                                                  .contains(
+                                                                    clip.path,
+                                                                  ),
+                                                          errorMessage:
+                                                              clip == null
+                                                              ? null
+                                                              : _clipErrors[clip
+                                                                    .path],
+                                                          onPickMedia:
+                                                              clip == null
+                                                              ? () =>
+                                                                    _pickMediaForSlot(
+                                                                      index,
+                                                                    )
+                                                              : null,
+                                                          index: index,
+                                                          backgroundColor:
+                                                              _selectedBackgroundColor
+                                                                  .color,
+                                                          dragData: clip == null
+                                                              ? null
+                                                              : index,
+                                                          showLabel:
+                                                              _includeClipLabelsInOutput,
+                                                          showLabelIndex:
+                                                              _showClipLabelIndex,
+                                                          onEditLabel:
+                                                              clip == null
+                                                              ? null
+                                                              : () => unawaited(
+                                                                  _editClipTitle(
+                                                                    clip,
+                                                                  ),
                                                                 ),
-                                                        errorMessage:
-                                                            clip == null
-                                                            ? null
-                                                            : _clipErrors[clip
-                                                                  .path],
-                                                        onPickMedia:
-                                                            clip == null
-                                                            ? () =>
-                                                                  _pickMediaForSlot(
-                                                                    index,
-                                                                  )
-                                                            : null,
-                                                        index: index,
-                                                        backgroundColor:
-                                                            _selectedBackgroundColor
-                                                                .color,
-                                                        dragData: clip == null
-                                                            ? null
-                                                            : index,
-                                                        showLabel:
-                                                            _includeClipLabelsInOutput,
-                                                        showLabelIndex:
-                                                            _showClipLabelIndex,
-                                                        onEditLabel:
-                                                            clip == null
-                                                            ? null
-                                                            : () => unawaited(
-                                                                _editClipTitle(
-                                                                  clip,
-                                                                ),
-                                                              ),
-                                                        isActiveLabel:
-                                                            _isSequentialPlayMode &&
-                                                            _isPreviewPlaying &&
-                                                            _activeSequentialClipPath ==
-                                                                clip?.path,
-                                                        clipLabelFontSize:
-                                                            _clipLabelFontSize,
-                                                        isDragTarget:
-                                                            candidateData
-                                                                .isNotEmpty ||
-                                                            _externalDropHoverSlotIndex ==
-                                                                index,
-                                                        overlayLabelScale:
-                                                            overlayLabelScale,
-                                                      ),
-                                                    );
-                                                  },
-                                            );
-                                          },
+                                                          isActiveLabel:
+                                                              _isSequentialPlayMode &&
+                                                              _isPreviewPlaying &&
+                                                              _activeSequentialClipPath ==
+                                                                  clip?.path,
+                                                          clipLabelFontSize:
+                                                              _clipLabelFontSize,
+                                                          isDragTarget:
+                                                              candidateData
+                                                                  .isNotEmpty ||
+                                                              _externalDropHoverSlotIndex ==
+                                                                  index,
+                                                          overlayLabelScale:
+                                                              overlayLabelScale,
+                                                        ),
+                                                      );
+                                                    },
+                                              );
+                                            },
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -1874,11 +1883,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                         ),
                       ),
                     ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1926,6 +1936,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _slotAssignments[_nextAvailableSlot(reservedSlotIndex: slotIndex)] =
           displacedPath;
     }
+  }
+
+  void _replacePathInSlot(String path, int slotIndex) {
+    _slotAssignments.removeWhere(
+      (assignedSlotIndex, assignedPath) =>
+          assignedSlotIndex != slotIndex && assignedPath == path,
+    );
+    _slotAssignments[slotIndex] = path;
   }
 
   void _compactSlotAssignments() {
@@ -2400,6 +2418,51 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     return cellWidth / cellHeight;
   }
 
+  int? _slotIndexForGlobalDropPosition(Offset globalPosition) {
+    final previewGridContext = _previewGridKey.currentContext;
+    final renderObject = previewGridContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+
+    final localPosition = renderObject.globalToLocal(globalPosition);
+    final gridSize = renderObject.size;
+    if (localPosition.dx < 0 ||
+        localPosition.dy < 0 ||
+        localPosition.dx > gridSize.width ||
+        localPosition.dy > gridSize.height) {
+      return null;
+    }
+
+    final spacing = _options.scaledBorderThickness;
+    final cellWidth =
+        ((gridSize.width - ((_columns - 1) * spacing)) / _columns).clamp(
+          1.0,
+          double.infinity,
+        );
+    final cellHeight =
+        ((gridSize.height - ((_rows - 1) * spacing)) / _rows).clamp(
+          1.0,
+          double.infinity,
+        );
+    final strideX = cellWidth + spacing;
+    final strideY = cellHeight + spacing;
+
+    final column = (localPosition.dx / strideX).floor();
+    final row = (localPosition.dy / strideY).floor();
+    if (column < 0 || column >= _columns || row < 0 || row >= _rows) {
+      return null;
+    }
+
+    final dxInCell = localPosition.dx - (column * strideX);
+    final dyInCell = localPosition.dy - (row * strideY);
+    if (dxInCell > cellWidth || dyInCell > cellHeight) {
+      return null;
+    }
+
+    return (row * _columns) + column;
+  }
+
   bool _isClipVisibleInGrid(String path) {
     for (final entry in _slotAssignments.entries) {
       if (entry.value == path && entry.key < _gridCapacity) {
@@ -2465,9 +2528,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         return;
       }
       setState(() {
-        _assignPathToSlot(path, slotIndex);
+        _replacePathInSlot(path, slotIndex);
         _statusMessage =
-            'Assigned ${existingClip!.name} to slot ${slotIndex + 1}.';
+            'Replaced slot ${slotIndex + 1} with ${existingClip!.name}.';
       });
       unawaited(_syncPreviewPlaybackMode());
       return;
@@ -2479,13 +2542,43 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
     setState(() {
       _clips.add(_placeholderClip(path));
-      _assignPathToSlot(path, slotIndex);
+      _replacePathInSlot(path, slotIndex);
       _loadingClipPaths.add(path);
       _clipErrors.remove(path);
-      _statusMessage = 'Queued ${p.basename(path)} for slot ${slotIndex + 1}.';
+      _statusMessage =
+          'Replacing slot ${slotIndex + 1} with ${p.basename(path)}.';
     });
 
     await _loadClip(path);
+  }
+
+  Future<void> _handleExternalDrop(
+    List<DropItem> items, {
+    required int? preferredSlotIndex,
+    Offset? globalPosition,
+  }) async {
+    final slotIndex =
+        globalPosition == null
+            ? preferredSlotIndex
+            : _slotIndexForGlobalDropPosition(globalPosition) ??
+                preferredSlotIndex;
+    if (mounted && _externalDropHoverSlotIndex != null) {
+      setState(() {
+        _externalDropHoverSlotIndex = null;
+      });
+    }
+
+    if (slotIndex != null) {
+      await _handleExternalDropToSlot(slotIndex, items);
+      return;
+    }
+
+    final supportedPaths = _supportedMediaDropPaths(items);
+    if (supportedPaths.isEmpty) {
+      return;
+    }
+
+    await _handleExternalMultiDrop(supportedPaths);
   }
 
   Future<void> _handleExternalMultiDrop(List<String> paths) async {
@@ -3252,6 +3345,7 @@ class _ClipListTile extends StatelessWidget {
     required this.isUsed,
     required this.isLoading,
     required this.errorMessage,
+    required this.onEditLabel,
     required this.onRemove,
   });
 
@@ -3260,6 +3354,7 @@ class _ClipListTile extends StatelessWidget {
   final bool isUsed;
   final bool isLoading;
   final String? errorMessage;
+  final VoidCallback onEditLabel;
   final VoidCallback onRemove;
 
   @override
@@ -3281,13 +3376,36 @@ class _ClipListTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    clip.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          clip.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        tooltip: 'Edit clip label',
+                        onPressed: onEditLabel,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 15,
+                        splashRadius: 14,
+                        icon: const Icon(Icons.edit_outlined, color: Colors.black45,),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
