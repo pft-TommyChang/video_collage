@@ -21,6 +21,7 @@ jobs:
     env:
       FLUTTER_VERSION: 3.38.10
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
       PACKAGE_ARCH: arm64
 
     steps:
@@ -65,14 +66,17 @@ jobs:
         run: |
           tag="${{ steps.release_meta.outputs.tag }}"
 
-          if gh release view "$tag" >/dev/null 2>&1; then
+          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
             echo "GitHub Release $tag already exists."
             exit 0
           fi
 
           gh release create "$tag" \
+            --repo "$GH_REPO" \
             --verify-tag \
             --generate-notes
+
+          gh release view "$tag" --repo "$GH_REPO" >/dev/null
 
       - name: Install Flutter SDK
         shell: bash
@@ -107,6 +111,7 @@ jobs:
         shell: bash
         run: |
           gh release upload "${{ steps.release_meta.outputs.tag }}" \
+            --repo "$GH_REPO" \
             dist/*.dmg \
             dist/*.sha256 \
             --clobber
