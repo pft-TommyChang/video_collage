@@ -37,6 +37,10 @@ class PersistedEditorSettings {
   const PersistedEditorSettings({
     required this.rows,
     required this.columns,
+    required this.isMediaSectionCollapsed,
+    required this.isLayoutSectionCollapsed,
+    required this.isLabelSectionCollapsed,
+    required this.isOutputSectionCollapsed,
     required this.borderThickness,
     required this.tileCornerRadius,
     required this.clipLabelFontSize,
@@ -59,6 +63,10 @@ class PersistedEditorSettings {
 
   final int rows;
   final int columns;
+  final bool isMediaSectionCollapsed;
+  final bool isLayoutSectionCollapsed;
+  final bool isLabelSectionCollapsed;
+  final bool isOutputSectionCollapsed;
   final double borderThickness;
   final double tileCornerRadius;
   final double clipLabelFontSize;
@@ -82,6 +90,10 @@ class PersistedEditorSettings {
     return <String, Object>{
       'rows': rows,
       'columns': columns,
+      'isMediaSectionCollapsed': isMediaSectionCollapsed,
+      'isLayoutSectionCollapsed': isLayoutSectionCollapsed,
+      'isLabelSectionCollapsed': isLabelSectionCollapsed,
+      'isOutputSectionCollapsed': isOutputSectionCollapsed,
       'borderThickness': borderThickness,
       'tileCornerRadius': tileCornerRadius,
       'clipLabelFontSize': clipLabelFontSize,
@@ -124,6 +136,14 @@ class PersistedEditorSettings {
     return PersistedEditorSettings(
       rows: (json['rows'] as num?)?.toInt() ?? 2,
       columns: (json['columns'] as num?)?.toInt() ?? 2,
+      isMediaSectionCollapsed:
+          json['isMediaSectionCollapsed'] as bool? ?? false,
+      isLayoutSectionCollapsed:
+          json['isLayoutSectionCollapsed'] as bool? ?? false,
+      isLabelSectionCollapsed:
+          json['isLabelSectionCollapsed'] as bool? ?? false,
+      isOutputSectionCollapsed:
+          json['isOutputSectionCollapsed'] as bool? ?? false,
       borderThickness: (json['borderThickness'] as num?)?.toDouble() ?? 12,
       tileCornerRadius: (json['tileCornerRadius'] as num?)?.toDouble() ?? 12,
       clipLabelFontSize: (json['clipLabelFontSize'] as num?)?.toDouble() ?? 12,

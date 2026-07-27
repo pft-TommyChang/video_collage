@@ -166,6 +166,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
   int _rows = _defaultRows;
   int _columns = _defaultColumns;
+  bool _isMediaSectionCollapsed = false;
+  bool _isLayoutSectionCollapsed = false;
+  bool _isLabelSectionCollapsed = false;
+  bool _isOutputSectionCollapsed = false;
   double _borderThickness = _defaultBorderThickness;
   double _tileCornerRadius = _defaultTileCornerRadius;
   double _clipLabelFontSize = _defaultClipLabelFontSize;
@@ -276,6 +280,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     setState(() {
       _rows = savedSettings.rows.clamp(1, 6);
       _columns = savedSettings.columns.clamp(1, 6);
+      _isMediaSectionCollapsed = savedSettings.isMediaSectionCollapsed;
+      _isLayoutSectionCollapsed = savedSettings.isLayoutSectionCollapsed;
+      _isLabelSectionCollapsed = savedSettings.isLabelSectionCollapsed;
+      _isOutputSectionCollapsed = savedSettings.isOutputSectionCollapsed;
       _borderThickness = savedSettings.borderThickness
           .clamp(0, _maxBorderThickness)
           .toDouble();
@@ -355,6 +363,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       PersistedEditorSettings(
         rows: _rows,
         columns: _columns,
+        isMediaSectionCollapsed: _isMediaSectionCollapsed,
+        isLayoutSectionCollapsed: _isLayoutSectionCollapsed,
+        isLabelSectionCollapsed: _isLabelSectionCollapsed,
+        isOutputSectionCollapsed: _isOutputSectionCollapsed,
         borderThickness: _borderThickness,
         tileCornerRadius: _tileCornerRadius,
         clipLabelFontSize: _clipLabelFontSize,
@@ -380,6 +392,30 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   void _setStateAndSave(VoidCallback update) {
     setState(update);
     _scheduleSettingsSave();
+  }
+
+  void _toggleMediaSection() {
+    _setStateAndSave(() {
+      _isMediaSectionCollapsed = !_isMediaSectionCollapsed;
+    });
+  }
+
+  void _toggleLayoutSection() {
+    _setStateAndSave(() {
+      _isLayoutSectionCollapsed = !_isLayoutSectionCollapsed;
+    });
+  }
+
+  void _toggleLabelSection() {
+    _setStateAndSave(() {
+      _isLabelSectionCollapsed = !_isLabelSectionCollapsed;
+    });
+  }
+
+  void _toggleOutputSection() {
+    _setStateAndSave(() {
+      _isOutputSectionCollapsed = !_isOutputSectionCollapsed;
+    });
   }
 
   ResolutionPreset get _effectiveResolutionForSizing {
@@ -1327,6 +1363,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   title: 'Media',
                                   subtitle:
                                       '${_clips.length} loaded • capacity $_gridCapacity',
+                                  isCollapsed: _isMediaSectionCollapsed,
+                                  onToggle: _toggleMediaSection,
                                   action: IconButton.outlined(
                                     onPressed: _clips.isEmpty
                                         ? null
@@ -1406,6 +1444,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   title: 'Layout',
                                   subtitle:
                                       'Aspect ratio, rows, columns, and styling',
+                                  isCollapsed: _isLayoutSectionCollapsed,
+                                  onToggle: _toggleLayoutSection,
                                   action: IconButton.outlined(
                                     onPressed: _resetLayoutDefaults,
                                     tooltip: 'Reset layout defaults',
@@ -1530,8 +1570,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 const SizedBox(height: 16),
                                 _SectionCard(
                                   title: 'Label',
-                                  subtitle:
-                                      'Clip label visibility, position, and spacing',
+                                  subtitle: 'Label display settings',
+                                  isCollapsed: _isLabelSectionCollapsed,
+                                  onToggle: _toggleLabelSection,
                                   action: IconButton.outlined(
                                     onPressed: _resetLabelDefaults,
                                     tooltip: 'Reset label defaults',
@@ -1629,6 +1670,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                 _SectionCard(
                                   title: 'Output',
                                   subtitle: '$playModeLabel mode',
+                                  isCollapsed: _isOutputSectionCollapsed,
+                                  onToggle: _toggleOutputSection,
                                   action: IconButton.outlined(
                                     onPressed: () =>
                                         unawaited(_resetOutputDefaults()),
@@ -3988,12 +4031,16 @@ class _SectionCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
+    required this.isCollapsed,
+    required this.onToggle,
     this.action,
   });
 
   final String title;
   final String subtitle;
   final Widget child;
+  final bool isCollapsed;
+  final VoidCallback onToggle;
   final Widget? action;
 
   @override
@@ -4013,28 +4060,74 @@ class _SectionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: onToggle,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                if (action != null) ...<Widget>[
+                if (!isCollapsed && action != null) ...<Widget>[
                   const SizedBox(width: 12),
                   action!,
                 ],
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: onToggle,
+                  tooltip: isCollapsed ? 'Expand section' : 'Collapse section',
+                  icon: TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeInOut,
+                    tween: Tween<double>(
+                      begin: 0,
+                      end: isCollapsed ? -math.pi / 2 : 0,
+                    ),
+                    builder: (context, angle, child) {
+                      return Transform.rotate(angle: angle, child: child);
+                    },
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 22,
+                    ),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: const Color(0xFF697180)),
+            ClipRect(
+              child: AnimatedAlign(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topCenter,
+                heightFactor: isCollapsed ? 0 : 1,
+                child: IgnorePointer(
+                  ignoring: isCollapsed,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 160),
+                    opacity: isCollapsed ? 0 : 1,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: const Color(0xFF697180)),
+                        ),
+                        const SizedBox(height: 16),
+                        child,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
-            child,
           ],
         ),
       ),
