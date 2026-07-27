@@ -14,6 +14,7 @@ import 'services/system_dialog_service.dart';
 import 'services/video_export_service.dart';
 
 const _aspectPresets = <AspectRatioPreset>[
+  AspectRatioPreset(label: '9:21', widthFactor: 9, heightFactor: 21),
   AspectRatioPreset(label: '9:16', widthFactor: 9, heightFactor: 16),
   AspectRatioPreset(label: '4:5', widthFactor: 4, heightFactor: 5),
   AspectRatioPreset(label: '3:4', widthFactor: 3, heightFactor: 4),
@@ -21,6 +22,7 @@ const _aspectPresets = <AspectRatioPreset>[
   AspectRatioPreset(label: '5:4', widthFactor: 5, heightFactor: 4),
   AspectRatioPreset(label: '4:3', widthFactor: 4, heightFactor: 3),
   AspectRatioPreset(label: '16:9', widthFactor: 16, heightFactor: 9),
+  AspectRatioPreset(label: '21:9', widthFactor: 21, heightFactor: 9),
 ];
 
 const _resolutionPresets = <ResolutionPreset>[
@@ -63,7 +65,9 @@ const _supportedPhotoExtensions = <String>{
   '.heif',
 };
 
-final AspectRatioPreset _defaultAspectPreset = _aspectPresets[6];
+final AspectRatioPreset _defaultAspectPreset = _aspectPresets.firstWhere(
+  (preset) => preset.label == '16:9',
+);
 final ResolutionPreset _defaultResolutionPreset = _resolutionPresets[1];
 final ColorChoice _defaultBorderColor = _colorChoices[0];
 final ColorChoice _defaultBackgroundColor = _colorChoices[1];
@@ -4650,7 +4654,7 @@ class _PreviewTileBody extends StatelessWidget {
                                       ? Icons.photo_outlined
                                       : Icons.movie_creation_outlined
                                 : Icons.warning_amber_rounded,
-                            size: clip == null ? 136 : 34,
+                            size: clip == null ? 108.8 : 34,
                             color: Colors.black.withValues(alpha: 0.28),
                           ),
                           if (errorMessage != null) ...<Widget>[
