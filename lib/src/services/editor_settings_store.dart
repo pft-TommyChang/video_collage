@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../models.dart';
+
 class ExportHistoryEntry {
   const ExportHistoryEntry({
     required this.path,
@@ -39,7 +41,7 @@ class PersistedEditorSettings {
     required this.tileCornerRadius,
     required this.clipLabelFontSize,
     required this.includeClipLabelsInOutput,
-    required this.showClipLabelIndex,
+    required this.clipLabelDisplayMode,
     required this.outputWidth,
     required this.outputHeight,
     required this.aspectLabel,
@@ -59,7 +61,7 @@ class PersistedEditorSettings {
   final double tileCornerRadius;
   final double clipLabelFontSize;
   final bool includeClipLabelsInOutput;
-  final bool showClipLabelIndex;
+  final ClipLabelDisplayMode clipLabelDisplayMode;
   final int outputWidth;
   final int outputHeight;
   final String aspectLabel;
@@ -80,7 +82,7 @@ class PersistedEditorSettings {
       'tileCornerRadius': tileCornerRadius,
       'clipLabelFontSize': clipLabelFontSize,
       'includeClipLabelsInOutput': includeClipLabelsInOutput,
-      'showClipLabelIndex': showClipLabelIndex,
+      'clipLabelDisplayMode': clipLabelDisplayMode.name,
       'outputWidth': outputWidth,
       'outputHeight': outputHeight,
       'aspectLabel': aspectLabel,
@@ -96,6 +98,18 @@ class PersistedEditorSettings {
   }
 
   factory PersistedEditorSettings.fromJson(Map<String, dynamic> json) {
+    final clipLabelDisplayModeName = json['clipLabelDisplayMode'] as String?;
+    final clipLabelDisplayMode = ClipLabelDisplayMode.values.firstWhere(
+      (mode) => mode.name == clipLabelDisplayModeName,
+      orElse: () {
+        final legacyShowClipLabelIndex =
+            json['showClipLabelIndex'] as bool? ?? false;
+        return legacyShowClipLabelIndex
+            ? ClipLabelDisplayMode.indexAndLabel
+            : ClipLabelDisplayMode.labelOnly;
+      },
+    );
+
     return PersistedEditorSettings(
       rows: (json['rows'] as num?)?.toInt() ?? 2,
       columns: (json['columns'] as num?)?.toInt() ?? 2,
@@ -104,7 +118,7 @@ class PersistedEditorSettings {
       clipLabelFontSize: (json['clipLabelFontSize'] as num?)?.toDouble() ?? 12,
       includeClipLabelsInOutput:
           json['includeClipLabelsInOutput'] as bool? ?? false,
-      showClipLabelIndex: json['showClipLabelIndex'] as bool? ?? false,
+      clipLabelDisplayMode: clipLabelDisplayMode,
       outputWidth: (json['outputWidth'] as num?)?.toInt() ?? 1920,
       outputHeight: (json['outputHeight'] as num?)?.toInt() ?? 1080,
       aspectLabel: json['aspectLabel'] as String? ?? '16:9',

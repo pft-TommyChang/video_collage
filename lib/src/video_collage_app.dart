@@ -66,7 +66,8 @@ const double _defaultBorderThickness = 12;
 const double _defaultTileCornerRadius = 12;
 const double _defaultClipLabelFontSize = 16;
 const bool _defaultIncludeClipLabelsInOutput = true;
-const bool _defaultShowClipLabelIndex = false;
+const ClipLabelDisplayMode _defaultClipLabelDisplayMode =
+    ClipLabelDisplayMode.labelOnly;
 const bool _defaultAppendDateTimeToExportName = true;
 const PlayMode _defaultPlayMode = PlayMode.parallel;
 const AudioMode _defaultAudioMode = AudioMode.firstClip;
@@ -150,7 +151,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   double _tileCornerRadius = _defaultTileCornerRadius;
   double _clipLabelFontSize = _defaultClipLabelFontSize;
   bool _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
-  bool _showClipLabelIndex = _defaultShowClipLabelIndex;
+  ClipLabelDisplayMode _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
   bool _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
   bool _isImporting = false;
   bool _isExporting = false;
@@ -214,7 +215,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       backgroundColor: _selectedBackgroundColor,
       borderColor: _selectedBorderColor,
       includeClipLabelsInOutput: _includeClipLabelsInOutput,
-      showClipLabelIndex: _showClipLabelIndex,
+      clipLabelDisplayMode: _clipLabelDisplayMode,
       clipLabelFontSize: _clipLabelFontSize,
       playMode: _selectedPlayMode,
       audioMode: _selectedAudioMode,
@@ -262,7 +263,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
           .clamp(8, 24)
           .toDouble();
       _includeClipLabelsInOutput = savedSettings.includeClipLabelsInOutput;
-      _showClipLabelIndex = savedSettings.showClipLabelIndex;
+      _clipLabelDisplayMode = savedSettings.clipLabelDisplayMode;
       _appendDateTimeToExportName = savedSettings.appendDateTimeToExportName;
       _selectedAspect = _aspectPresets.firstWhere(
         (preset) => preset.label == savedSettings.aspectLabel,
@@ -332,7 +333,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         tileCornerRadius: _tileCornerRadius,
         clipLabelFontSize: _clipLabelFontSize,
         includeClipLabelsInOutput: _includeClipLabelsInOutput,
-        showClipLabelIndex: _showClipLabelIndex,
+        clipLabelDisplayMode: _clipLabelDisplayMode,
         outputWidth: width,
         outputHeight: height,
         aspectLabel: _selectedAspect.label,
@@ -615,9 +616,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
     try {
       final selections = await _dialogService.pickMedia();
-      final paths = selections.map((selection) => selection.path).toList(
-        growable: false,
-      );
+      final paths = selections
+          .map((selection) => selection.path)
+          .toList(growable: false);
       final selectionByPath = <String, PickedMediaFile>{
         for (final selection in selections) selection.path: selection,
       };
@@ -643,7 +644,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
 
       for (final path in newPaths) {
-        unawaited(_loadClip(path, initialClip: selectionByPath[path]?.clipInfo));
+        unawaited(
+          _loadClip(path, initialClip: selectionByPath[path]?.clipInfo),
+        );
       }
       for (final path in existingPaths) {
         unawaited(_refreshClipMetadata(path));
@@ -771,7 +774,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _selectedBorderColor = _defaultBorderColor;
       _selectedBackgroundColor = _defaultBackgroundColor;
       _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
-      _showClipLabelIndex = _defaultShowClipLabelIndex;
+      _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
       _widthController.text = '${size.$1}';
       _heightController.text = '${size.$2}';
       _backfillVisibleSlotsFromOverflow();
@@ -1424,16 +1427,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           });
                                         },
                                       ),
-                                      SwitchListTile.adaptive(
-                                        contentPadding: EdgeInsets.zero,
-                                        title: const Text('Show label index'),
-                                        value: _showClipLabelIndex,
-                                        onChanged: (value) {
-                                          _setStateAndSave(() {
-                                            _showClipLabelIndex = value;
-                                          });
-                                        },
-                                      ),
                                     ],
                                   ),
                                 ),
@@ -1923,8 +1916,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                                 : index,
                                                             showLabel:
                                                                 _includeClipLabelsInOutput,
-                                                            showLabelIndex:
-                                                                _showClipLabelIndex,
+                                                            labelDisplayMode:
+                                                                _clipLabelDisplayMode,
                                                             onEditLabel:
                                                                 clip == null
                                                                 ? null
@@ -3125,18 +3118,20 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       await controller.pause();
 
       final initializedController = controller;
-      final clip = probedClip ?? (() {
-        final value = initializedController.value;
-        return VideoClipInfo(
-          path: path,
-          name: _defaultClipNameForPath(path),
-          duration: value.duration,
-          width: value.size.width.round(),
-          height: value.size.height.round(),
-          hasAudio: false,
-          mediaKind: MediaKind.video,
-        );
-      })();
+      final clip =
+          probedClip ??
+          (() {
+            final value = initializedController.value;
+            return VideoClipInfo(
+              path: path,
+              name: _defaultClipNameForPath(path),
+              duration: value.duration,
+              width: value.size.width.round(),
+              height: value.size.height.round(),
+              hasAudio: false,
+              mediaKind: MediaKind.video,
+            );
+          })();
 
       if (!mounted) {
         controller.dispose();
@@ -3213,159 +3208,43 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   Future<void> _editClipTitle(VideoClipInfo clip) async {
-    var draftName = clip.name;
     final visibleSlotClips = _slotClipsForExport();
     final showTwoClipPresets =
         visibleSlotClips.length == 2 &&
         visibleSlotClips.any((entry) => entry.clip.path == clip.path);
-    final textController = TextEditingController(
-      text: clip.name,
-    )..selection = TextSelection(baseOffset: 0, extentOffset: clip.name.length);
 
     final result = await showDialog<_ClipLabelEditResult>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Edit clip label'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              TextFormField(
-                controller: textController,
-                autofocus: true,
-                textInputAction: TextInputAction.done,
-                decoration: const InputDecoration(
-                  labelText: 'Clip label',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (value) {
-                  draftName = value;
-                },
-                onFieldSubmitted: (value) {
-                  Navigator.of(
-                    dialogContext,
-                  ).pop(_ClipLabelEditResult.rename(value.trim()));
-                },
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Label presets',
-                style: Theme.of(dialogContext).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _singleClipLabelPresetRows
-                    .map((presetRow) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: presetRow
-                              .map((preset) {
-                                return OutlinedButton(
-                                  onPressed: () {
-                                    Navigator.of(
-                                      dialogContext,
-                                    ).pop(_ClipLabelEditResult.rename(preset));
-                                  },
-                                  child: Text(preset),
-                                );
-                              })
-                              .toList(growable: false),
-                        ),
-                      );
-                    })
-                    .toList(growable: false),
-              ),
-              if (showTwoClipPresets) ...<Widget>[
-                const SizedBox(height: 16),
-                Text(
-                  'Quick presets',
-                  style: Theme.of(dialogContext).textTheme.labelLarge,
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _twoClipLabelPresets
-                      .map((preset) {
-                        return OutlinedButton(
-                          onPressed: () {
-                            Navigator.of(
-                              dialogContext,
-                            ).pop(_ClipLabelEditResult.preset(preset));
-                          },
-                          child: Text(
-                            '${preset.firstLabel} / ${preset.secondLabel}',
-                          ),
-                        );
-                      })
-                      .toList(growable: false),
-                ),
-              ],
-            ],
-          ),
-          actions: <Widget>[
-            SizedBox(
-              width: double.infinity,
-              child: Row(
-                children: <Widget>[
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(
-                        dialogContext,
-                      ).pop(const _ClipLabelEditResult.clearAll());
-                    },
-                    child: const Text('Clean all labels'),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.of(
-                        dialogContext,
-                      ).pop(_ClipLabelEditResult.rename(draftName.trim()));
-                    },
-                    child: const Text('Save'),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        return _ClipLabelEditDialog(
+          initialLabel: clip.name,
+          initialDisplayMode: _clipLabelDisplayMode,
+          showTwoClipPresets: showTwoClipPresets,
         );
       },
     );
-    textController.dispose();
 
     if (!mounted || result == null) {
       return;
     }
 
-    if (result.clearAll) {
-      _setStateAndSave(() {
-        for (var index = 0; index < _clips.length; index += 1) {
-          _clips[index] = _clips[index].copyWith(name: '');
-        }
-        _statusMessage = 'Cleared all clip labels.';
-      });
-      return;
-    }
-
     final selectedPreset = result.preset;
+    final displayModeChanged = result.displayMode != _clipLabelDisplayMode;
     if (selectedPreset != null) {
       final latestVisibleSlotClips = _slotClipsForExport();
       if (latestVisibleSlotClips.length != 2) {
+        if (displayModeChanged) {
+          _setStateAndSave(() {
+            _clipLabelDisplayMode = result.displayMode;
+            _statusMessage =
+                'Updated label display to ${result.displayMode.label}.';
+          });
+        }
         return;
       }
 
       _setStateAndSave(() {
+        _clipLabelDisplayMode = result.displayMode;
         final presetLabels = <String>[
           selectedPreset.firstLabel,
           selectedPreset.secondLabel,
@@ -3381,8 +3260,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
             );
           }
         }
-        _statusMessage =
+        final presetMessage =
             'Applied clip label preset: ${selectedPreset.firstLabel} / ${selectedPreset.secondLabel}.';
+        _statusMessage = displayModeChanged
+            ? '$presetMessage Display: ${result.displayMode.label}.'
+            : presetMessage;
       });
       return;
     }
@@ -3392,37 +3274,267 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       return;
     }
 
-    if (updatedName == clip.name) {
+    if (updatedName == clip.name && !displayModeChanged) {
       return;
     }
 
-    setState(() {
+    _setStateAndSave(() {
+      _clipLabelDisplayMode = result.displayMode;
       final index = _clips.indexWhere((entry) => entry.path == clip.path);
+      final updateMessage = updatedName == clip.name
+          ? null
+          : 'Updated clip label to $updatedName.';
+      final displayMessage = displayModeChanged
+          ? 'Label display: ${result.displayMode.label}.'
+          : null;
       if (index >= 0) {
         _clips[index] = _clips[index].copyWith(name: updatedName);
-        _statusMessage = updatedName.isEmpty
-            ? 'Cleared clip label.'
-            : 'Updated clip label to $updatedName.';
       }
+      _statusMessage = [?updateMessage, ?displayMessage].join(' ');
     });
   }
 }
 
 class _ClipLabelEditResult {
-  const _ClipLabelEditResult.rename(this.name)
-    : preset = null,
-      clearAll = false;
-  const _ClipLabelEditResult.preset(this.preset)
-    : name = null,
-      clearAll = false;
-  const _ClipLabelEditResult.clearAll()
-    : name = null,
-      preset = null,
-      clearAll = true;
+  const _ClipLabelEditResult({
+    required this.displayMode,
+    this.name,
+    this.preset,
+  });
 
   final String? name;
   final _TwoClipLabelPreset? preset;
-  final bool clearAll;
+  final ClipLabelDisplayMode displayMode;
+}
+
+class _ClipLabelEditDialog extends StatefulWidget {
+  const _ClipLabelEditDialog({
+    required this.initialLabel,
+    required this.initialDisplayMode,
+    required this.showTwoClipPresets,
+  });
+
+  final String initialLabel;
+  final ClipLabelDisplayMode initialDisplayMode;
+  final bool showTwoClipPresets;
+
+  @override
+  State<_ClipLabelEditDialog> createState() => _ClipLabelEditDialogState();
+}
+
+class _ClipLabelEditDialogState extends State<_ClipLabelEditDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late final TextEditingController _textController;
+  late String _draftName;
+  late ClipLabelDisplayMode _selectedDisplayMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _draftName = widget.initialLabel;
+    _selectedDisplayMode = widget.initialDisplayMode;
+    _textController = TextEditingController(text: widget.initialLabel)
+      ..selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: widget.initialLabel.length,
+      );
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  void _applySingleClipPreset(String preset) {
+    Navigator.of(context).pop(
+      _ClipLabelEditResult(name: preset, displayMode: _selectedDisplayMode),
+    );
+  }
+
+  void _applyTwoClipPreset(_TwoClipLabelPreset preset) {
+    Navigator.of(context).pop(
+      _ClipLabelEditResult(preset: preset, displayMode: _selectedDisplayMode),
+    );
+  }
+
+  void _submit() {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _ClipLabelEditResult(
+        name: _draftName.trim(),
+        displayMode: _selectedDisplayMode,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final compactPresetButtonStyle = OutlinedButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      minimumSize: const Size(0, 32),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      textStyle: Theme.of(context).textTheme.bodyMedium,
+    );
+
+    return AlertDialog(
+      title: const Text('Edit clip label'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640, maxHeight: 560),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Global label display',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Affects every clip in preview and export.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<ClipLabelDisplayMode>(
+                  showSelectedIcon: false,
+                  segments: ClipLabelDisplayMode.values
+                      .map(
+                        (mode) => ButtonSegment<ClipLabelDisplayMode>(
+                          value: mode,
+                          label: Text(mode.label),
+                        ),
+                      )
+                      .toList(growable: false),
+                  selected: <ClipLabelDisplayMode>{_selectedDisplayMode},
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _selectedDisplayMode = selection.first;
+                    });
+                  },
+                ),
+                if (_selectedDisplayMode ==
+                    ClipLabelDisplayMode.indexOnly) ...<Widget>[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Index only mode hides custom labels, so clip label editing is unavailable.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ] else ...<Widget>[
+                  const SizedBox(height: 20),
+                  const Divider(height: 1),
+                  const SizedBox(height: 16),
+                  Text(
+                    'This clip',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Only updates the selected clip label. Label cannot be blank.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _textController,
+                    autofocus: true,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      labelText: 'Clip label',
+                      border: OutlineInputBorder(),
+                      helperText: 'Required',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Clip label cannot be blank.';
+                      }
+                      return null;
+                    },
+                    onChanged: (value) {
+                      setState(() {
+                        _draftName = value;
+                      });
+                    },
+                    onFieldSubmitted: (_) => _submit(),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Single-clip presets',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _singleClipLabelPresetRows
+                        .map((presetRow) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: presetRow
+                                  .map((preset) {
+                                    return OutlinedButton(
+                                      style: compactPresetButtonStyle,
+                                      onPressed: () =>
+                                          _applySingleClipPreset(preset),
+                                      child: Text(preset),
+                                    );
+                                  })
+                                  .toList(growable: false),
+                            ),
+                          );
+                        })
+                        .toList(growable: false),
+                  ),
+                  if (widget.showTwoClipPresets) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Two-clip presets',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Global action for the two visible clips in the collage.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _twoClipLabelPresets
+                          .map((preset) {
+                            return OutlinedButton(
+                              style: compactPresetButtonStyle,
+                              onPressed: () => _applyTwoClipPreset(preset),
+                              child: Text(
+                                '${preset.firstLabel} / ${preset.secondLabel}',
+                              ),
+                            );
+                          })
+                          .toList(growable: false),
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Save')),
+      ],
+    );
+  }
 }
 
 class _TwoClipLabelPreset {
@@ -3952,7 +4064,7 @@ class _PreviewTile extends StatelessWidget {
     required this.backgroundColor,
     required this.dragData,
     required this.showLabel,
-    required this.showLabelIndex,
+    required this.labelDisplayMode,
     required this.onEditLabel,
     required this.isActiveLabel,
     required this.clipLabelFontSize,
@@ -3970,7 +4082,7 @@ class _PreviewTile extends StatelessWidget {
   final Color backgroundColor;
   final int? dragData;
   final bool showLabel;
-  final bool showLabelIndex;
+  final ClipLabelDisplayMode labelDisplayMode;
   final VoidCallback? onEditLabel;
   final bool isActiveLabel;
   final double clipLabelFontSize;
@@ -4016,7 +4128,7 @@ class _PreviewTile extends StatelessWidget {
         : buildClipLabelText(
             slotIndex: index,
             clipName: clip!.name,
-            includeIndex: showLabelIndex,
+            mode: labelDisplayMode,
           );
     final label = rawLabel == null || rawLabel.isEmpty ? null : rawLabel;
     final tile = _PreviewTileBody(

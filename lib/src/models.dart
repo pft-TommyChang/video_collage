@@ -84,6 +84,18 @@ enum ExportFormat {
   };
 }
 
+enum ClipLabelDisplayMode {
+  labelOnly,
+  indexOnly,
+  indexAndLabel;
+
+  String get label => switch (this) {
+    ClipLabelDisplayMode.labelOnly => 'Label only',
+    ClipLabelDisplayMode.indexOnly => 'Index only',
+    ClipLabelDisplayMode.indexAndLabel => 'Index + label',
+  };
+}
+
 class VideoClipInfo {
   const VideoClipInfo({
     required this.path,
@@ -140,7 +152,7 @@ class ExportOptions {
     required this.backgroundColor,
     required this.borderColor,
     required this.includeClipLabelsInOutput,
-    required this.showClipLabelIndex,
+    required this.clipLabelDisplayMode,
     required this.clipLabelFontSize,
     required this.playMode,
     required this.audioMode,
@@ -156,7 +168,7 @@ class ExportOptions {
   final ColorChoice backgroundColor;
   final ColorChoice borderColor;
   final bool includeClipLabelsInOutput;
-  final bool showClipLabelIndex;
+  final ClipLabelDisplayMode clipLabelDisplayMode;
   final double clipLabelFontSize;
   final PlayMode playMode;
   final AudioMode audioMode;
@@ -225,15 +237,16 @@ String formatDuration(Duration duration) {
 String buildClipLabelText({
   required int slotIndex,
   required String clipName,
-  required bool includeIndex,
+  required ClipLabelDisplayMode mode,
 }) {
-  if (!includeIndex) {
-    return clipName;
-  }
-  if (clipName.isEmpty) {
-    return '#${slotIndex + 1}';
-  }
-  return '#${slotIndex + 1} $clipName';
+  final trimmedName = clipName.trim();
+  final indexLabel = '#${slotIndex + 1}';
+  return switch (mode) {
+    ClipLabelDisplayMode.labelOnly => trimmedName,
+    ClipLabelDisplayMode.indexOnly => indexLabel,
+    ClipLabelDisplayMode.indexAndLabel =>
+      trimmedName.isEmpty ? indexLabel : '$indexLabel $trimmedName',
+  };
 }
 
 ExportFormat exportFormatForClips(Iterable<CollageSlotClip> slotClips) {

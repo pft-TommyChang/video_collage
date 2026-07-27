@@ -221,7 +221,7 @@ class VideoExportService {
               slotClips: slotClips,
               scaleFactor: options.scaleFactor,
               baseFontSize: options.clipLabelFontSize,
-              showClipLabelIndex: options.showClipLabelIndex,
+              clipLabelDisplayMode: options.clipLabelDisplayMode,
               cellWidth: cellWidth,
               tempDirectory: labelTempDirectory = await Directory.systemTemp
                   .createTemp('video_collage_labels_'),
@@ -426,7 +426,7 @@ class VideoExportService {
               slotClips: slotClips,
               scaleFactor: options.scaleFactor,
               baseFontSize: options.clipLabelFontSize,
-              showClipLabelIndex: options.showClipLabelIndex,
+              clipLabelDisplayMode: options.clipLabelDisplayMode,
               cellWidth: cellWidth,
               tempDirectory: labelTempDirectory = await Directory.systemTemp
                   .createTemp('photo_collage_labels_'),
@@ -598,7 +598,7 @@ class VideoExportService {
                 slotClips: slotClips,
                 scaleFactor: options.scaleFactor,
                 baseFontSize: options.clipLabelFontSize,
-                showClipLabelIndex: options.showClipLabelIndex,
+                clipLabelDisplayMode: options.clipLabelDisplayMode,
                 cellWidth: cellWidth,
                 tempDirectory: await Directory(
                   p.join(
@@ -825,7 +825,7 @@ class VideoExportService {
     required List<CollageSlotClip> slotClips,
     required double scaleFactor,
     required double baseFontSize,
-    required bool showClipLabelIndex,
+    required ClipLabelDisplayMode clipLabelDisplayMode,
     required int cellWidth,
     required Directory tempDirectory,
     int? highlightedInputIndex,
@@ -848,7 +848,7 @@ class VideoExportService {
         text: buildClipLabelText(
           slotIndex: slotClips[inputIndex].slotIndex,
           clipName: slotClips[inputIndex].clip.name,
-          includeIndex: showClipLabelIndex,
+          mode: clipLabelDisplayMode,
         ),
         labelStyle: labelStyle,
         maxTextWidth: maxTextWidth,
