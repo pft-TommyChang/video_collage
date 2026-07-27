@@ -266,14 +266,28 @@ class VideoExportService {
           radius: options.tileCornerRadiusPx,
         );
 
-        filters.add(
-          '[$inputIndex:v]setpts=PTS-STARTPTS,'
-          'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
-          'crop=$cellWidth:$cellHeight,'
-          'setsar=1'
-          '$stopDurationFilter'
-          '[clip$inputIndex]',
-        );
+        if (clip.isPhoto) {
+          filters.addAll(
+            _scaledPhotoFilters(
+              backgroundColor: options.backgroundColor,
+              inputIndex: inputIndex,
+              backgroundDurationSeconds: targetDurationSeconds,
+              trimDurationSeconds: targetDurationSeconds,
+              cellWidth: cellWidth,
+              cellHeight: cellHeight,
+              outputLabel: 'clip$inputIndex',
+            ),
+          );
+        } else {
+          filters.add(
+            '[$inputIndex:v]setpts=PTS-STARTPTS,'
+            'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
+            'crop=$cellWidth:$cellHeight,'
+            'setsar=1'
+            '$stopDurationFilter'
+            '[clip$inputIndex]',
+          );
+        }
 
         var decoratedClipName = 'clip$inputIndex';
         if (options.includeClipLabelsInOutput) {
@@ -444,19 +458,33 @@ class VideoExportService {
       ];
 
       for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex++) {
+        final clip = slotClips[inputIndex].clip;
         final roundedCornerFilter = _roundedCornerFilter(
           cellWidth: cellWidth,
           cellHeight: cellHeight,
           radius: options.tileCornerRadiusPx,
         );
 
-        filters.add(
-          '[$inputIndex:v]'
-          'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
-          'crop=$cellWidth:$cellHeight,'
-          'setsar=1'
-          '[clip$inputIndex]',
-        );
+        if (clip.isPhoto) {
+          filters.addAll(
+            _scaledPhotoFilters(
+              backgroundColor: options.backgroundColor,
+              inputIndex: inputIndex,
+              backgroundDurationSeconds: '1',
+              cellWidth: cellWidth,
+              cellHeight: cellHeight,
+              outputLabel: 'clip$inputIndex',
+            ),
+          );
+        } else {
+          filters.add(
+            '[$inputIndex:v]'
+            'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
+            'crop=$cellWidth:$cellHeight,'
+            'setsar=1'
+            '[clip$inputIndex]',
+          );
+        }
 
         var decoratedClipName = 'clip$inputIndex';
         if (options.includeClipLabelsInOutput) {
@@ -631,47 +659,62 @@ class VideoExportService {
           final slotClip = slotClips[inputIndex];
           final videoOrder = videoOrderByPath[slotClip.clip.path];
           final tileLabel = 'tile$inputIndex';
-          filters.add(switch (slotClip.clip.mediaKind) {
-            MediaKind.photo => _scaledPhotoFilter(
-              inputIndex: inputIndex,
-              durationSeconds: segmentDurationSeconds,
-              cellWidth: cellWidth,
-              cellHeight: cellHeight,
-              roundedCornerFilter: roundedCornerFilter,
-              outputLabel: tileLabel,
-            ),
-            MediaKind.video when inputIndex == activeInputIndex =>
-              _sequentialActiveVideoFilter(
-                inputIndex: inputIndex,
-                durationSeconds: segmentDurationSeconds,
-                cellWidth: cellWidth,
-                cellHeight: cellHeight,
-                roundedCornerFilter: roundedCornerFilter,
-                outputLabel: tileLabel,
-              ),
-            MediaKind.video
-                when videoOrder != null && videoOrder < segmentIndex =>
-              _sequentialFrozenVideoFilter(
-                inputIndex: inputIndex,
-                freezeAtEnd: true,
-                clipDuration: slotClip.clip.duration,
-                durationSeconds: segmentDurationSeconds,
-                cellWidth: cellWidth,
-                cellHeight: cellHeight,
-                roundedCornerFilter: roundedCornerFilter,
-                outputLabel: tileLabel,
-              ),
-            MediaKind.video => _sequentialFrozenVideoFilter(
-              inputIndex: inputIndex,
-              freezeAtEnd: false,
-              clipDuration: slotClip.clip.duration,
-              durationSeconds: segmentDurationSeconds,
-              cellWidth: cellWidth,
-              cellHeight: cellHeight,
-              roundedCornerFilter: roundedCornerFilter,
-              outputLabel: tileLabel,
-            ),
-          });
+          switch (slotClip.clip.mediaKind) {
+            case MediaKind.photo:
+              final preparedTileLabel = 'prepared_$tileLabel';
+              filters.addAll(
+                _scaledPhotoFilters(
+                  backgroundColor: options.backgroundColor,
+                  inputIndex: inputIndex,
+                  backgroundDurationSeconds: segmentDurationSeconds,
+                  trimDurationSeconds: segmentDurationSeconds,
+                  cellWidth: cellWidth,
+                  cellHeight: cellHeight,
+                  outputLabel: preparedTileLabel,
+                ),
+              );
+              filters.add(
+                '[$preparedTileLabel]$roundedCornerFilter[$tileLabel]',
+              );
+            case MediaKind.video when inputIndex == activeInputIndex:
+              filters.add(
+                _sequentialActiveVideoFilter(
+                  inputIndex: inputIndex,
+                  durationSeconds: segmentDurationSeconds,
+                  cellWidth: cellWidth,
+                  cellHeight: cellHeight,
+                  roundedCornerFilter: roundedCornerFilter,
+                  outputLabel: tileLabel,
+                ),
+              );
+            case MediaKind.video
+                when videoOrder != null && videoOrder < segmentIndex:
+              filters.add(
+                _sequentialFrozenVideoFilter(
+                  inputIndex: inputIndex,
+                  freezeAtEnd: true,
+                  clipDuration: slotClip.clip.duration,
+                  durationSeconds: segmentDurationSeconds,
+                  cellWidth: cellWidth,
+                  cellHeight: cellHeight,
+                  roundedCornerFilter: roundedCornerFilter,
+                  outputLabel: tileLabel,
+                ),
+              );
+            case MediaKind.video:
+              filters.add(
+                _sequentialFrozenVideoFilter(
+                  inputIndex: inputIndex,
+                  freezeAtEnd: false,
+                  clipDuration: slotClip.clip.duration,
+                  durationSeconds: segmentDurationSeconds,
+                  cellWidth: cellWidth,
+                  cellHeight: cellHeight,
+                  roundedCornerFilter: roundedCornerFilter,
+                  outputLabel: tileLabel,
+                ),
+              );
+          }
         }
 
         var stageLabel = 'base';
@@ -880,11 +923,7 @@ class VideoExportService {
         alignment: clipLabelAlignment,
       );
       overlays.add(
-        _ClipLabelOverlay(
-          filePath: filePath,
-          x: position.$1,
-          y: position.$2,
-        ),
+        _ClipLabelOverlay(filePath: filePath, x: position.$1, y: position.$2),
       );
     }
     return overlays;
@@ -1017,22 +1056,32 @@ class VideoExportService {
     return _RenderedClipLabelImage(width: imageWidth, height: imageHeight);
   }
 
-  String _scaledPhotoFilter({
+  List<String> _scaledPhotoFilters({
+    required ColorChoice backgroundColor,
     required int inputIndex,
-    required String durationSeconds,
+    required String backgroundDurationSeconds,
+    String? trimDurationSeconds,
     required int cellWidth,
     required int cellHeight,
-    required String roundedCornerFilter,
     required String outputLabel,
   }) {
-    return '[$inputIndex:v]'
-        'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
-        'crop=$cellWidth:$cellHeight,'
-        'setsar=1,'
-        'trim=duration=$durationSeconds,'
-        'setpts=PTS-STARTPTS,'
-        '$roundedCornerFilter'
-        '[$outputLabel]';
+    final backgroundLabel = 'photo_bg_$inputIndex';
+    final foregroundLabel = 'photo_fg_$inputIndex';
+    final trimFilter = trimDurationSeconds == null
+        ? ''
+        : ',trim=duration=$trimDurationSeconds,setpts=PTS-STARTPTS';
+    return <String>[
+      'color=c=${backgroundColor.ffmpegHex}:s=$cellWidth'
+          'x$cellHeight:d=$backgroundDurationSeconds[$backgroundLabel]',
+      '[$inputIndex:v]'
+          'format=rgba,'
+          'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
+          'crop=$cellWidth:$cellHeight,'
+          'setsar=1'
+          '$trimFilter'
+          '[$foregroundLabel]',
+      '[$backgroundLabel][$foregroundLabel]overlay=x=0:y=0:format=auto[$outputLabel]',
+    ];
   }
 
   String _sequentialActiveVideoFilter({
@@ -1259,10 +1308,7 @@ class _ClipLabelOverlay {
 }
 
 class _RenderedClipLabelImage {
-  const _RenderedClipLabelImage({
-    required this.width,
-    required this.height,
-  });
+  const _RenderedClipLabelImage({required this.width, required this.height});
 
   final int width;
   final int height;

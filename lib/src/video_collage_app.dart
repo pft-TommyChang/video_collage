@@ -4637,7 +4637,7 @@ class _PreviewTileBody extends StatelessWidget {
                                       ? Icons.photo_outlined
                                       : Icons.movie_creation_outlined
                                 : Icons.warning_amber_rounded,
-                            size: clip == null ? 68 : 34,
+                            size: clip == null ? 136 : 34,
                             color: Colors.black.withValues(alpha: 0.28),
                           ),
                           if (errorMessage != null) ...<Widget>[
