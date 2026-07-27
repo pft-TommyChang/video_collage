@@ -11,6 +11,7 @@ import 'package:ffmpeg_kit_flutter_new/media_information.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:ffmpeg_kit_flutter_new/statistics.dart';
 import 'package:ffmpeg_kit_flutter_new/stream_information.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
@@ -890,11 +891,13 @@ class VideoExportService {
       overlayLabelScaleForExportScale(scaleFactor),
       baseFontSize: baseFontSize,
       baseEdgePadding: clipLabelPadding,
+      alignment: clipLabelAlignment,
     );
     final maxTextWidth = math.max(
       1.0,
       cellWidth -
-          (labelStyle.edgePadding * 2) -
+          labelStyle.margin.left -
+          labelStyle.margin.right -
           (labelStyle.horizontalPadding * 2),
     );
 
@@ -919,7 +922,7 @@ class VideoExportService {
         cellHeight: cellHeight,
         overlayWidth: labelImage.width,
         overlayHeight: labelImage.height,
-        edgePadding: labelStyle.edgePadding,
+        margin: labelStyle.margin,
         alignment: clipLabelAlignment,
       );
       overlays.add(
@@ -934,22 +937,32 @@ class VideoExportService {
     required int cellHeight,
     required int overlayWidth,
     required int overlayHeight,
-    required double edgePadding,
+    required EdgeInsets margin,
     required ClipLabelAlignment alignment,
   }) {
-    final inset = edgePadding.round();
-    final maxX = math.max(0, cellWidth - overlayWidth - inset);
-    final maxY = math.max(0, cellHeight - overlayHeight - inset);
-    final centeredX = math.max(0, ((cellWidth - overlayWidth) / 2).round());
-    final centeredY = math.max(0, ((cellHeight - overlayHeight) / 2).round());
-    final topY = math.max(0, inset);
+    final leftInset = margin.left.round();
+    final rightInset = margin.right.round();
+    final topInset = margin.top.round();
+    final bottomInset = margin.bottom.round();
+    final minX = math.max(0, leftInset);
+    final minY = math.max(0, topInset);
+    final maxX = math.max(minX, cellWidth - overlayWidth - rightInset);
+    final maxY = math.max(minY, cellHeight - overlayHeight - bottomInset);
+    final centeredX = ((cellWidth - overlayWidth) / 2).round().clamp(
+      minX,
+      maxX,
+    );
+    final centeredY = ((cellHeight - overlayHeight) / 2).round().clamp(
+      minY,
+      maxY,
+    );
 
     return switch (alignment) {
-      ClipLabelAlignment.topLeft => (math.max(0, inset), topY),
-      ClipLabelAlignment.topCenter => (centeredX, topY),
-      ClipLabelAlignment.topRight => (maxX, topY),
+      ClipLabelAlignment.topLeft => (minX, minY),
+      ClipLabelAlignment.topCenter => (centeredX, minY),
+      ClipLabelAlignment.topRight => (maxX, minY),
       ClipLabelAlignment.center => (centeredX, centeredY),
-      ClipLabelAlignment.bottomLeft => (math.max(0, inset), maxY),
+      ClipLabelAlignment.bottomLeft => (minX, maxY),
       ClipLabelAlignment.bottomCenter => (centeredX, maxY),
       ClipLabelAlignment.bottomRight => (maxX, maxY),
     };

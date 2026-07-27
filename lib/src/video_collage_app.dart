@@ -4579,6 +4579,7 @@ class _PreviewTileBody extends StatelessWidget {
       overlayLabelScale,
       baseFontSize: clipLabelFontSize,
       baseEdgePadding: clipLabelPadding,
+      alignment: clipLabelAlignment,
     );
 
     return AnimatedScale(
@@ -4697,7 +4698,7 @@ class _PreviewTileBody extends StatelessWidget {
                     Align(
                       alignment: clipLabelAlignment.previewAlignment,
                       child: Padding(
-                        padding: EdgeInsets.all(labelStyle.edgePadding),
+                        padding: labelStyle.margin,
                         child: MouseRegion(
                           cursor: onLabelTap == null
                               ? MouseCursor.defer

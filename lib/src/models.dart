@@ -221,13 +221,13 @@ class ExportOptions {
 
 class ClipLabelStyle {
   const ClipLabelStyle({
-    required this.edgePadding,
+    required this.margin,
     required this.horizontalPadding,
     required this.verticalPadding,
     required this.fontSize,
   });
 
-  final double edgePadding;
+  final EdgeInsets margin;
   final double horizontalPadding;
   final double verticalPadding;
   final double fontSize;
@@ -241,14 +241,68 @@ ClipLabelStyle clipLabelStyleForOverlayScale(
   double overlayLabelScale, {
   required double baseFontSize,
   required double baseEdgePadding,
+  required ClipLabelAlignment alignment,
+  double baseFixedPadding = 5,
 }) {
   final fontScale = baseFontSize / 12;
+  final resolvedEdgePadding = baseEdgePadding * overlayLabelScale * fontScale;
+  final resolvedFixedPadding = baseFixedPadding * overlayLabelScale * fontScale;
   return ClipLabelStyle(
-    edgePadding: baseEdgePadding * overlayLabelScale * fontScale,
+    margin: clipLabelMarginForAlignment(
+      alignment: alignment,
+      anchorPadding: resolvedEdgePadding,
+      fixedPadding: resolvedFixedPadding,
+    ),
     horizontalPadding: 8 * overlayLabelScale * fontScale,
     verticalPadding: 4 * overlayLabelScale * fontScale,
     fontSize: baseFontSize * overlayLabelScale,
   );
+}
+
+EdgeInsets clipLabelMarginForAlignment({
+  required ClipLabelAlignment alignment,
+  required double anchorPadding,
+  required double fixedPadding,
+}) {
+  return switch (alignment) {
+    ClipLabelAlignment.topLeft => EdgeInsets.fromLTRB(
+      anchorPadding,
+      anchorPadding,
+      fixedPadding,
+      fixedPadding,
+    ),
+    ClipLabelAlignment.topCenter => EdgeInsets.fromLTRB(
+      fixedPadding,
+      anchorPadding,
+      fixedPadding,
+      fixedPadding,
+    ),
+    ClipLabelAlignment.topRight => EdgeInsets.fromLTRB(
+      fixedPadding,
+      anchorPadding,
+      anchorPadding,
+      fixedPadding,
+    ),
+    ClipLabelAlignment.center => EdgeInsets.all(fixedPadding),
+    ClipLabelAlignment.bottomLeft => EdgeInsets.fromLTRB(
+      anchorPadding,
+      fixedPadding,
+      fixedPadding,
+      anchorPadding,
+    ),
+    ClipLabelAlignment.bottomCenter => EdgeInsets.fromLTRB(
+      fixedPadding,
+      fixedPadding,
+      fixedPadding,
+      anchorPadding,
+    ),
+    ClipLabelAlignment.bottomRight => EdgeInsets.fromLTRB(
+      fixedPadding,
+      fixedPadding,
+      anchorPadding,
+      anchorPadding,
+    ),
+  };
 }
 
 class CollageSlotClip {
