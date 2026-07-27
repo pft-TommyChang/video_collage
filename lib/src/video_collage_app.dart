@@ -4314,31 +4314,6 @@ class _ClipListTile extends StatelessWidget {
               )
             else
               _buildThumbnailFallback(),
-            Positioned(
-              right: 4,
-              bottom: 4,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: isUsed
-                      ? const Color(0xFFA0563D)
-                      : Colors.black.withValues(alpha: 0.62),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 2,
-                  ),
-                  child: Icon(
-                    isUsed
-                        ? Icons.visibility_rounded
-                        : Icons.crop_square_rounded,
-                    size: 11,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -4365,6 +4340,7 @@ class _ClipListTile extends StatelessWidget {
   }
 
   String get _clipDetails {
+    final clipFormat = p.extension(clip.path).replaceFirst('.', '').toLowerCase();
     if (isLoading) {
       return 'Importing preview...';
     }
@@ -4372,12 +4348,14 @@ class _ClipListTile extends StatelessWidget {
       return 'Preview unavailable • export still possible';
     }
     if (clip.width == 0 || clip.height == 0) {
-      return clip.isPhoto ? 'Photo' : formatDuration(clip.duration);
+      return clip.isPhoto
+          ? clipFormat
+          : '${formatDuration(clip.duration)} • $clipFormat';
     }
     if (clip.isPhoto) {
-      return '${clip.width}×${clip.height} • Photo';
+      return '${clip.width}×${clip.height} • $clipFormat';
     }
-    return '${clip.width}×${clip.height} • ${formatDuration(clip.duration)}';
+    return '${clip.width}×${clip.height} • ${formatDuration(clip.duration)} • $clipFormat';
   }
 }
 
