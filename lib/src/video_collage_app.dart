@@ -69,6 +69,16 @@ final AspectRatioPreset _defaultAspectPreset = _aspectPresets.firstWhere(
   (preset) => preset.label == '16:9',
 );
 final ResolutionPreset _defaultResolutionPreset = _resolutionPresets[1];
+
+ButtonStyle _sectionHeaderIconButtonStyle() {
+  return IconButton.styleFrom(
+    minimumSize: const Size(34, 34),
+    maximumSize: const Size(34, 34),
+    padding: EdgeInsets.zero,
+    visualDensity: VisualDensity.compact,
+  );
+}
+
 final ColorChoice _defaultBorderColor = _colorChoices[0];
 final ColorChoice _defaultBackgroundColor = _colorChoices[1];
 
@@ -1371,10 +1381,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                         ? null
                                         : () => unawaited(_confirmClearClips()),
                                     tooltip: 'Reset media',
-                                    style: IconButton.styleFrom(
-                                      minimumSize: const Size(34, 34),
-                                      maximumSize: const Size(34, 34),
-                                    ),
+                                    style: _sectionHeaderIconButtonStyle(),
                                     icon: const Icon(
                                       Icons.cleaning_services_outlined,
                                       size: 18,
@@ -1450,10 +1457,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   action: IconButton.outlined(
                                     onPressed: _resetLayoutDefaults,
                                     tooltip: 'Reset layout defaults',
-                                    style: IconButton.styleFrom(
-                                      minimumSize: const Size(34, 34),
-                                      maximumSize: const Size(34, 34),
-                                    ),
+                                    style: _sectionHeaderIconButtonStyle(),
                                     icon: const Icon(Icons.refresh, size: 18),
                                   ),
                                   child: Column(
@@ -1577,10 +1581,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   action: IconButton.outlined(
                                     onPressed: _resetLabelDefaults,
                                     tooltip: 'Reset label defaults',
-                                    style: IconButton.styleFrom(
-                                      minimumSize: const Size(34, 34),
-                                      maximumSize: const Size(34, 34),
-                                    ),
+                                    style: _sectionHeaderIconButtonStyle(),
                                     icon: const Icon(Icons.refresh, size: 18),
                                   ),
                                   child: Column(
@@ -1683,10 +1684,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     onPressed: () =>
                                         unawaited(_resetOutputDefaults()),
                                     tooltip: 'Reset output defaults',
-                                    style: IconButton.styleFrom(
-                                      minimumSize: const Size(34, 34),
-                                      maximumSize: const Size(34, 34),
-                                    ),
+                                    style: _sectionHeaderIconButtonStyle(),
                                     icon: const Icon(Icons.refresh, size: 18),
                                   ),
                                   child: Column(
@@ -4074,7 +4072,7 @@ class _SectionCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
                 Expanded(
                   child: InkWell(
@@ -4096,9 +4094,10 @@ class _SectionCard extends StatelessWidget {
                   action!,
                 ],
                 const SizedBox(width: 8),
-                IconButton(
+                IconButton.outlined(
                   onPressed: onToggle,
                   tooltip: isCollapsed ? 'Expand section' : 'Collapse section',
+                  style: _sectionHeaderIconButtonStyle(),
                   icon: TweenAnimationBuilder<double>(
                     duration: const Duration(milliseconds: 180),
                     curve: Curves.easeInOut,
@@ -4346,7 +4345,10 @@ class _ClipListTile extends StatelessWidget {
   }
 
   String get _clipDetails {
-    final clipFormat = p.extension(clip.path).replaceFirst('.', '').toLowerCase();
+    final clipFormat = p
+        .extension(clip.path)
+        .replaceFirst('.', '')
+        .toLowerCase();
     if (isLoading) {
       return 'Importing preview...';
     }
