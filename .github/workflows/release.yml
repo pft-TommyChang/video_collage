@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to upload assets to, for example v1.0.0
+        description: Existing git tag to build and upload assets for, for example v1.0.0
         required: true
         type: string
 
@@ -58,6 +58,21 @@ jobs:
             echo "Tag version ($release_version) does not match pubspec.yaml ($pubspec_version)." >&2
             exit 1
           fi
+
+      - name: Ensure GitHub Release exists
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          tag="${{ steps.release_meta.outputs.tag }}"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub Release $tag already exists."
+            exit 0
+          fi
+
+          gh release create "$tag" \
+            --verify-tag \
+            --generate-notes
 
       - name: Install Flutter SDK
         shell: bash
