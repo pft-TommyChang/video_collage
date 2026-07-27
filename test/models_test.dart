@@ -4,6 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:video_collage_mac/src/models.dart';
 
 void main() {
+  test('crop center fit mode uses cover preview fit', () {
+    expect(ClipFitMode.cropCenter.previewFit, BoxFit.cover);
+    expect(ClipFitMode.centerInside.previewFit, BoxFit.contain);
+  });
+
   test('bottom center label padding only affects the bottom edge', () {
     final style = clipLabelStyleForOverlayScale(
       1,

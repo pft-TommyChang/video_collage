@@ -97,6 +97,7 @@ const bool _defaultAppendDateTimeToExportName = true;
 const PlayMode _defaultPlayMode = PlayMode.parallel;
 const AudioMode _defaultAudioMode = AudioMode.firstClip;
 const ExportDurationMode _defaultDurationMode = ExportDurationMode.longest;
+const ClipFitMode _defaultFitMode = ClipFitMode.cropCenter;
 const int _minOutputDimensionExclusive = 360;
 const int _maxOutputDimensionExclusive = 4096;
 const double _maxBorderThickness = 100;
@@ -177,6 +178,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   PlayMode _selectedPlayMode = _defaultPlayMode;
   AudioMode _selectedAudioMode = _defaultAudioMode;
   ExportDurationMode _selectedDurationMode = _defaultDurationMode;
+  ClipFitMode _selectedFitMode = _defaultFitMode;
 
   int _rows = _defaultRows;
   int _columns = _defaultColumns;
@@ -251,6 +253,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       tileCornerRadius: _tileCornerRadius,
       backgroundColor: _selectedBackgroundColor,
       borderColor: _selectedBorderColor,
+      fitMode: _selectedFitMode,
       includeClipLabelsInOutput: _includeClipLabelsInOutput,
       clipLabelDisplayMode: _clipLabelDisplayMode,
       clipLabelFontSize: _clipLabelFontSize,
@@ -313,6 +316,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _includeClipLabelsInOutput = savedSettings.includeClipLabelsInOutput;
       _clipLabelDisplayMode = savedSettings.clipLabelDisplayMode;
       _clipLabelAlignment = savedSettings.clipLabelAlignment;
+      _selectedFitMode = ClipFitMode.values.firstWhere(
+        (mode) => mode.name == savedSettings.fitMode,
+        orElse: () => _selectedFitMode,
+      );
       _appendDateTimeToExportName = savedSettings.appendDateTimeToExportName;
       _selectedAspect = _aspectPresets.firstWhere(
         (preset) => preset.label == savedSettings.aspectLabel,
@@ -388,6 +395,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         clipLabelPadding: _clipLabelPadding,
         includeClipLabelsInOutput: _includeClipLabelsInOutput,
         clipLabelDisplayMode: _clipLabelDisplayMode,
+        fitMode: _selectedFitMode.name,
         outputWidth: _outputWidth,
         outputHeight: _outputHeight,
         aspectLabel: _selectedAspect.label,
@@ -923,6 +931,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _tileCornerRadius = _defaultTileCornerRadius;
       _selectedBorderColor = _defaultBorderColor;
       _selectedBackgroundColor = _defaultBackgroundColor;
+      _selectedFitMode = _defaultFitMode;
       _setAppliedResolution(width: size.$1, height: size.$2);
       _backfillVisibleSlotsFromOverflow();
       _statusMessage = 'Layout reset to defaults.';
@@ -1470,7 +1479,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                         itemBuilder: (preset) =>
                                             _AspectRatioDropdownItem(
                                               preset: preset,
-                                            ),
+                                        ),
                                         onSelected: _applyAspectPreset,
                                       ),
                                       const SizedBox(height: 16),
@@ -1566,6 +1575,22 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                         onSelected: (choice) {
                                           _setStateAndSave(() {
                                             _selectedBackgroundColor = choice;
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _SelectionDropdown<ClipFitMode>(
+                                        label: 'Fit mode',
+                                        selected: _selectedFitMode,
+                                        options: ClipFitMode.values,
+                                        itemLabel: (mode) => mode.label,
+                                        itemBuilder: (mode) =>
+                                            _ClipFitModeDropdownItem(
+                                              mode: mode,
+                                            ),
+                                        onSelected: (mode) {
+                                          _setStateAndSave(() {
+                                            _selectedFitMode = mode;
                                           });
                                         },
                                       ),
@@ -1895,8 +1920,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                               Center(
                                 child: Text(
                                   exportFormat == ExportFormat.jpg
-                                      ? '${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • $playModeLabel'
-                                      : '${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • $playModeLabel • ${formatDuration(exportDuration)}',
+                                      ? '${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • ${options.fitMode.label} • $playModeLabel'
+                                      : '${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • ${options.fitMode.label} • $playModeLabel • ${formatDuration(exportDuration)}',
                                   textAlign: TextAlign.center,
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
@@ -2209,6 +2234,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                                 _clipLabelAlignment,
                                                             clipLabelPadding:
                                                                 _clipLabelPadding,
+                                                            fitMode:
+                                                                _selectedFitMode,
                                                             isDragTarget:
                                                                 candidateData
                                                                     .isNotEmpty ||
@@ -4407,6 +4434,7 @@ class _PreviewTile extends StatelessWidget {
     required this.clipLabelFontSize,
     required this.clipLabelAlignment,
     required this.clipLabelPadding,
+    required this.fitMode,
     required this.isDragTarget,
     required this.overlayLabelScale,
   });
@@ -4427,6 +4455,7 @@ class _PreviewTile extends StatelessWidget {
   final double clipLabelFontSize;
   final ClipLabelAlignment clipLabelAlignment;
   final double clipLabelPadding;
+  final ClipFitMode fitMode;
   final bool isDragTarget;
   final double overlayLabelScale;
 
@@ -4484,6 +4513,7 @@ class _PreviewTile extends StatelessWidget {
       clipLabelFontSize: clipLabelFontSize,
       clipLabelAlignment: clipLabelAlignment,
       clipLabelPadding: clipLabelPadding,
+      fitMode: fitMode,
       isDragTarget: isDragTarget,
       overlayLabelScale: overlayLabelScale,
     );
@@ -4528,6 +4558,7 @@ class _PreviewTile extends StatelessWidget {
               clipLabelFontSize: clipLabelFontSize,
               clipLabelAlignment: clipLabelAlignment,
               clipLabelPadding: clipLabelPadding,
+              fitMode: fitMode,
               isDragTarget: false,
               overlayLabelScale: overlayLabelScale,
             ),
@@ -4555,6 +4586,7 @@ class _PreviewTileBody extends StatelessWidget {
     required this.clipLabelFontSize,
     required this.clipLabelAlignment,
     required this.clipLabelPadding,
+    required this.fitMode,
     required this.isDragTarget,
     required this.overlayLabelScale,
   });
@@ -4572,6 +4604,7 @@ class _PreviewTileBody extends StatelessWidget {
   final double clipLabelFontSize;
   final ClipLabelAlignment clipLabelAlignment;
   final double clipLabelPadding;
+  final ClipFitMode fitMode;
   final bool isDragTarget;
   final double overlayLabelScale;
 
@@ -4619,7 +4652,7 @@ class _PreviewTileBody extends StatelessWidget {
                       controller!.value.isInitialized &&
                       previewVideoSize != null)
                     FittedBox(
-                      fit: BoxFit.cover,
+                      fit: fitMode.previewFit,
                       child: SizedBox(
                         width: previewVideoSize.width,
                         height: previewVideoSize.height,
@@ -4630,7 +4663,7 @@ class _PreviewTileBody extends StatelessWidget {
                     Positioned.fill(
                       child: Image.file(
                         File(clip!.path),
-                        fit: BoxFit.cover,
+                        fit: fitMode.previewFit,
                         errorBuilder: (context, error, stackTrace) {
                           return Center(
                             child: Icon(
@@ -4819,6 +4852,81 @@ class _SelectionDropdown<T> extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _ClipFitModeDropdownItem extends StatelessWidget {
+  const _ClipFitModeDropdownItem({required this.mode});
+
+  final ClipFitMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        _ClipFitModeIcon(mode: mode),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(mode.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    );
+  }
+}
+
+class _ClipFitModeIcon extends StatelessWidget {
+  const _ClipFitModeIcon({required this.mode});
+
+  final ClipFitMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCropCenter = mode == ClipFitMode.cropCenter;
+
+    return Container(
+      width: 28,
+      height: 24,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F2EA),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: const Color(0xFFD7CEC2)),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFFB8B1A8)),
+            ),
+          ),
+          Center(
+            child: Container(
+              width: isCropCenter ? 14 : 10,
+              height: isCropCenter ? 10 : 7,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF7A59),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+          if (isCropCenter)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: const Color(0xFF171A21),
+                    width: 1.2,
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

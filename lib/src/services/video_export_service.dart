@@ -268,6 +268,7 @@ class VideoExportService {
         if (clip.isPhoto) {
           filters.addAll(
             _scaledPhotoFilters(
+              fitMode: options.fitMode,
               backgroundColor: options.backgroundColor,
               inputIndex: inputIndex,
               backgroundDurationSeconds: targetDurationSeconds,
@@ -280,9 +281,7 @@ class VideoExportService {
         } else {
           filters.add(
             '[$inputIndex:v]setpts=PTS-STARTPTS,'
-            'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
-            'crop=$cellWidth:$cellHeight,'
-            'setsar=1'
+            '${_videoTileScaleFilterChain(fitMode: options.fitMode, backgroundColor: options.backgroundColor, cellWidth: cellWidth, cellHeight: cellHeight)}'
             '$stopDurationFilter'
             '[clip$inputIndex]',
           );
@@ -467,6 +466,7 @@ class VideoExportService {
         if (clip.isPhoto) {
           filters.addAll(
             _scaledPhotoFilters(
+              fitMode: options.fitMode,
               backgroundColor: options.backgroundColor,
               inputIndex: inputIndex,
               backgroundDurationSeconds: '1',
@@ -478,9 +478,7 @@ class VideoExportService {
         } else {
           filters.add(
             '[$inputIndex:v]'
-            'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
-            'crop=$cellWidth:$cellHeight,'
-            'setsar=1'
+            '${_videoTileScaleFilterChain(fitMode: options.fitMode, backgroundColor: options.backgroundColor, cellWidth: cellWidth, cellHeight: cellHeight)}'
             '[clip$inputIndex]',
           );
         }
@@ -661,6 +659,7 @@ class VideoExportService {
               final preparedTileLabel = 'prepared_$tileLabel';
               filters.addAll(
                 _scaledPhotoFilters(
+                  fitMode: options.fitMode,
                   backgroundColor: options.backgroundColor,
                   inputIndex: inputIndex,
                   backgroundDurationSeconds: segmentDurationSeconds,
@@ -677,6 +676,8 @@ class VideoExportService {
               filters.add(
                 _sequentialActiveVideoFilter(
                   inputIndex: inputIndex,
+                  fitMode: options.fitMode,
+                  backgroundColor: options.backgroundColor,
                   durationSeconds: segmentDurationSeconds,
                   cellWidth: cellWidth,
                   cellHeight: cellHeight,
@@ -689,6 +690,8 @@ class VideoExportService {
               filters.add(
                 _sequentialFrozenVideoFilter(
                   inputIndex: inputIndex,
+                  fitMode: options.fitMode,
+                  backgroundColor: options.backgroundColor,
                   freezeAtEnd: true,
                   clipDuration: slotClip.clip.duration,
                   durationSeconds: segmentDurationSeconds,
@@ -702,6 +705,8 @@ class VideoExportService {
               filters.add(
                 _sequentialFrozenVideoFilter(
                   inputIndex: inputIndex,
+                  fitMode: options.fitMode,
+                  backgroundColor: options.backgroundColor,
                   freezeAtEnd: false,
                   clipDuration: slotClip.clip.duration,
                   durationSeconds: segmentDurationSeconds,
@@ -1060,6 +1065,7 @@ class VideoExportService {
   }
 
   List<String> _scaledPhotoFilters({
+    required ClipFitMode fitMode,
     required ColorChoice backgroundColor,
     required int inputIndex,
     required String backgroundDurationSeconds,
@@ -1068,27 +1074,29 @@ class VideoExportService {
     required int cellHeight,
     required String outputLabel,
   }) {
-    final backgroundLabel = 'photo_bg_$inputIndex';
-    final foregroundLabel = 'photo_fg_$inputIndex';
+    final output = _photoForegroundOutputForFitMode(fitMode: fitMode);
     final trimFilter = trimDurationSeconds == null
         ? ''
         : ',trim=duration=$trimDurationSeconds,setpts=PTS-STARTPTS';
+    final backgroundLabel = 'photo_bg_$inputIndex';
+    final foregroundLabel = 'photo_fg_$inputIndex';
     return <String>[
       'color=c=${backgroundColor.ffmpegHex}:s=$cellWidth'
           'x$cellHeight:d=$backgroundDurationSeconds[$backgroundLabel]',
       '[$inputIndex:v]'
           'format=rgba,'
-          'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
-          'crop=$cellWidth:$cellHeight,'
-          'setsar=1'
+          '${_photoTileScaleFilterChain(fitMode: fitMode, cellWidth: cellWidth, cellHeight: cellHeight)}'
           '$trimFilter'
           '[$foregroundLabel]',
-      '[$backgroundLabel][$foregroundLabel]overlay=x=0:y=0:format=auto[$outputLabel]',
+      '[$backgroundLabel][$foregroundLabel]overlay='
+          'x=${output.$1}:y=${output.$2}:format=auto[$outputLabel]',
     ];
   }
 
   String _sequentialActiveVideoFilter({
     required int inputIndex,
+    required ClipFitMode fitMode,
+    required ColorChoice backgroundColor,
     required String durationSeconds,
     required int cellWidth,
     required int cellHeight,
@@ -1097,9 +1105,7 @@ class VideoExportService {
   }) {
     return '[$inputIndex:v]'
         'setpts=PTS-STARTPTS,'
-        'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
-        'crop=$cellWidth:$cellHeight,'
-        'setsar=1,'
+        '${_videoTileScaleFilterChain(fitMode: fitMode, backgroundColor: backgroundColor, cellWidth: cellWidth, cellHeight: cellHeight)},'
         'trim=duration=$durationSeconds,'
         'setpts=PTS-STARTPTS,'
         '$roundedCornerFilter'
@@ -1108,6 +1114,8 @@ class VideoExportService {
 
   String _sequentialFrozenVideoFilter({
     required int inputIndex,
+    required ClipFitMode fitMode,
+    required ColorChoice backgroundColor,
     required bool freezeAtEnd,
     required Duration clipDuration,
     required String durationSeconds,
@@ -1132,9 +1140,7 @@ class VideoExportService {
               'setpts=PTS-STARTPTS,';
     return '[$inputIndex:v]'
         'setpts=PTS-STARTPTS,'
-        'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
-        'crop=$cellWidth:$cellHeight,'
-        'setsar=1,'
+        '${_videoTileScaleFilterChain(fitMode: fitMode, backgroundColor: backgroundColor, cellWidth: cellWidth, cellHeight: cellHeight)},'
         '$freezeSelectionFilter'
         'fps=30,'
         'tpad=stop_mode=clone:stop_duration=$durationSeconds,'
@@ -1142,6 +1148,49 @@ class VideoExportService {
         'setpts=PTS-STARTPTS,'
         '$roundedCornerFilter'
         '[$outputLabel]';
+  }
+
+  String _videoTileScaleFilterChain({
+    required ClipFitMode fitMode,
+    required ColorChoice backgroundColor,
+    required int cellWidth,
+    required int cellHeight,
+  }) {
+    return switch (fitMode) {
+      ClipFitMode.cropCenter =>
+        'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
+            'crop=$cellWidth:$cellHeight,'
+            'setsar=1',
+      ClipFitMode.centerInside =>
+        'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=decrease,'
+            'pad=$cellWidth:$cellHeight:(ow-iw)/2:(oh-ih)/2:color=${backgroundColor.ffmpegHex},'
+            'setsar=1',
+    };
+  }
+
+  String _photoTileScaleFilterChain({
+    required ClipFitMode fitMode,
+    required int cellWidth,
+    required int cellHeight,
+  }) {
+    return switch (fitMode) {
+      ClipFitMode.cropCenter =>
+        'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=increase,'
+            'crop=$cellWidth:$cellHeight,'
+            'setsar=1',
+      ClipFitMode.centerInside =>
+        'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=decrease,'
+            'setsar=1',
+    };
+  }
+
+  (String, String) _photoForegroundOutputForFitMode({
+    required ClipFitMode fitMode,
+  }) {
+    return switch (fitMode) {
+      ClipFitMode.cropCenter => ('0', '0'),
+      ClipFitMode.centerInside => ('(W-w)/2', '(H-h)/2'),
+    };
   }
 
   StreamInformation? _findPrimaryVideoStream(MediaInformation information) {

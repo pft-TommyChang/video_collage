@@ -84,6 +84,21 @@ enum ExportFormat {
   };
 }
 
+enum ClipFitMode {
+  cropCenter,
+  centerInside;
+
+  String get label => switch (this) {
+    ClipFitMode.cropCenter => 'Crop',
+    ClipFitMode.centerInside => 'Inside',
+  };
+
+  BoxFit get previewFit => switch (this) {
+    ClipFitMode.cropCenter => BoxFit.cover,
+    ClipFitMode.centerInside => BoxFit.contain,
+  };
+}
+
 enum ClipLabelDisplayMode {
   labelOnly,
   indexOnly,
@@ -181,6 +196,7 @@ class ExportOptions {
     required this.tileCornerRadius,
     required this.backgroundColor,
     required this.borderColor,
+    required this.fitMode,
     required this.includeClipLabelsInOutput,
     required this.clipLabelDisplayMode,
     required this.clipLabelFontSize,
@@ -199,6 +215,7 @@ class ExportOptions {
   final double tileCornerRadius;
   final ColorChoice backgroundColor;
   final ColorChoice borderColor;
+  final ClipFitMode fitMode;
   final bool includeClipLabelsInOutput;
   final ClipLabelDisplayMode clipLabelDisplayMode;
   final double clipLabelFontSize;
