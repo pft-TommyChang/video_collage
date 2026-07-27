@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'package:flutter/painting.dart';
 
 class AspectRatioPreset {
   const AspectRatioPreset({
@@ -96,6 +96,36 @@ enum ClipLabelDisplayMode {
   };
 }
 
+enum ClipLabelAlignment {
+  topLeft,
+  topCenter,
+  topRight,
+  center,
+  bottomLeft,
+  bottomCenter,
+  bottomRight;
+
+  String get label => switch (this) {
+    ClipLabelAlignment.topLeft => 'Top left',
+    ClipLabelAlignment.topCenter => 'Top',
+    ClipLabelAlignment.topRight => 'Top right',
+    ClipLabelAlignment.center => 'Center',
+    ClipLabelAlignment.bottomLeft => 'Bottom left',
+    ClipLabelAlignment.bottomCenter => 'Bottom',
+    ClipLabelAlignment.bottomRight => 'Bottom right',
+  };
+
+  Alignment get previewAlignment => switch (this) {
+    ClipLabelAlignment.topLeft => Alignment.topLeft,
+    ClipLabelAlignment.topCenter => Alignment.topCenter,
+    ClipLabelAlignment.topRight => Alignment.topRight,
+    ClipLabelAlignment.center => Alignment.center,
+    ClipLabelAlignment.bottomLeft => Alignment.bottomLeft,
+    ClipLabelAlignment.bottomCenter => Alignment.bottomCenter,
+    ClipLabelAlignment.bottomRight => Alignment.bottomRight,
+  };
+}
+
 class VideoClipInfo {
   const VideoClipInfo({
     required this.path,
@@ -154,6 +184,8 @@ class ExportOptions {
     required this.includeClipLabelsInOutput,
     required this.clipLabelDisplayMode,
     required this.clipLabelFontSize,
+    required this.clipLabelAlignment,
+    required this.clipLabelPadding,
     required this.playMode,
     required this.audioMode,
     required this.durationMode,
@@ -170,6 +202,8 @@ class ExportOptions {
   final bool includeClipLabelsInOutput;
   final ClipLabelDisplayMode clipLabelDisplayMode;
   final double clipLabelFontSize;
+  final ClipLabelAlignment clipLabelAlignment;
+  final double clipLabelPadding;
   final PlayMode playMode;
   final AudioMode audioMode;
   final ExportDurationMode durationMode;
@@ -187,13 +221,13 @@ class ExportOptions {
 
 class ClipLabelStyle {
   const ClipLabelStyle({
-    required this.margin,
+    required this.edgePadding,
     required this.horizontalPadding,
     required this.verticalPadding,
     required this.fontSize,
   });
 
-  final double margin;
+  final double edgePadding;
   final double horizontalPadding;
   final double verticalPadding;
   final double fontSize;
@@ -206,10 +240,11 @@ double overlayLabelScaleForExportScale(double scaleFactor) {
 ClipLabelStyle clipLabelStyleForOverlayScale(
   double overlayLabelScale, {
   required double baseFontSize,
+  required double baseEdgePadding,
 }) {
   final fontScale = baseFontSize / 12;
   return ClipLabelStyle(
-    margin: 8 * overlayLabelScale * fontScale,
+    edgePadding: baseEdgePadding * overlayLabelScale * fontScale,
     horizontalPadding: 8 * overlayLabelScale * fontScale,
     verticalPadding: 4 * overlayLabelScale * fontScale,
     fontSize: baseFontSize * overlayLabelScale,

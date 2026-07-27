@@ -40,6 +40,8 @@ class PersistedEditorSettings {
     required this.borderThickness,
     required this.tileCornerRadius,
     required this.clipLabelFontSize,
+    required this.clipLabelAlignment,
+    required this.clipLabelPadding,
     required this.includeClipLabelsInOutput,
     required this.clipLabelDisplayMode,
     required this.outputWidth,
@@ -60,6 +62,8 @@ class PersistedEditorSettings {
   final double borderThickness;
   final double tileCornerRadius;
   final double clipLabelFontSize;
+  final ClipLabelAlignment clipLabelAlignment;
+  final double clipLabelPadding;
   final bool includeClipLabelsInOutput;
   final ClipLabelDisplayMode clipLabelDisplayMode;
   final int outputWidth;
@@ -81,6 +85,8 @@ class PersistedEditorSettings {
       'borderThickness': borderThickness,
       'tileCornerRadius': tileCornerRadius,
       'clipLabelFontSize': clipLabelFontSize,
+      'clipLabelAlignment': clipLabelAlignment.name,
+      'clipLabelPadding': clipLabelPadding,
       'includeClipLabelsInOutput': includeClipLabelsInOutput,
       'clipLabelDisplayMode': clipLabelDisplayMode.name,
       'outputWidth': outputWidth,
@@ -109,6 +115,11 @@ class PersistedEditorSettings {
             : ClipLabelDisplayMode.labelOnly;
       },
     );
+    final clipLabelAlignmentName = json['clipLabelAlignment'] as String?;
+    final clipLabelAlignment = ClipLabelAlignment.values.firstWhere(
+      (alignment) => alignment.name == clipLabelAlignmentName,
+      orElse: () => ClipLabelAlignment.topLeft,
+    );
 
     return PersistedEditorSettings(
       rows: (json['rows'] as num?)?.toInt() ?? 2,
@@ -116,6 +127,8 @@ class PersistedEditorSettings {
       borderThickness: (json['borderThickness'] as num?)?.toDouble() ?? 12,
       tileCornerRadius: (json['tileCornerRadius'] as num?)?.toDouble() ?? 12,
       clipLabelFontSize: (json['clipLabelFontSize'] as num?)?.toDouble() ?? 12,
+      clipLabelAlignment: clipLabelAlignment,
+      clipLabelPadding: (json['clipLabelPadding'] as num?)?.toDouble() ?? 8,
       includeClipLabelsInOutput:
           json['includeClipLabelsInOutput'] as bool? ?? false,
       clipLabelDisplayMode: clipLabelDisplayMode,

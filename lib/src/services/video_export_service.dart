@@ -223,6 +223,9 @@ class VideoExportService {
               baseFontSize: options.clipLabelFontSize,
               clipLabelDisplayMode: options.clipLabelDisplayMode,
               cellWidth: cellWidth,
+              cellHeight: cellHeight,
+              clipLabelAlignment: options.clipLabelAlignment,
+              clipLabelPadding: options.clipLabelPadding,
               tempDirectory: labelTempDirectory = await Directory.systemTemp
                   .createTemp('video_collage_labels_'),
             )
@@ -428,6 +431,9 @@ class VideoExportService {
               baseFontSize: options.clipLabelFontSize,
               clipLabelDisplayMode: options.clipLabelDisplayMode,
               cellWidth: cellWidth,
+              cellHeight: cellHeight,
+              clipLabelAlignment: options.clipLabelAlignment,
+              clipLabelPadding: options.clipLabelPadding,
               tempDirectory: labelTempDirectory = await Directory.systemTemp
                   .createTemp('photo_collage_labels_'),
             )
@@ -600,6 +606,9 @@ class VideoExportService {
                 baseFontSize: options.clipLabelFontSize,
                 clipLabelDisplayMode: options.clipLabelDisplayMode,
                 cellWidth: cellWidth,
+                cellHeight: cellHeight,
+                clipLabelAlignment: options.clipLabelAlignment,
+                clipLabelPadding: options.clipLabelPadding,
                 tempDirectory: await Directory(
                   p.join(
                     segmentDirectory.path,
@@ -827,6 +836,9 @@ class VideoExportService {
     required double baseFontSize,
     required ClipLabelDisplayMode clipLabelDisplayMode,
     required int cellWidth,
+    required int cellHeight,
+    required ClipLabelAlignment clipLabelAlignment,
+    required double clipLabelPadding,
     required Directory tempDirectory,
     int? highlightedInputIndex,
     ui.Color highlightedTextColor = const ui.Color(0xFFFFFFFF),
@@ -834,16 +846,19 @@ class VideoExportService {
     final labelStyle = clipLabelStyleForOverlayScale(
       overlayLabelScaleForExportScale(scaleFactor),
       baseFontSize: baseFontSize,
+      baseEdgePadding: clipLabelPadding,
     );
     final maxTextWidth = math.max(
       1.0,
-      cellWidth - (labelStyle.margin * 2) - (labelStyle.horizontalPadding * 2),
+      cellWidth -
+          (labelStyle.edgePadding * 2) -
+          (labelStyle.horizontalPadding * 2),
     );
 
     final overlays = <_ClipLabelOverlay>[];
     for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex++) {
       final filePath = p.join(tempDirectory.path, 'label_$inputIndex.png');
-      await _renderClipLabelImage(
+      final labelImage = await _renderClipLabelImage(
         filePath: filePath,
         text: buildClipLabelText(
           slotIndex: slotClips[inputIndex].slotIndex,
@@ -856,15 +871,49 @@ class VideoExportService {
             ? highlightedTextColor
             : const ui.Color(0xFFFFFFFF),
       );
+      final position = _resolveClipLabelOverlayPosition(
+        cellWidth: cellWidth,
+        cellHeight: cellHeight,
+        overlayWidth: labelImage.width,
+        overlayHeight: labelImage.height,
+        edgePadding: labelStyle.edgePadding,
+        alignment: clipLabelAlignment,
+      );
       overlays.add(
         _ClipLabelOverlay(
           filePath: filePath,
-          x: labelStyle.margin.round(),
-          y: labelStyle.margin.round(),
+          x: position.$1,
+          y: position.$2,
         ),
       );
     }
     return overlays;
+  }
+
+  (int, int) _resolveClipLabelOverlayPosition({
+    required int cellWidth,
+    required int cellHeight,
+    required int overlayWidth,
+    required int overlayHeight,
+    required double edgePadding,
+    required ClipLabelAlignment alignment,
+  }) {
+    final inset = edgePadding.round();
+    final maxX = math.max(0, cellWidth - overlayWidth - inset);
+    final maxY = math.max(0, cellHeight - overlayHeight - inset);
+    final centeredX = math.max(0, ((cellWidth - overlayWidth) / 2).round());
+    final centeredY = math.max(0, ((cellHeight - overlayHeight) / 2).round());
+    final topY = math.max(0, inset);
+
+    return switch (alignment) {
+      ClipLabelAlignment.topLeft => (math.max(0, inset), topY),
+      ClipLabelAlignment.topCenter => (centeredX, topY),
+      ClipLabelAlignment.topRight => (maxX, topY),
+      ClipLabelAlignment.center => (centeredX, centeredY),
+      ClipLabelAlignment.bottomLeft => (math.max(0, inset), maxY),
+      ClipLabelAlignment.bottomCenter => (centeredX, maxY),
+      ClipLabelAlignment.bottomRight => (maxX, maxY),
+    };
   }
 
   Future<void> _runFfmpegCommand({
@@ -902,7 +951,7 @@ class VideoExportService {
     }
   }
 
-  Future<void> _renderClipLabelImage({
+  Future<_RenderedClipLabelImage> _renderClipLabelImage({
     required String filePath,
     required String text,
     required ClipLabelStyle labelStyle,
@@ -965,6 +1014,7 @@ class VideoExportService {
     }
 
     await File(filePath).writeAsBytes(_bytesFromByteData(byteData));
+    return _RenderedClipLabelImage(width: imageWidth, height: imageHeight);
   }
 
   String _scaledPhotoFilter({
@@ -1206,6 +1256,16 @@ class _ClipLabelOverlay {
   final String filePath;
   final int x;
   final int y;
+}
+
+class _RenderedClipLabelImage {
+  const _RenderedClipLabelImage({
+    required this.width,
+    required this.height,
+  });
+
+  final int width;
+  final int height;
 }
 
 class _VideoDisplayMetadata {

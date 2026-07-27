@@ -73,13 +73,22 @@ const int _defaultColumns = 3;
 const double _defaultBorderThickness = 12;
 const double _defaultTileCornerRadius = 12;
 const double _defaultClipLabelFontSize = 16;
+const double _defaultClipLabelPadding = 8;
 const bool _defaultIncludeClipLabelsInOutput = true;
 const ClipLabelDisplayMode _defaultClipLabelDisplayMode =
     ClipLabelDisplayMode.labelOnly;
+const ClipLabelAlignment _defaultClipLabelAlignment =
+    ClipLabelAlignment.topLeft;
 const bool _defaultAppendDateTimeToExportName = true;
 const PlayMode _defaultPlayMode = PlayMode.parallel;
 const AudioMode _defaultAudioMode = AudioMode.firstClip;
 const ExportDurationMode _defaultDurationMode = ExportDurationMode.longest;
+const int _minOutputDimensionExclusive = 360;
+const int _maxOutputDimensionExclusive = 4096;
+const double _maxBorderThickness = 100;
+const double _maxTileCornerRadius = 100;
+const double _maxClipLabelFontSize = 50;
+const double _maxClipLabelPadding = 48;
 
 class VideoCollageApp extends StatelessWidget {
   const VideoCollageApp({super.key});
@@ -160,8 +169,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   double _borderThickness = _defaultBorderThickness;
   double _tileCornerRadius = _defaultTileCornerRadius;
   double _clipLabelFontSize = _defaultClipLabelFontSize;
+  double _clipLabelPadding = _defaultClipLabelPadding;
   bool _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
   ClipLabelDisplayMode _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
+  ClipLabelAlignment _clipLabelAlignment = _defaultClipLabelAlignment;
   bool _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
   bool _isImporting = false;
   bool _isExporting = false;
@@ -225,6 +236,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       includeClipLabelsInOutput: _includeClipLabelsInOutput,
       clipLabelDisplayMode: _clipLabelDisplayMode,
       clipLabelFontSize: _clipLabelFontSize,
+      clipLabelAlignment: _clipLabelAlignment,
+      clipLabelPadding: _clipLabelPadding,
       playMode: _selectedPlayMode,
       audioMode: _selectedAudioMode,
       durationMode: _selectedDurationMode,
@@ -263,15 +276,21 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     setState(() {
       _rows = savedSettings.rows.clamp(1, 6);
       _columns = savedSettings.columns.clamp(1, 6);
-      _borderThickness = savedSettings.borderThickness.clamp(0, 48).toDouble();
+      _borderThickness = savedSettings.borderThickness
+          .clamp(0, _maxBorderThickness)
+          .toDouble();
       _tileCornerRadius = savedSettings.tileCornerRadius
-          .clamp(0, 48)
+          .clamp(0, _maxTileCornerRadius)
           .toDouble();
       _clipLabelFontSize = savedSettings.clipLabelFontSize
-          .clamp(8, 24)
+          .clamp(8, _maxClipLabelFontSize)
+          .toDouble();
+      _clipLabelPadding = savedSettings.clipLabelPadding
+          .clamp(0, _maxClipLabelPadding)
           .toDouble();
       _includeClipLabelsInOutput = savedSettings.includeClipLabelsInOutput;
       _clipLabelDisplayMode = savedSettings.clipLabelDisplayMode;
+      _clipLabelAlignment = savedSettings.clipLabelAlignment;
       _appendDateTimeToExportName = savedSettings.appendDateTimeToExportName;
       _selectedAspect = _aspectPresets.firstWhere(
         (preset) => preset.label == savedSettings.aspectLabel,
@@ -339,6 +358,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         borderThickness: _borderThickness,
         tileCornerRadius: _tileCornerRadius,
         clipLabelFontSize: _clipLabelFontSize,
+        clipLabelAlignment: _clipLabelAlignment,
+        clipLabelPadding: _clipLabelPadding,
         includeClipLabelsInOutput: _includeClipLabelsInOutput,
         clipLabelDisplayMode: _clipLabelDisplayMode,
         outputWidth: _outputWidth,
@@ -373,13 +394,33 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     );
   }
 
+  bool _isValidOutputDimension(int value) {
+    return value > _minOutputDimensionExclusive &&
+        value < _maxOutputDimensionExclusive;
+  }
+
+  bool _isValidOutputResolution(int width, int height) {
+    return _isValidOutputDimension(width) && _isValidOutputDimension(height);
+  }
+
+  String get _outputResolutionRangeMessage {
+    return 'Width and height must be greater than 360 and less than 4096.';
+  }
+
   (int, int)? _parseResolutionDraft() {
     final width = int.tryParse(_widthController.text);
     final height = int.tryParse(_heightController.text);
     if (width == null || height == null || width <= 0 || height <= 0) {
       return null;
     }
-    return (_ensureEven(width), _ensureEven(height));
+
+    final normalizedWidth = _ensureEven(width);
+    final normalizedHeight = _ensureEven(height);
+    if (!_isValidOutputResolution(normalizedWidth, normalizedHeight)) {
+      return null;
+    }
+
+    return (normalizedWidth, normalizedHeight);
   }
 
   bool get _canApplyCustomResolution {
@@ -830,14 +871,22 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _columns = _defaultColumns;
       _borderThickness = _defaultBorderThickness;
       _tileCornerRadius = _defaultTileCornerRadius;
-      _clipLabelFontSize = _defaultClipLabelFontSize;
       _selectedBorderColor = _defaultBorderColor;
       _selectedBackgroundColor = _defaultBackgroundColor;
-      _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
-      _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
       _setAppliedResolution(width: size.$1, height: size.$2);
       _backfillVisibleSlotsFromOverflow();
       _statusMessage = 'Layout reset to defaults.';
+    });
+  }
+
+  void _resetLabelDefaults() {
+    _setStateAndSave(() {
+      _clipLabelFontSize = _defaultClipLabelFontSize;
+      _clipLabelPadding = _defaultClipLabelPadding;
+      _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
+      _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
+      _clipLabelAlignment = _defaultClipLabelAlignment;
+      _statusMessage = 'Label settings reset to defaults.';
     });
   }
 
@@ -886,7 +935,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final parsedSize = _parseResolutionDraft();
     if (parsedSize == null) {
       setState(() {
-        _statusMessage = 'Resolution must be greater than zero.';
+        _statusMessage = _outputResolutionRangeMessage;
       });
       return;
     }
@@ -1019,9 +1068,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final options = _options;
     final slotClips = _slotClipsForExport();
     final exportFormat = exportFormatForClips(slotClips);
-    if (options.outputWidth <= 0 || options.outputHeight <= 0) {
+    if (!_isValidOutputResolution(
+      options.outputWidth,
+      options.outputHeight,
+    )) {
       setState(() {
-        _statusMessage = 'Resolution must be greater than zero.';
+        _statusMessage = _outputResolutionRangeMessage;
       });
       return;
     }
@@ -1417,8 +1469,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                       Slider(
                                         value: _borderThickness,
                                         min: 0,
-                                        max: 48,
-                                        divisions: 24,
+                                        max: _maxBorderThickness,
+                                        divisions: 50,
                                         onChanged: (value) {
                                           _setStateAndSave(() {
                                             _borderThickness = value;
@@ -1444,38 +1496,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                       Slider(
                                         value: _tileCornerRadius,
                                         min: 0,
-                                        max: 48,
-                                        divisions: 24,
+                                        max: _maxTileCornerRadius,
+                                        divisions: 50,
                                         onChanged: (value) {
                                           _setStateAndSave(() {
                                             _tileCornerRadius = value;
-                                          });
-                                        },
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        children: <Widget>[
-                                          Expanded(
-                                            child: Text(
-                                              'Clip label font size',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.titleSmall,
-                                            ),
-                                          ),
-                                          Text(
-                                            '${_clipLabelFontSize.round()} px',
-                                          ),
-                                        ],
-                                      ),
-                                      Slider(
-                                        value: _clipLabelFontSize,
-                                        min: 8,
-                                        max: 24,
-                                        divisions: 16,
-                                        onChanged: (value) {
-                                          _setStateAndSave(() {
-                                            _clipLabelFontSize = value;
                                           });
                                         },
                                       ),
@@ -1499,7 +1524,25 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           });
                                         },
                                       ),
-                                      const SizedBox(height: 8),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                _SectionCard(
+                                  title: 'Label',
+                                  subtitle:
+                                      'Clip label visibility, position, and spacing',
+                                  action: IconButton.outlined(
+                                    onPressed: _resetLabelDefaults,
+                                    tooltip: 'Reset label defaults',
+                                    style: IconButton.styleFrom(
+                                      minimumSize: const Size(34, 34),
+                                      maximumSize: const Size(34, 34),
+                                    ),
+                                    icon: const Icon(Icons.refresh, size: 18),
+                                  ),
+                                  child: Column(
+                                    children: <Widget>[
                                       SwitchListTile.adaptive(
                                         contentPadding: EdgeInsets.zero,
                                         title: const Text('Show clip labels'),
@@ -1510,6 +1553,75 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           });
                                         },
                                       ),
+                                      if (_includeClipLabelsInOutput) ...<Widget>[
+                                        const SizedBox(height: 4),
+                                        _SelectionDropdown<ClipLabelAlignment>(
+                                          label: 'Clip label position',
+                                          selected: _clipLabelAlignment,
+                                          options: ClipLabelAlignment.values,
+                                          itemLabel: (alignment) =>
+                                              alignment.label,
+                                          onSelected: (alignment) {
+                                            _setStateAndSave(() {
+                                              _clipLabelAlignment = alignment;
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: <Widget>[
+                                            Expanded(
+                                              child: Text(
+                                                'Clip label font size',
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.titleSmall,
+                                              ),
+                                            ),
+                                            Text(
+                                              '${_clipLabelFontSize.round()} px',
+                                            ),
+                                          ],
+                                        ),
+                                        Slider(
+                                          value: _clipLabelFontSize,
+                                          min: 8,
+                                          max: _maxClipLabelFontSize,
+                                          divisions: 42,
+                                          onChanged: (value) {
+                                            _setStateAndSave(() {
+                                              _clipLabelFontSize = value;
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: <Widget>[
+                                            Expanded(
+                                              child: Text(
+                                                'Clip label padding',
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.titleSmall,
+                                              ),
+                                            ),
+                                            Text(
+                                              '${_clipLabelPadding.round()} px',
+                                            ),
+                                          ],
+                                        ),
+                                        Slider(
+                                          value: _clipLabelPadding,
+                                          min: 0,
+                                          max: _maxClipLabelPadding,
+                                          divisions: 48,
+                                          onChanged: (value) {
+                                            _setStateAndSave(() {
+                                              _clipLabelPadding = value;
+                                            });
+                                          },
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -2035,6 +2147,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                                     clip?.path,
                                                             clipLabelFontSize:
                                                                 _clipLabelFontSize,
+                                                            clipLabelAlignment:
+                                                                _clipLabelAlignment,
+                                                            clipLabelPadding:
+                                                                _clipLabelPadding,
                                                             isDragTarget:
                                                                 candidateData
                                                                     .isNotEmpty ||
@@ -4027,10 +4143,15 @@ class _ClipListTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Remove',
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.close),
+                SizedBox(
+                  height: 56,
+                  child: Center(
+                    child: IconButton(
+                      tooltip: 'Remove',
+                      onPressed: onRemove,
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -4170,6 +4291,8 @@ class _PreviewTile extends StatelessWidget {
     required this.onEditLabel,
     required this.isActiveLabel,
     required this.clipLabelFontSize,
+    required this.clipLabelAlignment,
+    required this.clipLabelPadding,
     required this.isDragTarget,
     required this.overlayLabelScale,
   });
@@ -4188,6 +4311,8 @@ class _PreviewTile extends StatelessWidget {
   final VoidCallback? onEditLabel;
   final bool isActiveLabel;
   final double clipLabelFontSize;
+  final ClipLabelAlignment clipLabelAlignment;
+  final double clipLabelPadding;
   final bool isDragTarget;
   final double overlayLabelScale;
 
@@ -4245,6 +4370,8 @@ class _PreviewTile extends StatelessWidget {
       onLabelTap: onEditLabel,
       isActiveLabel: isActiveLabel,
       clipLabelFontSize: clipLabelFontSize,
+      clipLabelAlignment: clipLabelAlignment,
+      clipLabelPadding: clipLabelPadding,
       isDragTarget: isDragTarget,
       overlayLabelScale: overlayLabelScale,
     );
@@ -4287,6 +4414,8 @@ class _PreviewTile extends StatelessWidget {
               onLabelTap: null,
               isActiveLabel: isActiveLabel,
               clipLabelFontSize: clipLabelFontSize,
+              clipLabelAlignment: clipLabelAlignment,
+              clipLabelPadding: clipLabelPadding,
               isDragTarget: false,
               overlayLabelScale: overlayLabelScale,
             ),
@@ -4312,6 +4441,8 @@ class _PreviewTileBody extends StatelessWidget {
     required this.onLabelTap,
     required this.isActiveLabel,
     required this.clipLabelFontSize,
+    required this.clipLabelAlignment,
+    required this.clipLabelPadding,
     required this.isDragTarget,
     required this.overlayLabelScale,
   });
@@ -4327,6 +4458,8 @@ class _PreviewTileBody extends StatelessWidget {
   final VoidCallback? onLabelTap;
   final bool isActiveLabel;
   final double clipLabelFontSize;
+  final ClipLabelAlignment clipLabelAlignment;
+  final double clipLabelPadding;
   final bool isDragTarget;
   final double overlayLabelScale;
 
@@ -4335,6 +4468,7 @@ class _PreviewTileBody extends StatelessWidget {
     final labelStyle = clipLabelStyleForOverlayScale(
       overlayLabelScale,
       baseFontSize: clipLabelFontSize,
+      baseEdgePadding: clipLabelPadding,
     );
 
     return AnimatedScale(
@@ -4451,9 +4585,9 @@ class _PreviewTileBody extends StatelessWidget {
                     ),
                   if (label != null)
                     Align(
-                      alignment: Alignment.topLeft,
+                      alignment: clipLabelAlignment.previewAlignment,
                       child: Padding(
-                        padding: EdgeInsets.all(labelStyle.margin),
+                        padding: EdgeInsets.all(labelStyle.edgePadding),
                         child: MouseRegion(
                           cursor: onLabelTap == null
                               ? MouseCursor.defer

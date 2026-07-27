@@ -1,22 +1,27 @@
 # Perfect Collage
 
-`Perfect Collage` 是一套用來快速製作多格影片/照片拼貼的 macOS 桌面工具。  
-你可以把多段影片或照片排進同一個 grid，調整版面與輸出設定，先在 Preview 預覽，再輸出成影片或圖片。
+`Perfect Collage` 是一套用來快速製作多格拼貼的 macOS 桌面工具。  
+它同時支援 `photo` 與 `video`，可輸出成圖片拼貼或影片拼貼，適合做比較畫面、素材排列、社群內容與多段影片展示。
+
+## 產品重點
+
+- 支援 `photo` and `video`，可製作圖片或影片的 collage。
+- 支援 `label`，做 compare、before/after 或多素材對照時可直接標記。
+- 多個 video 可同時播放，也可接續播放。
 
 ## 功能總覽
 
-- 支援匯入多段影片與照片。
+- 支援匯入多段影片與照片，並可輸出成 `MP4` 或 `JPG`。
 - 支援拖拉匯入，整個 app 視窗都可接收檔案。
 - 可將媒體切換為 active / non-active，控制哪些內容進入拼貼。
 - 可直接拖曳調整 Preview 格子的內容順序。
 - 單一檔案拖到指定格子時，會直接 replace 該格內容。
 - 可設定畫面比例、列數、欄數、邊框、圓角、背景色、邊框色。
-- 可顯示 clip label，並調整字級與是否顯示編號。
+- 可顯示 clip label，並調整字級與是否顯示編號，方便 compare 與標記。
 - 內建 Preview 播放控制: play / pause / reset。
 - 會顯示目前播放進度 `current position / total position`。
 - 可選擇 `Together` 或 `One by one` 播放模式。
 - 可設定音訊模式、輸出時長規則、輸出解析度、檔名時間戳。
-- 可匯出為 `MP4` 或 `JPG`。
 - 內建匯出進度、取消匯出、最近匯出紀錄、開啟最後輸出檔案。
 
 ## 適用情境
