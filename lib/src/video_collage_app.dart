@@ -4274,6 +4274,10 @@ class _ClipListTile extends StatelessWidget {
   Widget _buildThumbnail() {
     const borderRadius = BorderRadius.all(Radius.circular(14));
     const inactiveBorderColor = Color(0xFFD6DCE4);
+    final previewVideoSize = _previewVideoDisplaySize(
+      clip: clip,
+      controller: controller,
+    );
 
     return Container(
       width: 56,
@@ -4287,12 +4291,14 @@ class _ClipListTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            if (controller != null && controller!.value.isInitialized)
+            if (controller != null &&
+                controller!.value.isInitialized &&
+                previewVideoSize != null)
               FittedBox(
                 fit: BoxFit.cover,
                 child: SizedBox(
-                  width: controller!.value.size.width,
-                  height: controller!.value.size.height,
+                  width: previewVideoSize.width,
+                  height: previewVideoSize.height,
                   child: VideoPlayer(controller!),
                 ),
               )
@@ -4359,6 +4365,24 @@ class _ClipListTile extends StatelessWidget {
   }
 }
 
+Size? _previewVideoDisplaySize({
+  required VideoClipInfo? clip,
+  required VideoPlayerController? controller,
+}) {
+  if (clip != null && clip.width > 0 && clip.height > 0) {
+    return Size(clip.width.toDouble(), clip.height.toDouble());
+  }
+
+  if (controller != null && controller.value.isInitialized) {
+    final size = controller.value.size;
+    if (size.width > 0 && size.height > 0) {
+      return size;
+    }
+  }
+
+  return null;
+}
+
 class _PreviewTile extends StatelessWidget {
   static const Size _dragFeedbackFallbackSize = Size(240, 160);
   static const double _dragFeedbackMaxSide = 240;
@@ -4405,12 +4429,10 @@ class _PreviewTile extends StatelessWidget {
   final double overlayLabelScale;
 
   Size _dragFeedbackSize() {
-    Size? mediaSize;
-    if (controller != null && controller!.value.isInitialized) {
-      mediaSize = controller!.value.size;
-    } else if (clip != null && clip!.width > 0 && clip!.height > 0) {
-      mediaSize = Size(clip!.width.toDouble(), clip!.height.toDouble());
-    }
+    final mediaSize = _previewVideoDisplaySize(
+      clip: clip,
+      controller: controller,
+    );
 
     if (mediaSize == null || mediaSize.width <= 0 || mediaSize.height <= 0) {
       return _dragFeedbackFallbackSize;
@@ -4553,6 +4575,10 @@ class _PreviewTileBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final previewVideoSize = _previewVideoDisplaySize(
+      clip: clip,
+      controller: controller,
+    );
     final labelStyle = clipLabelStyleForOverlayScale(
       overlayLabelScale,
       baseFontSize: clipLabelFontSize,
@@ -4587,12 +4613,14 @@ class _PreviewTileBody extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: <Widget>[
-                  if (controller != null && controller!.value.isInitialized)
+                  if (controller != null &&
+                      controller!.value.isInitialized &&
+                      previewVideoSize != null)
                     FittedBox(
                       fit: BoxFit.cover,
                       child: SizedBox(
-                        width: controller!.value.size.width,
-                        height: controller!.value.size.height,
+                        width: previewVideoSize.width,
+                        height: previewVideoSize.height,
                         child: VideoPlayer(controller!),
                       ),
                     )
