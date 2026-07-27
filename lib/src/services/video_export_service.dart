@@ -217,6 +217,19 @@ class VideoExportService {
         return;
       }
 
+      if (options.playMode == PlayMode.sequential) {
+        await _exportSequentialVideoCollage(
+          slotClips: slotClips,
+          options: options,
+          outputPath: outputPath,
+          targetDurationMs: targetDurationMs,
+          cellWidth: cellWidth,
+          cellHeight: cellHeight,
+          reportProgress: reportProgress,
+        );
+        return;
+      }
+
       final labelOverlays = options.includeClipLabelsInOutput
           ? await _createClipLabelOverlays(
               slotClips: slotClips,
@@ -231,21 +244,6 @@ class VideoExportService {
                   .createTemp('video_collage_labels_'),
             )
           : const <_ClipLabelOverlay>[];
-
-      if (options.playMode == PlayMode.sequential) {
-        await _exportSequentialVideoCollage(
-          slotClips: slotClips,
-          options: options,
-          outputPath: outputPath,
-          targetDurationMs: targetDurationMs,
-          targetDurationSeconds: targetDurationSeconds,
-          cellWidth: cellWidth,
-          cellHeight: cellHeight,
-          labelOverlays: labelOverlays,
-          reportProgress: reportProgress,
-        );
-        return;
-      }
 
       final filters = <String>[
         'color=c=${options.borderColor.ffmpegHex}:s=${options.outputWidth}x${options.outputHeight}:d=$targetDurationSeconds[base]',
@@ -568,10 +566,8 @@ class VideoExportService {
     required ExportOptions options,
     required String outputPath,
     required int targetDurationMs,
-    required String targetDurationSeconds,
     required int cellWidth,
     required int cellHeight,
-    required List<_ClipLabelOverlay> labelOverlays,
     required void Function({
       required double progress,
       required int processedMs,
@@ -783,16 +779,10 @@ class VideoExportService {
           '-y',
           for (final entry in slotClips)
             ...entry.clip.isPhoto
-                ? <String>[
-                    '-loop',
-                    '1',
-                    '-framerate',
-                    '30',
-                    '-t',
-                    targetDurationSeconds,
-                    '-i',
-                    entry.clip.path,
-                  ]
+                ? _loopedStillImageInputArguments(
+                    path: entry.clip.path,
+                    durationSeconds: segmentDurationSeconds,
+                  )
                 : <String>['-i', entry.clip.path],
           for (final overlay in segmentLabelOverlays) ...<String>[
             '-loop',
@@ -808,20 +798,14 @@ class VideoExportService {
           '[outa]',
           '-t',
           segmentDurationSeconds,
-          '-r',
-          '30',
-          '-c:v',
-          'libx264',
-          '-preset',
-          'medium',
-          '-crf',
-          '18',
-          '-pix_fmt',
-          'yuv420p',
-          '-c:a',
-          'aac',
-          '-b:a',
-          '192k',
+          ..._h264VideoEncodingArguments(),
+          ..._aacAudioEncodingArguments(),
+          // Keep each MPEG-TS segment starting close to t=0 so the first
+          // visual frame survives the later concat/remux step.
+          '-muxpreload',
+          '0',
+          '-muxdelay',
+          '0',
           '-f',
           'mpegts',
           segmentPath,
@@ -855,12 +839,18 @@ class VideoExportService {
           'concat',
           '-safe',
           '0',
+          '-fflags',
+          '+genpts',
           '-i',
           concatListPath,
-          '-c',
-          'copy',
-          '-bsf:a',
-          'aac_adtstoasc',
+          // Re-encode the final concat output and explicitly reset timestamps
+          // so sequential exports begin with a visible frame at t=0.
+          '-vf',
+          'setpts=PTS-STARTPTS',
+          '-af',
+          'asetpts=PTS-STARTPTS',
+          ..._h264VideoEncodingArguments(),
+          ..._aacAudioEncodingArguments(),
           '-movflags',
           '+faststart',
           outputPath,
@@ -1263,6 +1253,41 @@ class VideoExportService {
 
   String _durationSeconds(Duration duration) {
     return (duration.inMilliseconds / 1000).toStringAsFixed(3);
+  }
+
+  List<String> _loopedStillImageInputArguments({
+    required String path,
+    required String durationSeconds,
+  }) {
+    return <String>[
+      '-loop',
+      '1',
+      '-framerate',
+      '30',
+      '-t',
+      durationSeconds,
+      '-i',
+      path,
+    ];
+  }
+
+  List<String> _h264VideoEncodingArguments() {
+    return <String>[
+      '-r',
+      '30',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'medium',
+      '-crf',
+      '18',
+      '-pix_fmt',
+      'yuv420p',
+    ];
+  }
+
+  List<String> _aacAudioEncodingArguments() {
+    return <String>['-c:a', 'aac', '-b:a', '192k'];
   }
 
   String _roundedCornerFilter({
