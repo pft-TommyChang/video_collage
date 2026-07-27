@@ -29,6 +29,14 @@ const _resolutionPresets = <ResolutionPreset>[
   ResolutionPreset(label: '2K 1440', shortEdge: 1440),
   ResolutionPreset(label: '4K 2160', shortEdge: 2160),
 ];
+const ResolutionPreset _customResolutionPreset = ResolutionPreset(
+  label: 'Custom',
+  shortEdge: 0,
+);
+const _resolutionOptions = <ResolutionPreset>[
+  ..._resolutionPresets,
+  _customResolutionPreset,
+];
 
 const _colorChoices = <ColorChoice>[
   ColorChoice(label: 'White', color: Color(0xFFFFFFFF), ffmpegHex: '0xFFFFFF'),
@@ -121,6 +129,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
   late final TextEditingController _widthController;
   late final TextEditingController _heightController;
+  late int _outputWidth;
+  late int _outputHeight;
   Timer? _settingsSaveDebounce;
   Timer? _toastTimer;
   Timer? _parallelPreviewTimer;
@@ -170,10 +180,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   void initState() {
     super.initState();
     final initialSize = _sizeFromPreset(_selectedAspect, _selectedResolution);
-    _widthController = TextEditingController(text: '${initialSize.$1}')
-      ..addListener(_scheduleSettingsSave);
-    _heightController = TextEditingController(text: '${initialSize.$2}')
-      ..addListener(_scheduleSettingsSave);
+    _outputWidth = initialSize.$1;
+    _outputHeight = initialSize.$2;
+    _widthController = TextEditingController(text: '$_outputWidth');
+    _heightController = TextEditingController(text: '$_outputHeight');
     unawaited(_restoreSettings());
     unawaited(_restoreExportHistory());
   }
@@ -203,13 +213,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   ExportOptions get _options {
-    final width = int.tryParse(_widthController.text) ?? 1080;
-    final height = int.tryParse(_heightController.text) ?? 1920;
     return ExportOptions(
       rows: _rows,
       columns: _columns,
-      outputWidth: width,
-      outputHeight: height,
+      outputWidth: _outputWidth,
+      outputHeight: _outputHeight,
       borderThickness: _borderThickness,
       tileCornerRadius: _tileCornerRadius,
       backgroundColor: _selectedBackgroundColor,
@@ -269,7 +277,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         (preset) => preset.label == savedSettings.aspectLabel,
         orElse: () => _selectedAspect,
       );
-      _selectedResolution = _resolutionPresets.firstWhere(
+      _selectedResolution = _resolutionOptions.firstWhere(
         (preset) => preset.label == savedSettings.resolutionLabel,
         orElse: () => _selectedResolution,
       );
@@ -294,8 +302,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         (choice) => choice.label == savedSettings.backgroundColorLabel,
         orElse: () => _selectedBackgroundColor,
       );
-      _widthController.text = '${_ensureEven(savedSettings.outputWidth)}';
-      _heightController.text = '${_ensureEven(savedSettings.outputHeight)}';
+      _outputWidth = _ensureEven(savedSettings.outputWidth);
+      _outputHeight = _ensureEven(savedSettings.outputHeight);
+      _syncResolutionDraft(_outputWidth, _outputHeight);
     });
     _isRestoringSettings = false;
     unawaited(_syncPreviewPlaybackMode());
@@ -323,8 +332,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   Future<void> _persistSettings() async {
-    final width = _ensureEven(int.tryParse(_widthController.text) ?? 1080);
-    final height = _ensureEven(int.tryParse(_heightController.text) ?? 1920);
     await _settingsStore.save(
       PersistedEditorSettings(
         rows: _rows,
@@ -334,8 +341,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         clipLabelFontSize: _clipLabelFontSize,
         includeClipLabelsInOutput: _includeClipLabelsInOutput,
         clipLabelDisplayMode: _clipLabelDisplayMode,
-        outputWidth: width,
-        outputHeight: height,
+        outputWidth: _outputWidth,
+        outputHeight: _outputHeight,
         aspectLabel: _selectedAspect.label,
         resolutionLabel: _selectedResolution.label,
         playMode: _selectedPlayMode.name,
@@ -352,6 +359,56 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   void _setStateAndSave(VoidCallback update) {
     setState(update);
     _scheduleSettingsSave();
+  }
+
+  ResolutionPreset get _effectiveResolutionForSizing {
+    if (_selectedResolution != _customResolutionPreset) {
+      return _selectedResolution;
+    }
+
+    final shortEdge = math.min(_outputWidth, _outputHeight);
+    return ResolutionPreset(
+      label: _customResolutionPreset.label,
+      shortEdge: _ensureEven(math.max(shortEdge, 2)),
+    );
+  }
+
+  (int, int)? _parseResolutionDraft() {
+    final width = int.tryParse(_widthController.text);
+    final height = int.tryParse(_heightController.text);
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+    return (_ensureEven(width), _ensureEven(height));
+  }
+
+  bool get _canApplyCustomResolution {
+    final parsedSize = _parseResolutionDraft();
+    if (parsedSize != null) {
+      return parsedSize.$1 != _outputWidth ||
+          parsedSize.$2 != _outputHeight ||
+          _widthController.text != '$_outputWidth' ||
+          _heightController.text != '$_outputHeight';
+    }
+    return false;
+  }
+
+  void _syncResolutionDraft(int width, int height) {
+    _widthController.text = '$width';
+    _heightController.text = '$height';
+  }
+
+  void _setAppliedResolution({
+    required int width,
+    required int height,
+    ResolutionPreset? preset,
+  }) {
+    _outputWidth = _ensureEven(width);
+    _outputHeight = _ensureEven(height);
+    _syncResolutionDraft(_outputWidth, _outputHeight);
+    if (preset != null) {
+      _selectedResolution = preset;
+    }
   }
 
   Future<void> _recordExportHistory(String path, ExportFormat format) async {
@@ -763,7 +820,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   void _resetLayoutDefaults() {
-    final size = _sizeFromPreset(_defaultAspectPreset, _selectedResolution);
+    final size = _sizeFromPreset(
+      _defaultAspectPreset,
+      _effectiveResolutionForSizing,
+    );
     _setStateAndSave(() {
       _selectedAspect = _defaultAspectPreset;
       _rows = _defaultRows;
@@ -775,8 +835,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _selectedBackgroundColor = _defaultBackgroundColor;
       _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
       _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
-      _widthController.text = '${size.$1}';
-      _heightController.text = '${size.$2}';
+      _setAppliedResolution(width: size.$1, height: size.$2);
       _backfillVisibleSlotsFromOverflow();
       _statusMessage = 'Layout reset to defaults.';
     });
@@ -788,10 +847,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _selectedPlayMode = _defaultPlayMode;
       _selectedAudioMode = _defaultAudioMode;
       _selectedDurationMode = _defaultDurationMode;
-      _selectedResolution = _defaultResolutionPreset;
       _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
-      _widthController.text = '${size.$1}';
-      _heightController.text = '${size.$2}';
+      _setAppliedResolution(
+        width: size.$1,
+        height: size.$2,
+        preset: _defaultResolutionPreset,
+      );
       _activeSequentialClipPath = null;
       _statusMessage = 'Output reset to defaults.';
     });
@@ -808,11 +869,35 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   void _applyResolutionPreset(ResolutionPreset preset) {
+    if (preset == _customResolutionPreset) {
+      _setStateAndSave(() {
+        _selectedResolution = _customResolutionPreset;
+      });
+      return;
+    }
+
     final size = _sizeFromPreset(_selectedAspect, preset);
     _setStateAndSave(() {
-      _selectedResolution = preset;
-      _widthController.text = '${size.$1}';
-      _heightController.text = '${size.$2}';
+      _setAppliedResolution(width: size.$1, height: size.$2, preset: preset);
+    });
+  }
+
+  void _applyCustomResolution() {
+    final parsedSize = _parseResolutionDraft();
+    if (parsedSize == null) {
+      setState(() {
+        _statusMessage = 'Resolution must be greater than zero.';
+      });
+      return;
+    }
+
+    _setStateAndSave(() {
+      _setAppliedResolution(
+        width: parsedSize.$1,
+        height: parsedSize.$2,
+        preset: _customResolutionPreset,
+      );
+      _statusMessage = 'Custom resolution applied.';
     });
   }
 
@@ -855,11 +940,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   void _applyAspectPreset(AspectRatioPreset preset) {
-    final size = _sizeFromPreset(preset, _selectedResolution);
+    final size = _sizeFromPreset(preset, _effectiveResolutionForSizing);
     _setStateAndSave(() {
       _selectedAspect = preset;
-      _widthController.text = '${size.$1}';
-      _heightController.text = '${size.$2}';
+      _setAppliedResolution(width: size.$1, height: size.$2);
     });
   }
 
@@ -911,14 +995,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final resolvedChoice = bestChoice;
     final size = _sizeFromPreset(
       resolvedChoice.aspectPreset,
-      _selectedResolution,
+      _effectiveResolutionForSizing,
     );
     _setStateAndSave(() {
       _rows = resolvedChoice.rows;
       _columns = resolvedChoice.columns;
       _selectedAspect = resolvedChoice.aspectPreset;
-      _widthController.text = '${size.$1}';
-      _heightController.text = '${size.$2}';
+      _setAppliedResolution(width: size.$1, height: size.$2);
       _backfillVisibleSlotsFromOverflow();
       _statusMessage =
           'Auto layout picked ${resolvedChoice.rows}×${resolvedChoice.columns} • ${resolvedChoice.aspectPreset.label}.';
@@ -1492,7 +1575,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                       _SelectionDropdown<ResolutionPreset>(
                                         label: 'Resolution',
                                         selected: _selectedResolution,
-                                        options: _resolutionPresets,
+                                        options: _resolutionOptions,
                                         itemLabel: (preset) => preset.label,
                                         onSelected: _applyResolutionPreset,
                                       ),
@@ -1502,6 +1585,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           Expanded(
                                             child: TextField(
                                               controller: _widthController,
+                                              onChanged: (_) => setState(() {}),
                                               keyboardType:
                                                   TextInputType.number,
                                               inputFormatters:
@@ -1519,6 +1603,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           Expanded(
                                             child: TextField(
                                               controller: _heightController,
+                                              onChanged: (_) => setState(() {}),
                                               keyboardType:
                                                   TextInputType.number,
                                               inputFormatters:
@@ -1530,6 +1615,23 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                 labelText: 'Height',
                                                 border: OutlineInputBorder(),
                                               ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          IconButton.filledTonal(
+                                            tooltip: 'Apply custom resolution',
+                                            onPressed: _canApplyCustomResolution
+                                                ? _applyCustomResolution
+                                                : null,
+                                            style: IconButton.styleFrom(
+                                              minimumSize: const Size(34, 34),
+                                              maximumSize: const Size(34, 34),
+                                              shape: const CircleBorder(),
+                                              padding: EdgeInsets.zero,
+                                            ),
+                                            icon: const Icon(
+                                              Icons.check_rounded,
+                                              size: 18,
                                             ),
                                           ),
                                         ],

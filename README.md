@@ -364,6 +364,12 @@ flutter build macos
 ./scripts/build_release_artifacts.sh
 ```
 
+若要直接在本機從指定 tag 建置並上傳 GitHub Release:
+
+```bash
+./scripts/release_macos.sh v1.1.0
+```
+
 更完整的 release 說明請看 [docs/releasing.md](/Users/rdapp/git/video_collage/docs/releasing.md)。
 
 ## 專案定位
