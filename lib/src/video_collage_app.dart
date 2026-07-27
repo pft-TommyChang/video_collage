@@ -1104,10 +1104,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final options = _options;
     final slotClips = _slotClipsForExport();
     final exportFormat = exportFormatForClips(slotClips);
-    if (!_isValidOutputResolution(
-      options.outputWidth,
-      options.outputHeight,
-    )) {
+    if (!_isValidOutputResolution(options.outputWidth, options.outputHeight)) {
       setState(() {
         _statusMessage = _outputResolutionRangeMessage;
       });
@@ -1594,7 +1591,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           });
                                         },
                                       ),
-                                      if (_includeClipLabelsInOutput) ...<Widget>[
+                                      if (_includeClipLabelsInOutput) ...<
+                                        Widget
+                                      >[
                                         const SizedBox(height: 4),
                                         _SelectionDropdown<ClipLabelAlignment>(
                                           label: 'Clip label position',
@@ -1602,6 +1601,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           options: ClipLabelAlignment.values,
                                           itemLabel: (alignment) =>
                                               alignment.label,
+                                          itemBuilder: (alignment) =>
+                                              _ClipLabelAlignmentDropdownItem(
+                                                alignment: alignment,
+                                              ),
                                           onSelected: (alignment) {
                                             _setStateAndSave(() {
                                               _clipLabelAlignment = alignment;
@@ -1691,6 +1694,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                         selected: _selectedPlayMode,
                                         options: PlayMode.values,
                                         itemLabel: (mode) => mode.label,
+                                        itemBuilder: (mode) =>
+                                            _PlayModeDropdownItem(mode: mode),
                                         onSelected: (mode) {
                                           unawaited(
                                             _handlePlayModeSelected(mode),
@@ -1704,6 +1709,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           selected: _selectedAudioMode,
                                           options: AudioMode.values,
                                           itemLabel: (mode) => mode.label,
+                                          itemBuilder: (mode) =>
+                                              _AudioModeDropdownItem(
+                                                mode: mode,
+                                              ),
                                           onSelected: (mode) {
                                             _setStateAndSave(() {
                                               _selectedAudioMode = mode;
@@ -1719,6 +1728,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           selected: _selectedDurationMode,
                                           options: ExportDurationMode.values,
                                           itemLabel: (mode) => mode.label,
+                                          itemBuilder: (mode) =>
+                                              _ExportDurationDropdownItem(
+                                                mode: mode,
+                                              ),
                                           onSelected: (mode) {
                                             _setStateAndSave(() {
                                               _selectedDurationMode = mode;
@@ -4793,6 +4806,414 @@ class _SelectionDropdown<T> extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _ClipLabelAlignmentDropdownItem extends StatelessWidget {
+  const _ClipLabelAlignmentDropdownItem({required this.alignment});
+
+  final ClipLabelAlignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        _ClipLabelAlignmentIcon(alignment: alignment),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            alignment.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ClipLabelAlignmentIcon extends StatelessWidget {
+  const _ClipLabelAlignmentIcon({required this.alignment});
+
+  final ClipLabelAlignment alignment;
+
+  Alignment _indicatorAlignment() => switch (alignment) {
+    ClipLabelAlignment.topLeft => Alignment.topLeft,
+    ClipLabelAlignment.topCenter => Alignment.topCenter,
+    ClipLabelAlignment.topRight => Alignment.topRight,
+    ClipLabelAlignment.center => Alignment.center,
+    ClipLabelAlignment.bottomLeft => Alignment.bottomLeft,
+    ClipLabelAlignment.bottomCenter => Alignment.bottomCenter,
+    ClipLabelAlignment.bottomRight => Alignment.bottomRight,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 24,
+      height: 24,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F2EA),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: const Color(0xFFD7CEC2)),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: const Color(0xFF171A21), width: 1),
+        ),
+        child: Align(
+          alignment: _indicatorAlignment(),
+          child: Container(
+            width: 5,
+            height: 5,
+            margin: const EdgeInsets.all(2),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFF7A59),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExportDurationDropdownItem extends StatelessWidget {
+  const _ExportDurationDropdownItem({required this.mode});
+
+  final ExportDurationMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        _ExportDurationIcon(mode: mode),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(mode.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    );
+  }
+}
+
+class _AudioModeDropdownItem extends StatelessWidget {
+  const _AudioModeDropdownItem({required this.mode});
+
+  final AudioMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        _AudioModeIcon(mode: mode),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(mode.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlayModeDropdownItem extends StatelessWidget {
+  const _PlayModeDropdownItem({required this.mode});
+
+  final PlayMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        _PlayModeIcon(mode: mode),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(mode.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlayModeIcon extends StatelessWidget {
+  const _PlayModeIcon({required this.mode});
+
+  final PlayMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 24,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F2EA),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: const Color(0xFFD7CEC2)),
+      ),
+      child: switch (mode) {
+        PlayMode.parallel => const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            _PlayModeParallelRow(),
+            SizedBox(height: 2),
+            _PlayModeParallelRow(),
+          ],
+        ),
+        PlayMode.sequential => const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            _PlayModeTile(),
+            SizedBox(width: 1),
+            _PlayModeArrow(),
+            SizedBox(width: 1),
+            _PlayModeTile(isHighlighted: true),
+          ],
+        ),
+      },
+    );
+  }
+}
+
+class _PlayModeParallelRow extends StatelessWidget {
+  const _PlayModeParallelRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        _PlayModeTile(isHighlighted: true),
+        SizedBox(width: 1),
+        _PlayModeArrow(),
+      ],
+    );
+  }
+}
+
+class _PlayModeTile extends StatelessWidget {
+  const _PlayModeTile({this.isHighlighted = false});
+
+  final bool isHighlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(
+        color: isHighlighted
+            ? const Color(0xFFFF7A59)
+            : const Color(0xFFE5DED3),
+        borderRadius: BorderRadius.circular(2),
+        border: Border.all(
+          color: isHighlighted
+              ? const Color(0xFFFF7A59)
+              : const Color(0xFFB8B1A8),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayModeArrow extends StatelessWidget {
+  const _PlayModeArrow();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 4,
+      height: 6,
+      child: CustomPaint(painter: _PlayModeArrowPainter()),
+    );
+  }
+}
+
+class _PlayModeArrowPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFFF7A59)
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final centerY = size.height / 2;
+    canvas.drawLine(
+      Offset(0, centerY),
+      Offset(size.width - 1.7, centerY),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(size.width - 2.4, 1),
+      Offset(size.width - 0.3, centerY),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(size.width - 2.4, size.height - 1),
+      Offset(size.width - 0.3, centerY),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _AudioModeIcon extends StatelessWidget {
+  const _AudioModeIcon({required this.mode});
+
+  final AudioMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F2EA),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: const Color(0xFFD7CEC2)),
+      ),
+      child: switch (mode) {
+        AudioMode.firstClip => const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _AudioTrackBar(width: 16, isHighlighted: true),
+            SizedBox(height: 2),
+            _AudioTrackBar(width: 12),
+            SizedBox(height: 2),
+            _AudioTrackBar(width: 8),
+          ],
+        ),
+        AudioMode.mixAll => const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _AudioTrackBar(width: 16, isHighlighted: true),
+            SizedBox(height: 2),
+            _AudioTrackBar(width: 13, isHighlighted: true),
+            SizedBox(height: 2),
+            _AudioTrackBar(width: 10, isHighlighted: true),
+          ],
+        ),
+        AudioMode.longestClip => const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _AudioTrackBar(width: 8),
+            SizedBox(height: 2),
+            _AudioTrackBar(width: 11),
+            SizedBox(height: 2),
+            _AudioTrackBar(width: 16, isHighlighted: true),
+          ],
+        ),
+        AudioMode.mute => Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            const Center(
+              child: Icon(
+                Icons.volume_up_rounded,
+                size: 15,
+                color: Color(0xFFB8B1A8),
+              ),
+            ),
+            Center(
+              child: Transform.rotate(
+                angle: -0.78,
+                child: Container(
+                  width: 20,
+                  height: 2.4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF7A59),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      },
+    );
+  }
+}
+
+class _AudioTrackBar extends StatelessWidget {
+  const _AudioTrackBar({required this.width, this.isHighlighted = false});
+
+  final double width;
+  final bool isHighlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 2,
+      decoration: BoxDecoration(
+        color: isHighlighted
+            ? const Color(0xFFFF7A59)
+            : const Color(0xFFB8B1A8),
+        borderRadius: BorderRadius.circular(999),
+      ),
+    );
+  }
+}
+
+class _ExportDurationIcon extends StatelessWidget {
+  const _ExportDurationIcon({required this.mode});
+
+  final ExportDurationMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final highlightLong = mode == ExportDurationMode.longest;
+    final highlightShort = mode == ExportDurationMode.shortest;
+
+    return Container(
+      width: 28,
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F2EA),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: const Color(0xFFD7CEC2)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _DurationBar(width: 16, isHighlighted: highlightLong),
+          const SizedBox(height: 3),
+          _DurationBar(width: 10, isHighlighted: highlightShort),
+        ],
+      ),
+    );
+  }
+}
+
+class _DurationBar extends StatelessWidget {
+  const _DurationBar({required this.width, required this.isHighlighted});
+
+  final double width;
+  final bool isHighlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 5,
+      decoration: BoxDecoration(
+        color: isHighlighted
+            ? const Color(0xFFFF7A59)
+            : const Color(0xFFB8B1A8),
+        borderRadius: BorderRadius.circular(999),
+      ),
     );
   }
 }
