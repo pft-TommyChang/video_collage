@@ -924,6 +924,99 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     }
   }
 
+  Future<void> _confirmResetAll() async {
+    final shouldReset = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Reset everything?'),
+          content: const Text(
+            'This will remove all loaded media and restore Layout, Label, and Output settings to their defaults. History and exported files will be kept.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Reset All'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldReset == true && mounted) {
+      await _resetAll();
+    }
+  }
+
+  Future<void> _resetAll() async {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    _controllers.clear();
+    _parallelPreviewTimer?.cancel();
+    _parallelPreviewTimer = null;
+    _sequentialPreviewTimer?.cancel();
+    _sequentialPreviewTimer = null;
+    final defaultSize = _sizeFromPreset(
+      _defaultAspectPreset,
+      _defaultResolutionPreset,
+    );
+
+    setState(() {
+      _clips.clear();
+      _slotAssignments.clear();
+      _loadingClipPaths.clear();
+      _clipErrors.clear();
+      _selectedAspect = _defaultAspectPreset;
+      _selectedResolution = _defaultResolutionPreset;
+      _selectedBorderColor = _defaultBorderColor;
+      _selectedBackgroundColor = _defaultBackgroundColor;
+      _selectedPlayMode = _defaultPlayMode;
+      _selectedAudioMode = _defaultAudioMode;
+      _selectedDurationMode = _defaultDurationMode;
+      _selectedFitMode = _defaultFitMode;
+      _rows = _defaultRows;
+      _columns = _defaultColumns;
+      _isMediaSectionCollapsed = false;
+      _isLayoutSectionCollapsed = false;
+      _isLabelSectionCollapsed = false;
+      _isOutputSectionCollapsed = false;
+      _borderThickness = _defaultBorderThickness;
+      _tileCornerRadius = _defaultTileCornerRadius;
+      _clipLabelFontSize = _defaultClipLabelFontSize;
+      _clipLabelPadding = _defaultClipLabelPadding;
+      _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
+      _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
+      _clipLabelAlignment = _defaultClipLabelAlignment;
+      _clipLabelVisualStyle = _defaultClipLabelVisualStyle;
+      _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
+      _lastExportDirectory = '';
+      _setAppliedResolution(
+        width: defaultSize.$1,
+        height: defaultSize.$2,
+        preset: _defaultResolutionPreset,
+      );
+      _isPreviewPlaying = false;
+      _isPreviewMuted = false;
+      _showExportComplete = false;
+      _exportProgress = 0;
+      _lastPreviewProgressSecond = null;
+      _parallelPreviewElapsed = Duration.zero;
+      _parallelPreviewStartedAt = null;
+      _sequentialPreviewElapsed = Duration.zero;
+      _sequentialPreviewStartedAt = null;
+      _activeSequentialClipPath = null;
+      _externalDropHoverSlotIndex = null;
+      _statusMessage = 'Everything reset to defaults.';
+    });
+    _scheduleSettingsSave();
+    await _syncPreviewPlaybackMode();
+  }
+
   void _resetLayoutDefaults() {
     final size = _sizeFromPreset(
       _defaultAspectPreset,
@@ -1381,6 +1474,18 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                             ?.copyWith(
                                               fontWeight: FontWeight.w700,
                                             ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton.outlined(
+                                      onPressed: _isImporting
+                                          ? null
+                                          : () => unawaited(_confirmResetAll()),
+                                      tooltip: 'Reset all',
+                                      style: _sectionHeaderIconButtonStyle(),
+                                      icon: const Icon(
+                                        Icons.restart_alt_rounded,
+                                        size: 18,
                                       ),
                                     ),
                                   ],

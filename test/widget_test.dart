@@ -50,6 +50,25 @@ void main() {
     expect(lastExportButton.onPressed, isNull);
   });
 
+  testWidgets('reset all asks for confirmation', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Reset all'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reset everything?'), findsOneWidget);
+    expect(
+      find.textContaining('History and exported files will be kept.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('aspect ratio dropdown includes 9:21 and 21:9', (
     WidgetTester tester,
   ) async {
