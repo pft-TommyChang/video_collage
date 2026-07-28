@@ -2,8 +2,15 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:video_collage_mac/src/models.dart';
+import 'package:video_collage_mac/src/services/editor_settings_store.dart';
 
 void main() {
+  test('persisted settings default clip label padding is 10', () {
+    final settings = PersistedEditorSettings.fromJson(<String, dynamic>{});
+
+    expect(settings.clipLabelPadding, 10);
+  });
+
   test('crop center fit mode uses cover preview fit', () {
     expect(ClipFitMode.cropCenter.previewFit, BoxFit.cover);
     expect(ClipFitMode.centerInside.previewFit, BoxFit.contain);

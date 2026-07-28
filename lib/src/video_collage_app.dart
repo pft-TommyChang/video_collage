@@ -87,7 +87,7 @@ const int _defaultColumns = 3;
 const double _defaultBorderThickness = 12;
 const double _defaultTileCornerRadius = 12;
 const double _defaultClipLabelFontSize = 16;
-const double _defaultClipLabelPadding = 4;
+const double _defaultClipLabelPadding = 10;
 const bool _defaultIncludeClipLabelsInOutput = true;
 const ClipLabelDisplayMode _defaultClipLabelDisplayMode =
     ClipLabelDisplayMode.labelOnly;
@@ -205,10 +205,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   bool _isPreviewMuted = false;
   String? _statusMessage;
   List<ExportHistoryEntry> _exportHistory = const <ExportHistoryEntry>[];
+  ExportHistoryEntry? _sessionLastExportEntry;
   String _lastExportDirectory = '';
 
-  ExportHistoryEntry? get _lastExportEntry =>
-      _exportHistory.isEmpty ? null : _exportHistory.first;
+  ExportHistoryEntry? get _lastExportEntry => _sessionLastExportEntry;
 
   @override
   void initState() {
@@ -518,18 +518,18 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
   Future<void> _recordExportHistory(String path, ExportFormat format) async {
     final normalizedPath = _resolveHistoryPath(path);
-    final history = await _settingsStore.addExportHistoryEntry(
-      ExportHistoryEntry(
-        path: normalizedPath,
-        format: format.label,
-        timestampMillis: DateTime.now().millisecondsSinceEpoch,
-      ),
+    final entry = ExportHistoryEntry(
+      path: normalizedPath,
+      format: format.label,
+      timestampMillis: DateTime.now().millisecondsSinceEpoch,
     );
+    final history = await _settingsStore.addExportHistoryEntry(entry);
     if (!mounted) {
       return;
     }
     setState(() {
       _exportHistory = history;
+      _sessionLastExportEntry = entry;
     });
   }
 

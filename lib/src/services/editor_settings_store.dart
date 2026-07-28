@@ -160,7 +160,7 @@ class PersistedEditorSettings {
       clipLabelFontSize: (json['clipLabelFontSize'] as num?)?.toDouble() ?? 12,
       clipLabelAlignment: clipLabelAlignment,
       clipLabelVisualStyle: clipLabelVisualStyle,
-      clipLabelPadding: (json['clipLabelPadding'] as num?)?.toDouble() ?? 4,
+      clipLabelPadding: (json['clipLabelPadding'] as num?)?.toDouble() ?? 10,
       includeClipLabelsInOutput:
           json['includeClipLabelsInOutput'] as bool? ?? false,
       clipLabelDisplayMode: clipLabelDisplayMode,

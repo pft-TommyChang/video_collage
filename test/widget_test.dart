@@ -30,6 +30,26 @@ void main() {
     expect(find.text('Preview'), findsOneWidget);
   });
 
+  testWidgets('last export is disabled at the start of each app session', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpAndSettle();
+
+    final lastExportButton = tester.widget<IconButton>(
+      find.ancestor(
+        of: find.byTooltip('No last export yet'),
+        matching: find.byType(IconButton),
+      ),
+    );
+    expect(lastExportButton.onPressed, isNull);
+  });
+
   testWidgets('aspect ratio dropdown includes 9:21 and 21:9', (
     WidgetTester tester,
   ) async {
