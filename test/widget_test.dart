@@ -5,6 +5,18 @@ import 'package:video_collage_mac/src/models.dart';
 import 'package:video_collage_mac/src/video_collage_app.dart';
 
 void main() {
+  Future<void> scrollSettingsIntoView(
+    WidgetTester tester,
+    Finder finder,
+  ) async {
+    await tester.scrollUntilVisible(
+      finder,
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('renders app shell', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
@@ -51,6 +63,12 @@ void main() {
     await tester.pumpWidget(const VideoCollageApp());
     await tester.pumpAndSettle();
 
+    await scrollSettingsIntoView(
+      tester,
+      find.byWidgetPredicate((widget) {
+        return widget is DropdownButtonFormField<ClipFitMode>;
+      }),
+    );
     await tester.tap(
       find.byWidgetPredicate((widget) {
         return widget is DropdownButtonFormField<ClipFitMode>;
@@ -58,7 +76,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Crop Center'), findsWidgets);
-    expect(find.text('Center Inside'), findsWidgets);
+    expect(find.text('Crop'), findsWidgets);
+    expect(find.text('Inside'), findsWidgets);
   });
 }

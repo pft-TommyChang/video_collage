@@ -1479,7 +1479,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                         itemBuilder: (preset) =>
                                             _AspectRatioDropdownItem(
                                               preset: preset,
-                                        ),
+                                            ),
                                         onSelected: _applyAspectPreset,
                                       ),
                                       const SizedBox(height: 16),
@@ -1920,8 +1920,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                               Center(
                                 child: Text(
                                   exportFormat == ExportFormat.jpg
-                                      ? '${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • ${options.fitMode.label} • $playModeLabel'
-                                      : '${options.outputWidth} × ${options.outputHeight} • ${options.rows}×${options.columns} grid • ${options.fitMode.label} • $playModeLabel • ${formatDuration(exportDuration)}',
+                                      ? '${options.outputWidth}x${options.outputHeight} • ${options.rows}×${options.columns} grid • ${options.fitMode.label} • $playModeLabel'
+                                      : '${options.outputWidth}x${options.outputHeight} • ${options.rows}×${options.columns} grid • ${options.fitMode.label} • $playModeLabel • ${formatDuration(exportDuration)}',
                                   textAlign: TextAlign.center,
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
@@ -4645,135 +4645,147 @@ class _PreviewTileBody extends StatelessWidget {
             color: backgroundColor,
             child: InkWell(
               onTap: onTap,
-              child: Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  if (controller != null &&
-                      controller!.value.isInitialized &&
-                      previewVideoSize != null)
-                    FittedBox(
-                      fit: fitMode.previewFit,
-                      child: SizedBox(
-                        width: previewVideoSize.width,
-                        height: previewVideoSize.height,
-                        child: VideoPlayer(controller!),
-                      ),
-                    )
-                  else if (clip?.isPhoto == true)
-                    Positioned.fill(
-                      child: Image.file(
-                        File(clip!.path),
-                        fit: fitMode.previewFit,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Center(
-                            child: Icon(
-                              Icons.warning_amber_rounded,
-                              size: 34,
-                              color: Colors.black.withValues(alpha: 0.28),
-                            ),
-                          );
-                        },
-                      ),
-                    )
-                  else if (isLoading)
-                    const Center(
-                      child: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
-                      ),
-                    )
-                  else
-                    Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Icon(
-                            clip == null
-                                ? Icons.add
-                                : errorMessage == null
-                                ? clip!.isPhoto
-                                      ? Icons.photo_outlined
-                                      : Icons.movie_creation_outlined
-                                : Icons.warning_amber_rounded,
-                            size: clip == null ? 108.8 : 34,
-                            color: Colors.black.withValues(alpha: 0.28),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final emptyTileIconSize =
+                      (constraints.biggest.shortestSide * 0.12).clamp(
+                        24.0,
+                        64.0,
+                      );
+
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      if (controller != null &&
+                          controller!.value.isInitialized &&
+                          previewVideoSize != null)
+                        FittedBox(
+                          fit: fitMode.previewFit,
+                          child: SizedBox(
+                            width: previewVideoSize.width,
+                            height: previewVideoSize.height,
+                            child: VideoPlayer(controller!),
                           ),
-                          if (errorMessage != null) ...<Widget>[
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
+                        )
+                      else if (clip?.isPhoto == true)
+                        Positioned.fill(
+                          child: Image.file(
+                            File(clip!.path),
+                            fit: fitMode.previewFit,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Center(
+                                child: Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 34,
+                                  color: Colors.black.withValues(alpha: 0.28),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                      else if (isLoading)
+                        const Center(
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          ),
+                        )
+                      else
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                clip == null
+                                    ? Icons.add
+                                    : errorMessage == null
+                                    ? clip!.isPhoto
+                                          ? Icons.photo_outlined
+                                          : Icons.movie_creation_outlined
+                                    : Icons.warning_amber_rounded,
+                                size: clip == null ? emptyTileIconSize : 34,
+                                color: Colors.black.withValues(alpha: 0.28),
                               ),
-                              child: Text(
-                                'Preview failed',
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.55,
-                                      ),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  if (isDragTarget)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(cornerRadius),
-                            border: Border.all(
-                              color: const Color(0xFFFF7A59),
-                              width: 3,
-                            ),
+                              if (errorMessage != null) ...<Widget>[
+                                const SizedBox(height: 8),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: Text(
+                                    'Preview failed',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.55,
+                                          ),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                      ),
-                    ),
-                  if (label != null)
-                    Align(
-                      alignment: clipLabelAlignment.previewAlignment,
-                      child: Padding(
-                        padding: labelStyle.margin,
-                        child: MouseRegion(
-                          cursor: onLabelTap == null
-                              ? MouseCursor.defer
-                              : SystemMouseCursors.click,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: onLabelTap,
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: labelStyle.horizontalPadding,
-                                vertical: labelStyle.verticalPadding,
-                              ),
+                      if (isDragTarget)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: DecoratedBox(
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.48),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                label!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: isActiveLabel
-                                      ? const Color(0xFFFACC15)
-                                      : Colors.white,
-                                  fontSize: labelStyle.fontSize,
-                                  fontWeight: FontWeight.w600,
+                                borderRadius: BorderRadius.circular(
+                                  cornerRadius,
+                                ),
+                                border: Border.all(
+                                  color: const Color(0xFFFF7A59),
+                                  width: 3,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                ],
+                      if (label != null)
+                        Align(
+                          alignment: clipLabelAlignment.previewAlignment,
+                          child: Padding(
+                            padding: labelStyle.margin,
+                            child: MouseRegion(
+                              cursor: onLabelTap == null
+                                  ? MouseCursor.defer
+                                  : SystemMouseCursors.click,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: onLabelTap,
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: labelStyle.horizontalPadding,
+                                    vertical: labelStyle.verticalPadding,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.48),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    label!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: isActiveLabel
+                                          ? const Color(0xFFFACC15)
+                                          : Colors.white,
+                                      fontSize: labelStyle.fontSize,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
