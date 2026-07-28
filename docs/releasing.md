@@ -74,14 +74,21 @@ This script will:
 2. Create a temporary worktree from the target tag.
 3. Verify the tag version matches `pubspec.yaml`.
 4. Build the macOS release app and package the DMG.
-5. Create the GitHub Release if it does not exist yet.
-6. Upload the DMG and SHA-256 files to that release.
+5. On a local machine, try to generate release notes with the system `codex` CLI first.
+6. If Codex notes are unavailable, fall back to GitHub auto-generated release notes.
+7. Create the GitHub Release if it does not exist yet.
+8. Upload the DMG and SHA-256 files to that release.
 
 Requirements:
 
 - `gh` installed and authenticated
 - Flutter installed locally
 - macOS arm64 host
+
+Notes:
+
+- Codex-generated release notes are only attempted for the local upload flow in `./scripts/release_macos.sh`.
+- If `codex` is not installed, not authenticated, or fails to return notes, the script keeps the old behavior and uses `gh release create --generate-notes`.
 
 ## Important note about signing
 

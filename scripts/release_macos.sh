@@ -104,7 +104,10 @@ BUILD_NAME="${VERSION_LINE%%+*}"
 log "Building macOS release artifacts from ${TAG}"
 (
   cd "$WORKTREE_DIR"
-  PACKAGE_ARCH=arm64 ./scripts/build_release_artifacts.sh
+  PACKAGE_ARCH=arm64 \
+  RELEASE_TAG="$TAG" \
+  TRY_CODEX_RELEASE_NOTES=1 \
+    ./scripts/build_release_artifacts.sh
 )
 
 mkdir -p "${ROOT_DIR}/dist"
@@ -119,14 +122,25 @@ shopt -u nullglob
 
 [[ "${#ASSET_PATHS[@]}" -gt 0 ]] || fail "No release assets were generated."
 
+RELEASE_NOTES_FILE="${WORKTREE_DIR}/dist/release_notes.md"
+
 if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   log "GitHub Release ${TAG} already exists in ${REPO}"
 else
   log "Creating GitHub Release ${TAG} in ${REPO}"
-  gh release create "$TAG" \
-    --repo "$REPO" \
-    --verify-tag \
-    --generate-notes >/dev/null
+  if [[ -s "$RELEASE_NOTES_FILE" ]]; then
+    log "Using Codex-generated release notes from ${RELEASE_NOTES_FILE}"
+    gh release create "$TAG" \
+      --repo "$REPO" \
+      --verify-tag \
+      --notes-file "$RELEASE_NOTES_FILE" >/dev/null
+  else
+    log "Falling back to GitHub generated release notes"
+    gh release create "$TAG" \
+      --repo "$REPO" \
+      --verify-tag \
+      --generate-notes >/dev/null
+  fi
 fi
 
 log "Uploading assets to GitHub Release ${TAG}"
