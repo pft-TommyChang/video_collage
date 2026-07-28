@@ -45,6 +45,7 @@ class PersistedEditorSettings {
     required this.tileCornerRadius,
     required this.clipLabelFontSize,
     required this.clipLabelAlignment,
+    required this.clipLabelVisualStyle,
     required this.clipLabelPadding,
     required this.includeClipLabelsInOutput,
     required this.clipLabelDisplayMode,
@@ -72,6 +73,7 @@ class PersistedEditorSettings {
   final double tileCornerRadius;
   final double clipLabelFontSize;
   final ClipLabelAlignment clipLabelAlignment;
+  final ClipLabelVisualStyle clipLabelVisualStyle;
   final double clipLabelPadding;
   final bool includeClipLabelsInOutput;
   final ClipLabelDisplayMode clipLabelDisplayMode;
@@ -100,6 +102,7 @@ class PersistedEditorSettings {
       'tileCornerRadius': tileCornerRadius,
       'clipLabelFontSize': clipLabelFontSize,
       'clipLabelAlignment': clipLabelAlignment.name,
+      'clipLabelVisualStyle': clipLabelVisualStyle.name,
       'clipLabelPadding': clipLabelPadding,
       'includeClipLabelsInOutput': includeClipLabelsInOutput,
       'clipLabelDisplayMode': clipLabelDisplayMode.name,
@@ -135,6 +138,11 @@ class PersistedEditorSettings {
       (alignment) => alignment.name == clipLabelAlignmentName,
       orElse: () => ClipLabelAlignment.topLeft,
     );
+    final clipLabelVisualStyleName = json['clipLabelVisualStyle'] as String?;
+    final clipLabelVisualStyle = ClipLabelVisualStyle.values.firstWhere(
+      (style) => style.name == clipLabelVisualStyleName,
+      orElse: () => ClipLabelVisualStyle.dark,
+    );
 
     return PersistedEditorSettings(
       rows: (json['rows'] as num?)?.toInt() ?? 2,
@@ -151,7 +159,8 @@ class PersistedEditorSettings {
       tileCornerRadius: (json['tileCornerRadius'] as num?)?.toDouble() ?? 12,
       clipLabelFontSize: (json['clipLabelFontSize'] as num?)?.toDouble() ?? 12,
       clipLabelAlignment: clipLabelAlignment,
-      clipLabelPadding: (json['clipLabelPadding'] as num?)?.toDouble() ?? 8,
+      clipLabelVisualStyle: clipLabelVisualStyle,
+      clipLabelPadding: (json['clipLabelPadding'] as num?)?.toDouble() ?? 4,
       includeClipLabelsInOutput:
           json['includeClipLabelsInOutput'] as bool? ?? false,
       clipLabelDisplayMode: clipLabelDisplayMode,

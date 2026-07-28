@@ -87,12 +87,14 @@ const int _defaultColumns = 3;
 const double _defaultBorderThickness = 12;
 const double _defaultTileCornerRadius = 12;
 const double _defaultClipLabelFontSize = 16;
-const double _defaultClipLabelPadding = 8;
+const double _defaultClipLabelPadding = 4;
 const bool _defaultIncludeClipLabelsInOutput = true;
 const ClipLabelDisplayMode _defaultClipLabelDisplayMode =
     ClipLabelDisplayMode.labelOnly;
 const ClipLabelAlignment _defaultClipLabelAlignment =
     ClipLabelAlignment.topLeft;
+const ClipLabelVisualStyle _defaultClipLabelVisualStyle =
+    ClipLabelVisualStyle.dark;
 const bool _defaultAppendDateTimeToExportName = true;
 const PlayMode _defaultPlayMode = PlayMode.parallel;
 const AudioMode _defaultAudioMode = AudioMode.firstClip;
@@ -193,6 +195,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   bool _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
   ClipLabelDisplayMode _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
   ClipLabelAlignment _clipLabelAlignment = _defaultClipLabelAlignment;
+  ClipLabelVisualStyle _clipLabelVisualStyle = _defaultClipLabelVisualStyle;
   bool _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
   bool _isImporting = false;
   bool _isExporting = false;
@@ -258,6 +261,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       clipLabelDisplayMode: _clipLabelDisplayMode,
       clipLabelFontSize: _clipLabelFontSize,
       clipLabelAlignment: _clipLabelAlignment,
+      clipLabelVisualStyle: _clipLabelVisualStyle,
       clipLabelPadding: _clipLabelPadding,
       playMode: _selectedPlayMode,
       audioMode: _selectedAudioMode,
@@ -316,6 +320,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _includeClipLabelsInOutput = savedSettings.includeClipLabelsInOutput;
       _clipLabelDisplayMode = savedSettings.clipLabelDisplayMode;
       _clipLabelAlignment = savedSettings.clipLabelAlignment;
+      _clipLabelVisualStyle = savedSettings.clipLabelVisualStyle;
       _selectedFitMode = ClipFitMode.values.firstWhere(
         (mode) => mode.name == savedSettings.fitMode,
         orElse: () => _selectedFitMode,
@@ -392,6 +397,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         tileCornerRadius: _tileCornerRadius,
         clipLabelFontSize: _clipLabelFontSize,
         clipLabelAlignment: _clipLabelAlignment,
+        clipLabelVisualStyle: _clipLabelVisualStyle,
         clipLabelPadding: _clipLabelPadding,
         includeClipLabelsInOutput: _includeClipLabelsInOutput,
         clipLabelDisplayMode: _clipLabelDisplayMode,
@@ -945,6 +951,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
       _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
       _clipLabelAlignment = _defaultClipLabelAlignment;
+      _clipLabelVisualStyle = _defaultClipLabelVisualStyle;
       _statusMessage = 'Label settings reset to defaults.';
     });
   }
@@ -1642,6 +1649,24 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                           },
                                         ),
                                         const SizedBox(height: 12),
+                                        _SelectionDropdown<
+                                          ClipLabelVisualStyle
+                                        >(
+                                          label: 'Clip label style',
+                                          selected: _clipLabelVisualStyle,
+                                          options: ClipLabelVisualStyle.values,
+                                          itemLabel: (style) => style.label,
+                                          itemBuilder: (style) =>
+                                              _ClipLabelStyleDropdownItem(
+                                                style: style,
+                                              ),
+                                          onSelected: (style) {
+                                            _setStateAndSave(() {
+                                              _clipLabelVisualStyle = style;
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
                                         Row(
                                           children: <Widget>[
                                             Expanded(
@@ -2232,6 +2257,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                                 _clipLabelFontSize,
                                                             clipLabelAlignment:
                                                                 _clipLabelAlignment,
+                                                            clipLabelVisualStyle:
+                                                                _clipLabelVisualStyle,
                                                             clipLabelPadding:
                                                                 _clipLabelPadding,
                                                             fitMode:
@@ -4433,6 +4460,7 @@ class _PreviewTile extends StatelessWidget {
     required this.isActiveLabel,
     required this.clipLabelFontSize,
     required this.clipLabelAlignment,
+    required this.clipLabelVisualStyle,
     required this.clipLabelPadding,
     required this.fitMode,
     required this.isDragTarget,
@@ -4454,6 +4482,7 @@ class _PreviewTile extends StatelessWidget {
   final bool isActiveLabel;
   final double clipLabelFontSize;
   final ClipLabelAlignment clipLabelAlignment;
+  final ClipLabelVisualStyle clipLabelVisualStyle;
   final double clipLabelPadding;
   final ClipFitMode fitMode;
   final bool isDragTarget;
@@ -4512,6 +4541,7 @@ class _PreviewTile extends StatelessWidget {
       isActiveLabel: isActiveLabel,
       clipLabelFontSize: clipLabelFontSize,
       clipLabelAlignment: clipLabelAlignment,
+      clipLabelVisualStyle: clipLabelVisualStyle,
       clipLabelPadding: clipLabelPadding,
       fitMode: fitMode,
       isDragTarget: isDragTarget,
@@ -4557,6 +4587,7 @@ class _PreviewTile extends StatelessWidget {
               isActiveLabel: isActiveLabel,
               clipLabelFontSize: clipLabelFontSize,
               clipLabelAlignment: clipLabelAlignment,
+              clipLabelVisualStyle: clipLabelVisualStyle,
               clipLabelPadding: clipLabelPadding,
               fitMode: fitMode,
               isDragTarget: false,
@@ -4585,6 +4616,7 @@ class _PreviewTileBody extends StatelessWidget {
     required this.isActiveLabel,
     required this.clipLabelFontSize,
     required this.clipLabelAlignment,
+    required this.clipLabelVisualStyle,
     required this.clipLabelPadding,
     required this.fitMode,
     required this.isDragTarget,
@@ -4603,6 +4635,7 @@ class _PreviewTileBody extends StatelessWidget {
   final bool isActiveLabel;
   final double clipLabelFontSize;
   final ClipLabelAlignment clipLabelAlignment;
+  final ClipLabelVisualStyle clipLabelVisualStyle;
   final double clipLabelPadding;
   final ClipFitMode fitMode;
   final bool isDragTarget;
@@ -4619,7 +4652,11 @@ class _PreviewTileBody extends StatelessWidget {
       baseFontSize: clipLabelFontSize,
       baseEdgePadding: clipLabelPadding,
       alignment: clipLabelAlignment,
+      visualStyle: clipLabelVisualStyle,
     );
+    final labelTextColor = isActiveLabel
+        ? clipLabelHighlightedTextColor(clipLabelVisualStyle)
+        : labelStyle.textColor;
 
     return AnimatedScale(
       duration: const Duration(milliseconds: 140),
@@ -4763,20 +4800,15 @@ class _PreviewTileBody extends StatelessWidget {
                                     vertical: labelStyle.verticalPadding,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.48),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    label!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: isActiveLabel
-                                          ? const Color(0xFFFACC15)
-                                          : Colors.white,
-                                      fontSize: labelStyle.fontSize,
-                                      fontWeight: FontWeight.w600,
+                                    color: labelStyle.backgroundColor,
+                                    borderRadius: BorderRadius.circular(
+                                      labelStyle.cornerRadius,
                                     ),
+                                  ),
+                                  child: _ClipLabelText(
+                                    text: label!,
+                                    color: labelTextColor,
+                                    labelStyle: labelStyle,
                                   ),
                                 ),
                               ),
@@ -4962,6 +4994,125 @@ class _ClipLabelAlignmentDropdownItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ClipLabelStyleDropdownItem extends StatelessWidget {
+  const _ClipLabelStyleDropdownItem({required this.style});
+
+  final ClipLabelVisualStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewStyle = clipLabelStyleForOverlayScale(
+      1,
+      baseFontSize: 12,
+      baseEdgePadding: 4,
+      alignment: ClipLabelAlignment.topLeft,
+      visualStyle: style,
+    );
+
+    return Row(
+      children: <Widget>[
+        Container(
+          width: 40,
+          height: 24,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F2EA),
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(color: const Color(0xFFD7CEC2)),
+          ),
+          alignment: Alignment.center,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: previewStyle.horizontalPadding,
+              vertical: previewStyle.verticalPadding,
+            ),
+            decoration: BoxDecoration(
+              color: previewStyle.backgroundColor,
+              borderRadius: BorderRadius.circular(previewStyle.cornerRadius),
+            ),
+            child: _ClipLabelText(
+              text: 'Aa',
+              color: previewStyle.textColor,
+              labelStyle: previewStyle,
+              fontSizeOverride: 10,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            style.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ClipLabelText extends StatelessWidget {
+  const _ClipLabelText({
+    required this.text,
+    required this.color,
+    required this.labelStyle,
+    this.fontSizeOverride,
+  });
+
+  final String text;
+  final Color color;
+  final ClipLabelStyle labelStyle;
+  final double? fontSizeOverride;
+
+  TextStyle _fillStyle() {
+    return TextStyle(
+      color: color,
+      fontSize: fontSizeOverride ?? labelStyle.fontSize,
+      fontWeight: FontWeight.w600,
+      shadows: labelStyle.textShadowColor == null
+          ? null
+          : <Shadow>[
+              Shadow(
+                color: labelStyle.textShadowColor!,
+                blurRadius: 6,
+                offset: const Offset(0, 1.5),
+              ),
+            ],
+    );
+  }
+
+  TextStyle _outlineStyle() {
+    return TextStyle(
+      foreground: Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = labelStyle.textOutlineWidth
+        ..color = labelStyle.textOutlineColor!,
+      fontSize: fontSizeOverride ?? labelStyle.fontSize,
+      fontWeight: FontWeight.w600,
+    );
+  }
+
+  Widget _buildText(TextStyle style) {
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (labelStyle.textOutlineColor == null ||
+        labelStyle.textOutlineWidth <= 0) {
+      return _buildText(_fillStyle());
+    }
+
+    return Stack(
+      children: <Widget>[_buildText(_outlineStyle()), _buildText(_fillStyle())],
     );
   }
 }

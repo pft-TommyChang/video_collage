@@ -240,6 +240,7 @@ class VideoExportService {
               cellWidth: cellWidth,
               cellHeight: cellHeight,
               clipLabelAlignment: options.clipLabelAlignment,
+              clipLabelVisualStyle: options.clipLabelVisualStyle,
               clipLabelPadding: options.clipLabelPadding,
               tempDirectory: labelTempDirectory = await Directory.systemTemp
                   .createTemp('video_collage_labels_'),
@@ -446,6 +447,7 @@ class VideoExportService {
               cellWidth: cellWidth,
               cellHeight: cellHeight,
               clipLabelAlignment: options.clipLabelAlignment,
+              clipLabelVisualStyle: options.clipLabelVisualStyle,
               clipLabelPadding: options.clipLabelPadding,
               tempDirectory: labelTempDirectory = await Directory.systemTemp
                   .createTemp('photo_collage_labels_'),
@@ -632,6 +634,7 @@ class VideoExportService {
                 cellWidth: cellWidth,
                 cellHeight: cellHeight,
                 clipLabelAlignment: options.clipLabelAlignment,
+                clipLabelVisualStyle: options.clipLabelVisualStyle,
                 clipLabelPadding: options.clipLabelPadding,
                 tempDirectory: await Directory(
                   p.join(
@@ -640,7 +643,9 @@ class VideoExportService {
                   ),
                 ).create(recursive: true),
                 highlightedInputIndex: activeInputIndex,
-                highlightedTextColor: const ui.Color(0xFFFACC15),
+                highlightedTextColor: clipLabelHighlightedTextColor(
+                  options.clipLabelVisualStyle,
+                ),
               )
             : const <_ClipLabelOverlay>[];
         final filters = <String>[
@@ -878,16 +883,18 @@ class VideoExportService {
     required int cellWidth,
     required int cellHeight,
     required ClipLabelAlignment clipLabelAlignment,
+    required ClipLabelVisualStyle clipLabelVisualStyle,
     required double clipLabelPadding,
     required Directory tempDirectory,
     int? highlightedInputIndex,
-    ui.Color highlightedTextColor = const ui.Color(0xFFFFFFFF),
+    ui.Color? highlightedTextColor,
   }) async {
     final labelStyle = clipLabelStyleForOverlayScale(
       overlayLabelScaleForExportScale(scaleFactor),
       baseFontSize: baseFontSize,
       baseEdgePadding: clipLabelPadding,
       alignment: clipLabelAlignment,
+      visualStyle: clipLabelVisualStyle,
     );
     final maxTextWidth = math.max(
       1.0,
@@ -910,8 +917,8 @@ class VideoExportService {
         labelStyle: labelStyle,
         maxTextWidth: maxTextWidth,
         textColor: inputIndex == highlightedInputIndex
-            ? highlightedTextColor
-            : const ui.Color(0xFFFFFFFF),
+            ? highlightedTextColor ?? labelStyle.textColor
+            : labelStyle.textColor,
       );
       final position = _resolveClipLabelOverlayPosition(
         cellWidth: cellWidth,
@@ -1006,49 +1013,89 @@ class VideoExportService {
     required double maxTextWidth,
     required ui.Color textColor,
   }) async {
-    final paragraphBuilder =
-        ui.ParagraphBuilder(
-          ui.ParagraphStyle(
-            fontSize: labelStyle.fontSize,
-            fontWeight: ui.FontWeight.w600,
+    final textEffectPadding = math.max(
+      labelStyle.textOutlineWidth,
+      labelStyle.textShadowColor == null ? 0.0 : 2.0,
+    );
+    final layoutTextWidth = math.max(
+      1.0,
+      maxTextWidth - (textEffectPadding * 2),
+    );
+    final fillTextPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: textColor,
+          fontSize: labelStyle.fontSize,
+          fontWeight: FontWeight.w600,
+          shadows: labelStyle.textShadowColor == null
+              ? null
+              : <Shadow>[
+                  Shadow(
+                    color: labelStyle.textShadowColor!,
+                    blurRadius: 6,
+                    offset: const Offset(0, 1.5),
+                  ),
+                ],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '...',
+    )..layout(maxWidth: layoutTextWidth);
+    final outlineTextPainter =
+        labelStyle.textOutlineColor == null || labelStyle.textOutlineWidth <= 0
+        ? null
+        : (TextPainter(
+            text: TextSpan(
+              text: text,
+              style: TextStyle(
+                foreground: Paint()
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = labelStyle.textOutlineWidth
+                  ..color = labelStyle.textOutlineColor!,
+                fontSize: labelStyle.fontSize,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            textDirection: TextDirection.ltr,
             maxLines: 1,
             ellipsis: '...',
-          ),
-        )..pushStyle(
-          ui.TextStyle(
-            color: textColor,
-            fontSize: labelStyle.fontSize,
-            fontWeight: ui.FontWeight.w600,
-          ),
-        );
-
-    paragraphBuilder.addText(text);
-    final paragraph = paragraphBuilder.build()
-      ..layout(ui.ParagraphConstraints(width: maxTextWidth));
+          )..layout(maxWidth: layoutTextWidth));
 
     final imageWidth = math.max(
       1,
-      (paragraph.longestLine + (labelStyle.horizontalPadding * 2)).ceil(),
+      (fillTextPainter.width +
+              (labelStyle.horizontalPadding * 2) +
+              (textEffectPadding * 2))
+          .ceil(),
     );
     final imageHeight = math.max(
       1,
-      (paragraph.height + (labelStyle.verticalPadding * 2)).ceil(),
+      (fillTextPainter.height +
+              (labelStyle.verticalPadding * 2) +
+              (textEffectPadding * 2))
+          .ceil(),
     );
 
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
-    final backgroundPaint = ui.Paint()..color = const ui.Color(0x7A000000);
-    canvas.drawRRect(
-      ui.RRect.fromRectAndRadius(
-        ui.Rect.fromLTWH(0, 0, imageWidth.toDouble(), imageHeight.toDouble()),
-        ui.Radius.circular(imageHeight / 2),
-      ),
-      backgroundPaint,
+    if (labelStyle.backgroundColor case final backgroundColor?) {
+      final backgroundPaint = ui.Paint()..color = backgroundColor;
+      canvas.drawRRect(
+        ui.RRect.fromRectAndRadius(
+          ui.Rect.fromLTWH(0, 0, imageWidth.toDouble(), imageHeight.toDouble()),
+          ui.Radius.circular(labelStyle.cornerRadius),
+        ),
+        backgroundPaint,
+      );
+    }
+    final textOffset = Offset(
+      labelStyle.horizontalPadding + textEffectPadding,
+      labelStyle.verticalPadding + textEffectPadding,
     );
-    canvas.drawParagraph(
-      paragraph,
-      ui.Offset(labelStyle.horizontalPadding, labelStyle.verticalPadding),
-    );
+    outlineTextPainter?.paint(canvas, textOffset);
+    fillTextPainter.paint(canvas, textOffset);
 
     final image = await recorder.endRecording().toImage(
       imageWidth,

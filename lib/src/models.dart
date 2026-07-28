@@ -141,6 +141,22 @@ enum ClipLabelAlignment {
   };
 }
 
+enum ClipLabelVisualStyle {
+  dark,
+  light,
+  transparentShadow,
+  transparentOutline,
+  squareTag;
+
+  String get label => switch (this) {
+    ClipLabelVisualStyle.dark => 'Black / white',
+    ClipLabelVisualStyle.light => 'White / black',
+    ClipLabelVisualStyle.transparentShadow => 'Transparent / shadow',
+    ClipLabelVisualStyle.transparentOutline => 'Transparent / outline',
+    ClipLabelVisualStyle.squareTag => 'Square tag',
+  };
+}
+
 class VideoClipInfo {
   const VideoClipInfo({
     required this.path,
@@ -201,6 +217,7 @@ class ExportOptions {
     required this.clipLabelDisplayMode,
     required this.clipLabelFontSize,
     required this.clipLabelAlignment,
+    required this.clipLabelVisualStyle,
     required this.clipLabelPadding,
     required this.playMode,
     required this.audioMode,
@@ -220,6 +237,7 @@ class ExportOptions {
   final ClipLabelDisplayMode clipLabelDisplayMode;
   final double clipLabelFontSize;
   final ClipLabelAlignment clipLabelAlignment;
+  final ClipLabelVisualStyle clipLabelVisualStyle;
   final double clipLabelPadding;
   final PlayMode playMode;
   final AudioMode audioMode;
@@ -242,12 +260,24 @@ class ClipLabelStyle {
     required this.horizontalPadding,
     required this.verticalPadding,
     required this.fontSize,
+    required this.backgroundColor,
+    required this.textColor,
+    required this.textShadowColor,
+    required this.textOutlineColor,
+    required this.textOutlineWidth,
+    required this.cornerRadius,
   });
 
   final EdgeInsets margin;
   final double horizontalPadding;
   final double verticalPadding;
   final double fontSize;
+  final Color? backgroundColor;
+  final Color textColor;
+  final Color? textShadowColor;
+  final Color? textOutlineColor;
+  final double textOutlineWidth;
+  final double cornerRadius;
 }
 
 double overlayLabelScaleForExportScale(double scaleFactor) {
@@ -259,21 +289,87 @@ ClipLabelStyle clipLabelStyleForOverlayScale(
   required double baseFontSize,
   required double baseEdgePadding,
   required ClipLabelAlignment alignment,
+  required ClipLabelVisualStyle visualStyle,
   double baseFixedPadding = 5,
 }) {
   final fontScale = baseFontSize / 12;
   final resolvedEdgePadding = baseEdgePadding * overlayLabelScale * fontScale;
   final resolvedFixedPadding = baseFixedPadding * overlayLabelScale * fontScale;
+  final (
+    backgroundColor,
+    textColor,
+    textShadowColor,
+    textOutlineColor,
+    textOutlineWidth,
+    cornerRadius,
+  ) = switch (visualStyle) {
+    ClipLabelVisualStyle.dark => (
+      const Color(0x7A000000),
+      const Color(0xFFFFFFFF),
+      null,
+      null,
+      0.0,
+      999.0,
+    ),
+    ClipLabelVisualStyle.light => (
+      const Color(0xEFFFFFFF),
+      const Color(0xFF111111),
+      null,
+      null,
+      0.0,
+      999.0,
+    ),
+    ClipLabelVisualStyle.transparentShadow => (
+      null,
+      const Color(0xFFFFFFFF),
+      const Color(0xCC000000),
+      null,
+      0.0,
+      999.0,
+    ),
+    ClipLabelVisualStyle.transparentOutline => (
+      null,
+      const Color(0xFFFFFFFF),
+      null,
+      const Color(0xFF000000),
+      2.4 * overlayLabelScale * fontScale,
+      999.0,
+    ),
+    ClipLabelVisualStyle.squareTag => (
+      const Color(0xCC111111),
+      const Color(0xFFFFFFFF),
+      null,
+      null,
+      0.0,
+      6.0 * overlayLabelScale * fontScale,
+    ),
+  };
   return ClipLabelStyle(
     margin: clipLabelMarginForAlignment(
       alignment: alignment,
       anchorPadding: resolvedEdgePadding,
       fixedPadding: resolvedFixedPadding,
     ),
-    horizontalPadding: 8 * overlayLabelScale * fontScale,
-    verticalPadding: 4 * overlayLabelScale * fontScale,
+    horizontalPadding: 7 * overlayLabelScale * fontScale,
+    verticalPadding: 2 * overlayLabelScale * fontScale,
     fontSize: baseFontSize * overlayLabelScale,
+    backgroundColor: backgroundColor,
+    textColor: textColor,
+    textShadowColor: textShadowColor,
+    textOutlineColor: textOutlineColor,
+    textOutlineWidth: textOutlineWidth,
+    cornerRadius: cornerRadius,
   );
+}
+
+Color clipLabelHighlightedTextColor(ClipLabelVisualStyle visualStyle) {
+  return switch (visualStyle) {
+    ClipLabelVisualStyle.dark => const Color(0xFFFACC15),
+    ClipLabelVisualStyle.light => const Color(0xFFC2410C),
+    ClipLabelVisualStyle.transparentShadow => const Color(0xFFFACC15),
+    ClipLabelVisualStyle.transparentOutline => const Color(0xFFFACC15),
+    ClipLabelVisualStyle.squareTag => const Color(0xFFFACC15),
+  };
 }
 
 EdgeInsets clipLabelMarginForAlignment({
