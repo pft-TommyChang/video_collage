@@ -253,14 +253,6 @@ class VideoExportService {
 
       for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex++) {
         final clip = slotClips[inputIndex].clip;
-        final clipDurationMs = clip.duration.inMilliseconds.clamp(
-          0,
-          targetDurationMs,
-        );
-        final stopDurationMs = targetDurationMs - clipDurationMs;
-        final stopDurationFilter = clip.isVideo && stopDurationMs > 0
-            ? ',tpad=stop_mode=clone:stop_duration=${(stopDurationMs / 1000).toStringAsFixed(3)}'
-            : '';
         final roundedCornerFilter = _roundedCornerFilter(
           cellWidth: cellWidth,
           cellHeight: cellHeight,
@@ -282,10 +274,15 @@ class VideoExportService {
           );
         } else {
           filters.add(
-            '[$inputIndex:v]setpts=PTS-STARTPTS,'
-            '${_videoTileScaleFilterChain(fitMode: options.fitMode, backgroundColor: options.backgroundColor, cellWidth: cellWidth, cellHeight: cellHeight)}'
-            '$stopDurationFilter'
-            '[clip$inputIndex]',
+            _simultaneousVideoFilter(
+              inputIndex: inputIndex,
+              fitMode: options.fitMode,
+              backgroundColor: options.backgroundColor,
+              durationSeconds: targetDurationSeconds,
+              cellWidth: cellWidth,
+              cellHeight: cellHeight,
+              outputLabel: 'clip$inputIndex',
+            ),
           );
         }
 
@@ -318,7 +315,10 @@ class VideoExportService {
             ? 'merged'
             : 'stage$inputIndex';
         filters.add(
-          '[$source][v$inputIndex]overlay=x=$x:y=$y:eof_action=pass[$destination]',
+          // Keep the last tile frame visible if an unusual input still ends
+          // early instead of exposing the solid-color base.
+          '[$source][v$inputIndex]overlay='
+          'x=$x:y=$y:eof_action=repeat:repeatlast=1[$destination]',
         );
       }
       filters.add('[merged]format=yuv420p[outv]');
@@ -1139,6 +1139,26 @@ class VideoExportService {
       '[$backgroundLabel][$foregroundLabel]overlay='
           'x=${output.$1}:y=${output.$2}:format=auto[$outputLabel]',
     ];
+  }
+
+  String _simultaneousVideoFilter({
+    required int inputIndex,
+    required ClipFitMode fitMode,
+    required ColorChoice backgroundColor,
+    required String durationSeconds,
+    required int cellWidth,
+    required int cellHeight,
+    required String outputLabel,
+  }) {
+    // Container duration metadata can extend beyond the final decodable frame.
+    // Pad without relying on that metadata, then cap the tile exactly.
+    return '[$inputIndex:v]'
+        'setpts=PTS-STARTPTS,'
+        '${_videoTileScaleFilterChain(fitMode: fitMode, backgroundColor: backgroundColor, cellWidth: cellWidth, cellHeight: cellHeight)},'
+        'tpad=stop_mode=clone:stop_duration=$durationSeconds,'
+        'trim=duration=$durationSeconds,'
+        'setpts=PTS-STARTPTS'
+        '[$outputLabel]';
   }
 
   String _sequentialActiveVideoFilter({
