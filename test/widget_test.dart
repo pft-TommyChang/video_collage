@@ -91,6 +91,36 @@ void main() {
     expect(find.text('21:9'), findsWidgets);
   });
 
+  testWidgets('rows and columns can be increased to 8', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpAndSettle();
+
+    for (final label in <String>['Rows', 'Columns']) {
+      final stepper = find
+          .ancestor(of: find.text(label), matching: find.byType(Row))
+          .first;
+      final addButton = find.descendant(
+        of: stepper,
+        matching: find.widgetWithIcon(IconButton, Icons.add_circle_outline),
+      );
+
+      for (var value = label == 'Rows' ? 1 : 3; value < 8; value++) {
+        await tester.tap(addButton);
+        await tester.pump();
+      }
+
+      expect(find.descendant(of: stepper, matching: find.text('8')), findsOne);
+      expect(tester.widget<IconButton>(addButton).onPressed, isNull);
+    }
+  });
+
   testWidgets('fit mode dropdown includes crop center and center inside', (
     WidgetTester tester,
   ) async {

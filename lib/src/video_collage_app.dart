@@ -84,6 +84,8 @@ final ColorChoice _defaultBackgroundColor = _colorChoices[1];
 
 const int _defaultRows = 1;
 const int _defaultColumns = 3;
+const int _maxGridDimension = 8;
+const int _maxGridCapacity = _maxGridDimension * _maxGridDimension;
 const double _defaultBorderThickness = 12;
 const double _defaultTileCornerRadius = 12;
 const double _defaultClipLabelFontSize = 16;
@@ -98,6 +100,9 @@ const ClipLabelVisualStyle _defaultClipLabelVisualStyle =
 const bool _defaultAppendDateTimeToExportName = true;
 const PlayMode _defaultPlayMode = PlayMode.parallel;
 const AudioMode _defaultAudioMode = AudioMode.firstClip;
+
+enum _LastExportAction { openFile, openFolder }
+
 const ExportDurationMode _defaultDurationMode = ExportDurationMode.longest;
 const ClipFitMode _defaultFitMode = ClipFitMode.cropCenter;
 const int _minOutputDimensionExclusive = 360;
@@ -299,8 +304,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
     _isRestoringSettings = true;
     setState(() {
-      _rows = savedSettings.rows.clamp(1, 6);
-      _columns = savedSettings.columns.clamp(1, 6);
+      _rows = savedSettings.rows.clamp(1, _maxGridDimension);
+      _columns = savedSettings.columns.clamp(1, _maxGridDimension);
       _isMediaSectionCollapsed = savedSettings.isMediaSectionCollapsed;
       _isLayoutSectionCollapsed = savedSettings.isLayoutSectionCollapsed;
       _isLabelSectionCollapsed = savedSettings.isLabelSectionCollapsed;
@@ -575,6 +580,45 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       return;
     }
     await _openExportHistoryEntry(lastExportEntry);
+  }
+
+  Future<void> _showLastExportMenu(
+    BuildContext context,
+    TapDownDetails details,
+  ) async {
+    final lastExportEntry = _lastExportEntry;
+    if (_isExporting || lastExportEntry == null) {
+      return;
+    }
+
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final position = details.globalPosition;
+    final action = await showMenu<_LastExportAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: const <PopupMenuEntry<_LastExportAction>>[
+        PopupMenuItem<_LastExportAction>(
+          value: _LastExportAction.openFile,
+          child: Text('Open File'),
+        ),
+        PopupMenuItem<_LastExportAction>(
+          value: _LastExportAction.openFolder,
+          child: Text('Open Folder'),
+        ),
+      ],
+    );
+
+    switch (action) {
+      case _LastExportAction.openFile:
+        await _openExportHistoryEntry(lastExportEntry);
+      case _LastExportAction.openFolder:
+        await _openExportHistoryFolder(lastExportEntry);
+      case null:
+        return;
+    }
   }
 
   Future<void> _openExportHistoryFolder(ExportHistoryEntry entry) async {
@@ -1160,7 +1204,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       return;
     }
 
-    final consideredClips = _clips.take(36).toList(growable: false);
+    final consideredClips = _clips
+        .take(_maxGridCapacity)
+        .toList(growable: false);
     final clipAspects = consideredClips
         .map(_clipAspectRatio)
         .where((aspect) => aspect > 0)
@@ -1173,8 +1219,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final dominantOrientation = _dominantOrientation(clipAspects);
     _AutoLayoutChoice? bestChoice;
 
-    for (var rows = 1; rows <= 6; rows++) {
-      for (var columns = 1; columns <= 6; columns++) {
+    for (var rows = 1; rows <= _maxGridDimension; rows++) {
+      for (var columns = 1; columns <= _maxGridDimension; columns++) {
         final capacity = rows * columns;
         if (capacity < clipCount) {
           continue;
@@ -2027,20 +2073,33 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                   Expanded(
                                     child: Align(
                                       alignment: Alignment.centerRight,
-                                      child: IconButton(
-                                        onPressed:
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onSecondaryTapDown:
                                             _isExporting || !hasLastExport
                                             ? null
-                                            : () =>
-                                                  unawaited(_openLastExport()),
-                                        tooltip: hasLastExport
-                                            ? 'Last export'
-                                            : 'No last export yet',
-                                        icon: const Icon(
-                                          Icons.open_in_new_rounded,
+                                            : (details) => unawaited(
+                                                _showLastExportMenu(
+                                                  context,
+                                                  details,
+                                                ),
+                                              ),
+                                        child: IconButton(
+                                          onPressed:
+                                              _isExporting || !hasLastExport
+                                              ? null
+                                              : () => unawaited(
+                                                  _openLastExport(),
+                                                ),
+                                          tooltip: hasLastExport
+                                              ? 'Last export'
+                                              : 'No last export yet',
+                                          icon: const Icon(
+                                            Icons.open_in_new_rounded,
+                                          ),
+                                          color: const Color(0xFF6A452D),
+                                          iconSize: 22,
                                         ),
-                                        color: const Color(0xFF6A452D),
-                                        iconSize: 22,
                                       ),
                                     ),
                                   ),
@@ -5760,7 +5819,9 @@ class _StepperRow extends StatelessWidget {
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         IconButton(
-          onPressed: value < 6 ? () => onChanged(value + 1) : null,
+          onPressed: value < _maxGridDimension
+              ? () => onChanged(value + 1)
+              : null,
           icon: const Icon(Icons.add_circle_outline),
         ),
       ],

@@ -29,6 +29,9 @@ class VideoExportException implements Exception {
 class VideoExportService {
   VideoExportService();
 
+  static const String _decoderThreadCount = '1';
+  static const String _complexFilterThreadCount = '1';
+  static const String _encoderThreadCount = '4';
   static const MethodChannel _metadataChannel = MethodChannel(
     'video_collage/media_probe',
   );
@@ -341,16 +344,22 @@ class VideoExportService {
                   '30',
                   '-t',
                   targetDurationSeconds,
+                  '-threads',
+                  _decoderThreadCount,
                   '-i',
                   entry.clip.path,
                 ]
-              : <String>['-i', entry.clip.path],
+              : _singleThreadedInputArguments(entry.clip.path),
         for (final overlay in labelOverlays) ...<String>[
           '-loop',
           '1',
+          '-threads',
+          _decoderThreadCount,
           '-i',
           overlay.filePath,
         ],
+        '-filter_complex_threads',
+        _complexFilterThreadCount,
         '-filter_complex',
         filters.join(';'),
         '-map',
@@ -365,6 +374,8 @@ class VideoExportService {
         'medium',
         '-crf',
         '18',
+        '-threads',
+        _encoderThreadCount,
         '-pix_fmt',
         'yuv420p',
         if (audioOutputLabel != null) ...<String>[
@@ -522,13 +533,18 @@ class VideoExportService {
 
       final arguments = <String>[
         '-y',
-        for (final entry in slotClips) ...<String>['-i', entry.clip.path],
+        for (final entry in slotClips)
+          ..._singleThreadedInputArguments(entry.clip.path),
         for (final overlay in labelOverlays) ...<String>[
           '-loop',
           '1',
+          '-threads',
+          _decoderThreadCount,
           '-i',
           overlay.filePath,
         ],
+        '-filter_complex_threads',
+        _complexFilterThreadCount,
         '-filter_complex',
         filters.join(';'),
         '-map',
@@ -794,13 +810,17 @@ class VideoExportService {
                     path: entry.clip.path,
                     durationSeconds: segmentDurationSeconds,
                   )
-                : <String>['-i', entry.clip.path],
+                : _singleThreadedInputArguments(entry.clip.path),
           for (final overlay in segmentLabelOverlays) ...<String>[
             '-loop',
             '1',
+            '-threads',
+            _decoderThreadCount,
             '-i',
             overlay.filePath,
           ],
+          '-filter_complex_threads',
+          _complexFilterThreadCount,
           '-filter_complex',
           filters.join(';'),
           '-map',
@@ -1383,9 +1403,15 @@ class VideoExportService {
       '30',
       '-t',
       durationSeconds,
+      '-threads',
+      _decoderThreadCount,
       '-i',
       path,
     ];
+  }
+
+  List<String> _singleThreadedInputArguments(String path) {
+    return <String>['-threads', _decoderThreadCount, '-i', path];
   }
 
   List<String> _h264VideoEncodingArguments() {
@@ -1398,6 +1424,8 @@ class VideoExportService {
       'medium',
       '-crf',
       '18',
+      '-threads',
+      _encoderThreadCount,
       '-pix_fmt',
       'yuv420p',
     ];
