@@ -32,6 +32,7 @@ class VideoExportService {
   static const MethodChannel _metadataChannel = MethodChannel(
     'video_collage/media_probe',
   );
+  static const String _firstFrameSelectFilter = "select='eq(n\\,0)'";
 
   Future<void> cancelActiveExport() {
     return FFmpegKit.cancel();
@@ -1132,11 +1133,11 @@ class VideoExportService {
         ? 'trim=start=${freezeStartSeconds.toStringAsFixed(3)},'
               'setpts=PTS-STARTPTS,'
               'reverse,'
-              'trim=duration=0.034,'
+              // Lock to a single decoded frame so inactive tiles do not
+              // advance by one frame when sequential segments are stitched.
+              '$_firstFrameSelectFilter,'
               'setpts=PTS-STARTPTS,'
-              'reverse,'
-              'setpts=PTS-STARTPTS,'
-        : 'trim=duration=0.034,'
+        : '$_firstFrameSelectFilter,'
               'setpts=PTS-STARTPTS,';
     return '[$inputIndex:v]'
         'setpts=PTS-STARTPTS,'

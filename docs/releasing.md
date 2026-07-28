@@ -3,17 +3,17 @@
 ## Versioning
 
 - App version is defined in `pubspec.yaml`.
-- The current release version is `1.1.0+1`.
+- The current release version is `1.3.0+130`.
 - The format is `build-name+build-number`.
-  - `1.1.0` is the user-facing version.
-  - `+1` is the internal build number.
+  - `1.3.0` is the user-facing version.
+  - `+130` is the internal build number.
 - GitHub release tags must match the app version.
-  - `v1.1.0` is valid for app version `1.1.0+1`.
-  - `1.1.0` is also accepted by the workflow, but `v1.1.0` is the recommended format.
+  - `v1.3.0` is valid for app version `1.3.0+130`.
+  - `1.3.0` is also accepted by the workflow, but `v1.3.0` is the recommended format.
 - The release tag only matches the `build-name` part. It does not include the `+build-number`.
 - Recommended build number policy:
-  - Keep `build-name` semantic, for example `1.1.0`, `1.1.1`, `1.2.0`.
-  - Keep `build-number` globally increasing across releases, for example `1.0.0+100`, `1.1.0+101`, `1.2.0+120`.
+  - Keep `build-name` semantic, for example `1.2.0`, `1.2.1`, `1.3.0`.
+  - Keep `build-number` globally increasing across releases, for example `1.1.0+101`, `1.2.0+120`, `1.3.0+130`.
   - Avoid reusing the same build number forever if you may later add App Store, notarization, or other distribution tooling.
 
 ## What the release workflow does
@@ -38,9 +38,9 @@ Expected release assets:
 2. Commit and push your changes to `main`.
 3. In GitHub, open `Releases`.
 4. Click `Draft a new release`.
-5. Create a new tag using the app version, for example `v1.1.0`.
+5. Create a new tag using the app version, for example `v1.3.0`.
 6. Choose the target branch or commit you want to release.
-7. Set the release title, for example `v1.1.0`.
+7. Set the release title, for example `v1.3.0`.
 8. Publish the release.
 9. Wait for the `Release macOS build` GitHub Actions workflow to finish.
 10. Refresh the release page and download the generated DMG asset.
@@ -65,7 +65,7 @@ If you want to build and publish from your local macOS arm64 machine instead of
 GitHub Actions:
 
 ```bash
-./scripts/release_macos.sh v1.1.0
+./scripts/release_macos.sh v1.3.0
 ```
 
 This script will:

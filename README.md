@@ -374,7 +374,7 @@ flutter build macos
 若要直接在本機從指定 tag 建置並上傳 GitHub Release:
 
 ```bash
-./scripts/release_macos.sh v1.1.0
+./scripts/release_macos.sh v1.3.0
 ```
 
 更完整的 release 說明請看 [docs/releasing.md](/Users/rdapp/git/video_collage/docs/releasing.md)。
