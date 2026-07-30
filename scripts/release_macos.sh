@@ -10,8 +10,8 @@ Build the macOS arm64 release artifact from the given git tag, create the
 GitHub Release if it does not exist yet, and upload the generated assets.
 
 Examples:
-  ./scripts/release_macos.sh v1.3.0
-  ./scripts/release_macos.sh v1.3.0 pft-TommyChang/video_collage
+  ./scripts/release_macos.sh v1.4.0
+  ./scripts/release_macos.sh v1.4.0 pft-TommyChang/video_collage
 EOF
 }
 
