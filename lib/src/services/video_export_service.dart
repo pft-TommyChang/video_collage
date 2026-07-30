@@ -59,46 +59,56 @@ class VideoExportService {
     required String filePath,
     required Duration duration,
     int count = 12,
+    void Function(List<String> paths)? onProgress,
   }) async {
     final safeCount = count.clamp(4, 24);
-    final durationSeconds = math.max(duration.inMilliseconds / 1000, 0.001);
-    final framesPerSecond = safeCount / durationSeconds;
     final directory = await Directory.systemTemp.createTemp(
       'video_collage_thumbnails_',
     );
-    final outputPattern = p.join(directory.path, 'thumb_%03d.jpg');
+    final paths = <String>[];
+    final durationMilliseconds = math.max(0, duration.inMilliseconds);
 
     try {
-      final session = await FFmpegKit.executeWithArguments(<String>[
-        '-y',
-        '-threads',
-        _decoderThreadCount,
-        '-i',
-        filePath,
-        '-vf',
-        'fps=${framesPerSecond.toStringAsFixed(8)},scale=180:-2:flags=lanczos',
-        '-frames:v',
-        '$safeCount',
-        '-q:v',
-        '4',
-        outputPattern,
-      ]);
-      final returnCode = await session.getReturnCode();
-      if (!ReturnCode.isSuccess(returnCode)) {
-        final output = await session.getOutput();
-        throw VideoExportException(
-          'Thumbnail extraction failed: ${output ?? 'Unknown FFmpeg error'}',
+      for (var index = 0; index < safeCount; index += 1) {
+        final timestampMilliseconds = (durationMilliseconds * index / safeCount)
+            .round();
+        final outputPath = p.join(
+          directory.path,
+          'thumb_${index.toString().padLeft(3, '0')}.jpg',
         );
+        final session = await FFmpegKit.executeWithArguments(<String>[
+          '-y',
+          if (timestampMilliseconds > 0) ...<String>[
+            '-ss',
+            (timestampMilliseconds / 1000).toStringAsFixed(3),
+          ],
+          '-threads',
+          _decoderThreadCount,
+          '-i',
+          filePath,
+          '-frames:v',
+          '1',
+          '-vf',
+          'scale=180:-2:flags=lanczos',
+          '-q:v',
+          '4',
+          outputPath,
+        ]);
+        final returnCode = await session.getReturnCode();
+        if (!ReturnCode.isSuccess(returnCode) ||
+            !File(outputPath).existsSync()) {
+          if (index == 0) {
+            final output = await session.getOutput();
+            throw VideoExportException(
+              'Thumbnail extraction failed: ${output ?? 'Unknown FFmpeg error'}',
+            );
+          }
+          continue;
+        }
+        paths.add(outputPath);
+        onProgress?.call(List<String>.unmodifiable(paths));
       }
 
-      final paths =
-          directory
-              .listSync()
-              .whereType<File>()
-              .map((file) => file.path)
-              .where((path) => p.extension(path).toLowerCase() == '.jpg')
-              .toList()
-            ..sort();
       if (paths.isEmpty) {
         throw const VideoExportException(
           'Thumbnail extraction produced no frames.',
@@ -110,6 +120,44 @@ class VideoExportService {
         await directory.delete(recursive: true);
       }
       rethrow;
+    }
+  }
+
+  Future<void> exportTrimmedVideo({
+    required String filePath,
+    required Duration start,
+    required Duration duration,
+    required String outputPath,
+  }) async {
+    final arguments = <String>[
+      '-y',
+      '-ss',
+      _durationSeconds(start),
+      '-t',
+      _durationSeconds(duration),
+      '-threads',
+      _decoderThreadCount,
+      '-i',
+      filePath,
+      '-map',
+      '0:v:0',
+      '-map',
+      '0:a?',
+      ..._h264VideoEncodingArguments(),
+      ..._aacAudioEncodingArguments(),
+      '-movflags',
+      '+faststart',
+      '-avoid_negative_ts',
+      'make_zero',
+      outputPath,
+    ];
+    final session = await FFmpegKit.executeWithArguments(arguments);
+    final returnCode = await session.getReturnCode();
+    if (!ReturnCode.isSuccess(returnCode)) {
+      final output = await session.getOutput();
+      throw VideoExportException(
+        'Trimmed video export failed: ${output ?? 'Unknown FFmpeg error'}',
+      );
     }
   }
 

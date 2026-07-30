@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:video_player/video_player.dart';
 
 import 'models.dart';
+import 'services/system_dialog_service.dart';
 import 'services/video_export_service.dart';
 
 class VideoTrimResult {
@@ -37,6 +39,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
   static const double _playButtonWidth = 58;
   static const double _timelineGap = 0;
   static const double _trimHandleWidth = 20;
+  static const double _timelineRailThickness = 4;
+  static const SystemDialogService _dialogService = SystemDialogService();
 
   VideoPlayerController? _controller;
   List<String> _thumbnailPaths = const <String>[];
@@ -45,6 +49,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
   late RangeValues _selection;
   double _positionMilliseconds = 0;
   bool _isLoading = true;
+  bool _isExporting = false;
   _TimelineDragTarget? _activeDragTarget;
 
   double get _sourceMilliseconds => widget.clip.fullDuration.inMilliseconds
@@ -73,7 +78,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       controller = VideoPlayerController.file(File(widget.clip.path));
       await controller.initialize();
       await controller.setLooping(false);
-      await controller.setVolume(0);
+      await controller.setVolume(1);
       await controller.seekTo(Duration(milliseconds: _selection.start.round()));
       controller.addListener(_handleControllerChanged);
 
@@ -104,6 +109,13 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
         filePath: widget.clip.path,
         duration: widget.clip.fullDuration,
         count: _thumbnailCount,
+        onProgress: (paths) {
+          if (mounted) {
+            setState(() {
+              _thumbnailPaths = paths;
+            });
+          }
+        },
       );
       if (!mounted) {
         await result.dispose();
@@ -115,6 +127,54 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       });
     } catch (_) {
       // The trimmer remains usable with a neutral timeline if extraction fails.
+    }
+  }
+
+  Future<void> _exportTrimmedVideo() async {
+    if (_isExporting) {
+      return;
+    }
+    final outputPath = await _dialogService.pickSavePath(
+      format: ExportFormat.mp4,
+      suggestedName:
+          '${p.basenameWithoutExtension(widget.clip.path)}_trimmed.mp4',
+    );
+    if (outputPath == null || !mounted) {
+      return;
+    }
+
+    final selectedDuration = Duration(
+      milliseconds: (_selection.end - _selection.start).round(),
+    );
+    setState(() {
+      _isExporting = true;
+    });
+    try {
+      await widget.exportService.exportTrimmedVideo(
+        filePath: widget.clip.path,
+        start: Duration(milliseconds: _selection.start.round()),
+        duration: selectedDuration,
+        outputPath: outputPath,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isExporting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Exported ${p.basename(outputPath)}')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isExporting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to export trimmed video: $error')),
+      );
     }
   }
 
@@ -155,12 +215,16 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
     await controller.play();
   }
 
-  Future<void> _seek(double milliseconds) async {
+  Future<void> _seekPreservingPlayback(double milliseconds) async {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) {
       return;
     }
+    final wasPlaying = controller.value.isPlaying;
     await controller.seekTo(Duration(milliseconds: milliseconds.round()));
+    if (wasPlaying && !controller.value.isPlaying) {
+      await controller.play();
+    }
   }
 
   void _updateSelection(RangeValues values) {
@@ -179,8 +243,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       _selection = selection;
       _positionMilliseconds = _positionMilliseconds.clamp(start, end);
     });
-    unawaited(_controller?.pause());
-    unawaited(_seek(_positionMilliseconds));
+    unawaited(_seekPreservingPlayback(_positionMilliseconds));
   }
 
   double _timelineContentWidth(double width) {
@@ -237,8 +300,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       setState(() {
         _positionMilliseconds = position;
       });
-      unawaited(_controller?.pause());
-      unawaited(_seek(position));
+      unawaited(_seekPreservingPlayback(position));
       return;
     }
 
@@ -259,8 +321,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
         _selection = RangeValues(start, start + selectedDuration);
         _positionMilliseconds = position;
       });
-      unawaited(_controller?.pause());
-      unawaited(_seek(position));
+      unawaited(_seekPreservingPlayback(position));
       return;
     }
 
@@ -360,10 +421,16 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                                 ),
                               ),
                             )
-                          : Center(
-                              child: AspectRatio(
-                                aspectRatio: controller!.value.aspectRatio,
-                                child: VideoPlayer(controller),
+                          : FittedBox(
+                              fit: BoxFit.contain,
+                              child: SizedBox(
+                                width: widget.clip.width > 0
+                                    ? widget.clip.width.toDouble()
+                                    : controller!.value.size.width,
+                                height: widget.clip.height > 0
+                                    ? widget.clip.height.toDouble()
+                                    : controller!.value.size.height,
+                                child: VideoPlayer(controller!),
                               ),
                             ),
                     ),
@@ -400,21 +467,47 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
         ),
       ),
       actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton.icon(
-          onPressed: _controller == null
-              ? null
-              : () => Navigator.of(context).pop(
-                  VideoTrimResult(
-                    start: Duration(milliseconds: _selection.start.round()),
-                    end: Duration(milliseconds: _selection.end.round()),
-                  ),
-                ),
-          icon: const Icon(Icons.check_rounded),
-          label: const Text('Apply trim'),
+        SizedBox(
+          width: 760,
+          child: Row(
+            children: <Widget>[
+              OutlinedButton.icon(
+                onPressed: _controller == null || _isExporting
+                    ? null
+                    : _exportTrimmedVideo,
+                icon: _isExporting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.file_upload_outlined),
+                label: Text(_isExporting ? 'Exporting...' : 'Export'),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: _isExporting
+                    ? null
+                    : () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: _controller == null || _isExporting
+                    ? null
+                    : () => Navigator.of(context).pop(
+                        VideoTrimResult(
+                          start: Duration(
+                            milliseconds: _selection.start.round(),
+                          ),
+                          end: Duration(milliseconds: _selection.end.round()),
+                        ),
+                      ),
+                icon: const Icon(Icons.check_rounded),
+                label: const Text('Apply trim'),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -496,8 +589,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                                   Positioned(
                                     left: _trimHandleWidth,
                                     right: _trimHandleWidth,
-                                    top: 5,
-                                    bottom: 5,
+                                    top: _timelineRailThickness,
+                                    bottom: _timelineRailThickness,
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(6),
                                       child: _thumbnailPaths.isEmpty
@@ -506,23 +599,14 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                                             )
                                           : Row(
                                               children: <Widget>[
-                                                for (final path
-                                                    in _thumbnailPaths)
+                                                for (
+                                                  var index = 0;
+                                                  index < _thumbnailCount;
+                                                  index += 1
+                                                )
                                                   Expanded(
-                                                    child: Image.file(
-                                                      File(path),
-                                                      height: _timelineHeight,
-                                                      fit: BoxFit.cover,
-                                                      errorBuilder:
-                                                          (
-                                                            context,
-                                                            error,
-                                                            stackTrace,
-                                                          ) => const ColoredBox(
-                                                            color: Color(
-                                                              0xFF2B3038,
-                                                            ),
-                                                          ),
+                                                    child: _buildThumbnailSlot(
+                                                      index,
                                                     ),
                                                   ),
                                               ],
@@ -531,8 +615,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                                   ),
                                   Positioned(
                                     left: _trimHandleWidth,
-                                    top: 5,
-                                    bottom: 5,
+                                    top: _timelineRailThickness,
+                                    bottom: _timelineRailThickness,
                                     width: startBoundary - _trimHandleWidth,
                                     child: const ClipRRect(
                                       borderRadius: BorderRadius.horizontal(
@@ -546,8 +630,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                                   Positioned(
                                     left: endBoundary,
                                     right: _trimHandleWidth,
-                                    top: 5,
-                                    bottom: 5,
+                                    top: _timelineRailThickness,
+                                    bottom: _timelineRailThickness,
                                     child: const ClipRRect(
                                       borderRadius: BorderRadius.horizontal(
                                         right: Radius.circular(6),
@@ -568,7 +652,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                                           border: Border.symmetric(
                                             horizontal: BorderSide(
                                               color: Color(0xFFFFD400),
-                                              width: 5,
+                                              width: _timelineRailThickness,
                                             ),
                                           ),
                                         ),
@@ -595,12 +679,12 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                           ),
                         ),
                         Positioned(
-                          left: playheadX - 1,
+                          left: playheadX - 1.5,
                           top: -5,
                           bottom: -7,
                           child: IgnorePointer(
                             child: Container(
-                              width: 2,
+                              width: 3,
                               decoration: const BoxDecoration(
                                 color: Colors.white,
                                 boxShadow: <BoxShadow>[
@@ -622,6 +706,29 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildThumbnailSlot(int index) {
+    final path = index < _thumbnailPaths.length ? _thumbnailPaths[index] : null;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: SizedBox.expand(
+        key: ValueKey<String>(path ?? 'empty-thumbnail'),
+        child: path == null
+            ? const ColoredBox(color: Color(0xFF2B3038))
+            : Image.file(
+                File(path),
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                errorBuilder: (context, error, stackTrace) =>
+                    const ColoredBox(color: Color(0xFF2B3038)),
+              ),
+      ),
     );
   }
 
