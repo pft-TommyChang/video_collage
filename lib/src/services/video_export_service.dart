@@ -26,6 +26,20 @@ class VideoExportException implements Exception {
   String toString() => message;
 }
 
+class VideoThumbnailStrip {
+  const VideoThumbnailStrip({required this.directoryPath, required this.paths});
+
+  final String directoryPath;
+  final List<String> paths;
+
+  Future<void> dispose() async {
+    final directory = Directory(directoryPath);
+    if (await directory.exists()) {
+      await directory.delete(recursive: true);
+    }
+  }
+}
+
 class VideoExportService {
   VideoExportService();
 
@@ -39,6 +53,64 @@ class VideoExportService {
 
   Future<void> cancelActiveExport() {
     return FFmpegKit.cancel();
+  }
+
+  Future<VideoThumbnailStrip> generateVideoThumbnails({
+    required String filePath,
+    required Duration duration,
+    int count = 12,
+  }) async {
+    final safeCount = count.clamp(4, 24);
+    final durationSeconds = math.max(duration.inMilliseconds / 1000, 0.001);
+    final framesPerSecond = safeCount / durationSeconds;
+    final directory = await Directory.systemTemp.createTemp(
+      'video_collage_thumbnails_',
+    );
+    final outputPattern = p.join(directory.path, 'thumb_%03d.jpg');
+
+    try {
+      final session = await FFmpegKit.executeWithArguments(<String>[
+        '-y',
+        '-threads',
+        _decoderThreadCount,
+        '-i',
+        filePath,
+        '-vf',
+        'fps=${framesPerSecond.toStringAsFixed(8)},scale=180:-2:flags=lanczos',
+        '-frames:v',
+        '$safeCount',
+        '-q:v',
+        '4',
+        outputPattern,
+      ]);
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode)) {
+        final output = await session.getOutput();
+        throw VideoExportException(
+          'Thumbnail extraction failed: ${output ?? 'Unknown FFmpeg error'}',
+        );
+      }
+
+      final paths =
+          directory
+              .listSync()
+              .whereType<File>()
+              .map((file) => file.path)
+              .where((path) => p.extension(path).toLowerCase() == '.jpg')
+              .toList()
+            ..sort();
+      if (paths.isEmpty) {
+        throw const VideoExportException(
+          'Thumbnail extraction produced no frames.',
+        );
+      }
+      return VideoThumbnailStrip(directoryPath: directory.path, paths: paths);
+    } catch (_) {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+      rethrow;
+    }
   }
 
   Future<VideoClipInfo> probeMedia(String filePath) async {
@@ -349,7 +421,7 @@ class VideoExportService {
                   '-i',
                   entry.clip.path,
                 ]
-              : _singleThreadedInputArguments(entry.clip.path),
+              : _videoInputArguments(entry.clip),
         for (final overlay in labelOverlays) ...<String>[
           '-loop',
           '1',
@@ -810,7 +882,7 @@ class VideoExportService {
                     path: entry.clip.path,
                     durationSeconds: segmentDurationSeconds,
                   )
-                : _singleThreadedInputArguments(entry.clip.path),
+                : _videoInputArguments(entry.clip),
           for (final overlay in segmentLabelOverlays) ...<String>[
             '-loop',
             '1',
@@ -1412,6 +1484,22 @@ class VideoExportService {
 
   List<String> _singleThreadedInputArguments(String path) {
     return <String>['-threads', _decoderThreadCount, '-i', path];
+  }
+
+  List<String> _videoInputArguments(VideoClipInfo clip) {
+    if (!clip.isTrimmed) {
+      return _singleThreadedInputArguments(clip.path);
+    }
+    return <String>[
+      '-ss',
+      _durationSeconds(clip.trimStart),
+      '-t',
+      _durationSeconds(clip.duration),
+      '-threads',
+      _decoderThreadCount,
+      '-i',
+      clip.path,
+    ];
   }
 
   List<String> _h264VideoEncodingArguments() {

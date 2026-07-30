@@ -12,6 +12,7 @@ import 'models.dart';
 import 'services/editor_settings_store.dart';
 import 'services/system_dialog_service.dart';
 import 'services/video_export_service.dart';
+import 'video_trimmer_dialog.dart';
 
 const _aspectPresets = <AspectRatioPreset>[
   AspectRatioPreset(label: '9:21', widthFactor: 9, heightFactor: 21),
@@ -1604,6 +1605,11 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                               onTap: () => unawaited(
                                                 _toggleClipActive(clip),
                                               ),
+                                              onTrim: clip.isVideo
+                                                  ? () => unawaited(
+                                                      _openVideoTrimmer(clip),
+                                                    )
+                                                  : null,
                                               onEditLabel: () => unawaited(
                                                 _editClipTitle(clip),
                                               ),
@@ -2391,6 +2397,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                                       _pickMediaForSlot(
                                                                         index,
                                                                       )
+                                                                : clip.isVideo
+                                                                ? () => unawaited(
+                                                                    _openVideoTrimmer(
+                                                                      clip,
+                                                                    ),
+                                                                  )
                                                                 : null,
                                                             index: index,
                                                             backgroundColor:
@@ -2792,9 +2804,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   Duration _lastFramePosition(VideoClipInfo clip) {
     final durationMs = clip.duration.inMilliseconds;
     if (durationMs <= 34) {
-      return Duration.zero;
+      return clip.trimStart;
     }
-    return Duration(milliseconds: durationMs - 34);
+    return clip.trimStart + Duration(milliseconds: durationMs - 34);
   }
 
   Future<void> _seekControllerIfNeeded(
@@ -2876,7 +2888,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         await controller.pause();
         final target = totalDuration >= entry.clip.duration
             ? _lastFramePosition(entry.clip)
-            : totalDuration;
+            : entry.clip.trimStart + totalDuration;
         await _seekControllerIfNeeded(controller, target);
       }
       return;
@@ -2889,7 +2901,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
       final clip = entry.clip;
       final isClipFinished = elapsed >= clip.duration;
-      final target = isClipFinished ? _lastFramePosition(clip) : elapsed;
+      final target = isClipFinished
+          ? _lastFramePosition(clip)
+          : clip.trimStart + elapsed;
 
       await controller.setLooping(false);
       await controller.setVolume(
@@ -3017,7 +3031,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
         final clipOrder = sequentialOrder[clip.clip.path];
         if (clip.clip.path == activeClipPath) {
-          await _seekControllerIfNeeded(controller, activeOffset);
+          await _seekControllerIfNeeded(
+            controller,
+            clip.clip.trimStart + activeOffset,
+          );
           if (_isPreviewPlaying) {
             await controller.play();
           } else {
@@ -3033,7 +3050,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
             _lastFramePosition(clip.clip),
           );
         } else {
-          await _seekControllerIfNeeded(controller, Duration.zero);
+          await _seekControllerIfNeeded(controller, clip.clip.trimStart);
         }
       }
     } finally {
@@ -3174,6 +3191,59 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
     }
     return false;
+  }
+
+  Future<void> _openVideoTrimmer(VideoClipInfo clip) async {
+    if (!clip.isVideo ||
+        _loadingClipPaths.contains(clip.path) ||
+        _clipErrors.containsKey(clip.path) ||
+        clip.fullDuration <= Duration.zero) {
+      return;
+    }
+
+    if (_isPreviewPlaying) {
+      await _setPreviewPlayback(false);
+    }
+    final controller = _controllers[clip.path];
+    await controller?.pause();
+    if (!mounted) {
+      return;
+    }
+
+    final result = await showDialog<VideoTrimResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) =>
+          VideoTrimmerDialog(clip: clip, exportService: _exportService),
+    );
+    if (result == null || !mounted) {
+      await _syncPreviewPlaybackMode();
+      return;
+    }
+
+    final index = _clips.indexWhere((candidate) => candidate.path == clip.path);
+    if (index < 0) {
+      return;
+    }
+    final trimmedDuration = result.end - result.start;
+    setState(() {
+      final current = _clips[index];
+      _clips[index] = current.copyWith(
+        duration: trimmedDuration,
+        sourceDuration: current.fullDuration,
+        trimStart: result.start,
+      );
+      _parallelPreviewElapsed = Duration.zero;
+      _parallelPreviewStartedAt = null;
+      _sequentialPreviewElapsed = Duration.zero;
+      _sequentialPreviewStartedAt = null;
+      _activeSequentialClipPath = null;
+      _statusMessage = _clips[index].isTrimmed
+          ? 'Trimmed ${current.name} to ${formatDuration(trimmedDuration)}.'
+          : 'Reset trim for ${current.name}.';
+    });
+    await controller?.seekTo(result.start);
+    await _syncPreviewPlaybackMode();
   }
 
   Future<void> _toggleClipActive(VideoClipInfo clip) async {
@@ -3694,7 +3764,26 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
           return;
         }
         final current = _clips[currentIndex];
-        _clips[currentIndex] = refreshed.copyWith(name: current.name);
+        if (!current.isTrimmed) {
+          _clips[currentIndex] = refreshed.copyWith(name: current.name);
+          return;
+        }
+        final sourceDuration = refreshed.duration;
+        final trimStart = current.trimStart < sourceDuration
+            ? current.trimStart
+            : Duration.zero;
+        final requestedEnd = current.trimEnd < sourceDuration
+            ? current.trimEnd
+            : sourceDuration;
+        final trimmedDuration = requestedEnd > trimStart
+            ? requestedEnd - trimStart
+            : sourceDuration;
+        _clips[currentIndex] = refreshed.copyWith(
+          name: current.name,
+          duration: trimmedDuration,
+          sourceDuration: sourceDuration,
+          trimStart: trimStart,
+        );
       });
     } catch (_) {
       // Keep the existing metadata if refresh fails.
@@ -4377,6 +4466,7 @@ class _ClipListTile extends StatelessWidget {
     required this.isLoading,
     required this.errorMessage,
     required this.onTap,
+    required this.onTrim,
     required this.onEditLabel,
     required this.onRemove,
   });
@@ -4387,6 +4477,7 @@ class _ClipListTile extends StatelessWidget {
   final bool isLoading;
   final String? errorMessage;
   final VoidCallback onTap;
+  final VoidCallback? onTrim;
   final VoidCallback onEditLabel;
   final VoidCallback onRemove;
 
@@ -4496,51 +4587,79 @@ class _ClipListTile extends StatelessWidget {
       controller: controller,
     );
 
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        borderRadius: borderRadius,
-        border: Border.all(color: inactiveBorderColor, width: 1.25),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            if (controller != null &&
-                controller!.value.isInitialized &&
-                previewVideoSize != null)
-              FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: previewVideoSize.width,
-                  height: previewVideoSize.height,
-                  child: VideoPlayer(controller!),
-                ),
-              )
-            else if (!isLoading && errorMessage == null && clip.isPhoto)
-              Image.file(
-                File(clip.path),
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return _buildThumbnailFallback();
-                },
-              )
-            else if (isLoading)
-              const Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2.2),
-                ),
-              )
-            else
-              _buildThumbnailFallback(),
-          ],
+    final thumbnail = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTrim,
+      child: MouseRegion(
+        cursor: onTrim == null ? MouseCursor.defer : SystemMouseCursors.click,
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+            border: Border.all(color: inactiveBorderColor, width: 1.25),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                if (controller != null &&
+                    controller!.value.isInitialized &&
+                    previewVideoSize != null)
+                  FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: previewVideoSize.width,
+                      height: previewVideoSize.height,
+                      child: VideoPlayer(controller!),
+                    ),
+                  )
+                else if (!isLoading && errorMessage == null && clip.isPhoto)
+                  Image.file(
+                    File(clip.path),
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return _buildThumbnailFallback();
+                    },
+                  )
+                else if (isLoading)
+                  const Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    ),
+                  )
+                else
+                  _buildThumbnailFallback(),
+                if (clip.isVideo)
+                  const Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: Icon(
+                      Icons.content_cut_rounded,
+                      size: 15,
+                      color: Colors.white,
+                      shadows: <Shadow>[
+                        Shadow(
+                          color: Color(0xE6000000),
+                          blurRadius: 5,
+                          offset: Offset(0, 1),
+                        ),
+                        Shadow(color: Color(0x99000000), blurRadius: 2),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
+    return onTrim == null
+        ? thumbnail
+        : Tooltip(message: 'Trim video', child: thumbnail);
   }
 
   Widget _buildThumbnailFallback() {
@@ -4581,7 +4700,8 @@ class _ClipListTile extends StatelessWidget {
     if (clip.isPhoto) {
       return '${clip.width}×${clip.height} • $clipFormat';
     }
-    return '${clip.width}×${clip.height} • ${formatDuration(clip.duration)} • $clipFormat';
+    final trimLabel = clip.isTrimmed ? ' • trimmed' : '';
+    return '${clip.width}×${clip.height} • ${formatDuration(clip.duration)} • $clipFormat$trimLabel';
   }
 }
 

@@ -92,4 +92,45 @@ void main() {
     expect(style.backgroundColor, const Color(0xCC111111));
     expect(style.cornerRadius, 6);
   });
+
+  test('trimmed video exposes source range and selected duration', () {
+    const clip = VideoClipInfo(
+      path: '/tmp/example.mp4',
+      name: 'Example',
+      duration: Duration(seconds: 4),
+      width: 1920,
+      height: 1080,
+      hasAudio: true,
+      mediaKind: MediaKind.video,
+      sourceDuration: Duration(seconds: 10),
+      trimStart: Duration(seconds: 2),
+    );
+
+    expect(clip.fullDuration, const Duration(seconds: 10));
+    expect(clip.trimEnd, const Duration(seconds: 6));
+    expect(clip.isTrimmed, isTrue);
+  });
+
+  test('trimmed duration participates in export duration calculation', () {
+    const clip = VideoClipInfo(
+      path: '/tmp/example.mp4',
+      name: 'Example',
+      duration: Duration(seconds: 4),
+      width: 1920,
+      height: 1080,
+      hasAudio: true,
+      mediaKind: MediaKind.video,
+      sourceDuration: Duration(seconds: 10),
+      trimStart: Duration(seconds: 2),
+    );
+
+    expect(
+      exportDurationForClips(
+        const <CollageSlotClip>[CollageSlotClip(slotIndex: 0, clip: clip)],
+        ExportDurationMode.longest,
+        PlayMode.parallel,
+      ),
+      const Duration(seconds: 4),
+    );
+  });
 }

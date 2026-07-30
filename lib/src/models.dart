@@ -166,6 +166,8 @@ class VideoClipInfo {
     required this.height,
     required this.hasAudio,
     required this.mediaKind,
+    this.sourceDuration,
+    this.trimStart = Duration.zero,
   });
 
   final String path;
@@ -175,9 +177,15 @@ class VideoClipInfo {
   final int height;
   final bool hasAudio;
   final MediaKind mediaKind;
+  final Duration? sourceDuration;
+  final Duration trimStart;
 
   bool get isVideo => mediaKind == MediaKind.video;
   bool get isPhoto => mediaKind == MediaKind.photo;
+  Duration get fullDuration => sourceDuration ?? duration;
+  Duration get trimEnd => trimStart + duration;
+  bool get isTrimmed =>
+      isVideo && (trimStart > Duration.zero || duration < fullDuration);
 
   VideoClipInfo copyWith({
     String? path,
@@ -187,6 +195,8 @@ class VideoClipInfo {
     int? height,
     bool? hasAudio,
     MediaKind? mediaKind,
+    Duration? sourceDuration,
+    Duration? trimStart,
   }) {
     return VideoClipInfo(
       path: path ?? this.path,
@@ -196,6 +206,8 @@ class VideoClipInfo {
       height: height ?? this.height,
       hasAudio: hasAudio ?? this.hasAudio,
       mediaKind: mediaKind ?? this.mediaKind,
+      sourceDuration: sourceDuration ?? this.sourceDuration,
+      trimStart: trimStart ?? this.trimStart,
     );
   }
 }
