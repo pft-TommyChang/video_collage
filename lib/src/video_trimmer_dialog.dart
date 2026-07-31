@@ -18,6 +18,8 @@ class VideoTrimResult {
 
 enum _TimelineDragTarget { trimStart, trimEnd, selection, playhead }
 
+enum _TrimExportAction { openFile, openFolder }
+
 class VideoTrimmerDialog extends StatefulWidget {
   const VideoTrimmerDialog({
     super.key,
@@ -43,6 +45,9 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
   static const SystemDialogService _dialogService = SystemDialogService();
 
   VideoPlayerController? _controller;
+  Timer? _exportCompletionTimer;
+  Timer? _toastTimer;
+  OverlayEntry? _toastOverlayEntry;
   List<String> _thumbnailPaths = const <String>[];
   String? _thumbnailDirectory;
   String? _error;
@@ -50,6 +55,9 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
   double _positionMilliseconds = 0;
   bool _isLoading = true;
   bool _isExporting = false;
+  bool _showExportComplete = false;
+  double _exportProgress = 0;
+  String? _lastExportPath;
   _TimelineDragTarget? _activeDragTarget;
 
   double get _sourceMilliseconds => widget.clip.fullDuration.inMilliseconds
@@ -147,7 +155,10 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       milliseconds: (_selection.end - _selection.start).round(),
     );
     setState(() {
+      _exportCompletionTimer?.cancel();
       _isExporting = true;
+      _showExportComplete = false;
+      _exportProgress = 0;
     });
     try {
       await widget.exportService.exportTrimmedVideo(
@@ -155,26 +166,167 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
         start: Duration(milliseconds: _selection.start.round()),
         duration: selectedDuration,
         outputPath: outputPath,
+        hasAudio: widget.clip.hasAudio,
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() {
+              _exportProgress = progress.progress;
+            });
+          }
+        },
       );
       if (!mounted) {
         return;
       }
       setState(() {
         _isExporting = false;
+        _showExportComplete = true;
+        _exportProgress = 1;
+        _lastExportPath = outputPath;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Exported ${p.basename(outputPath)}')),
-      );
+      _exportCompletionTimer = Timer(const Duration(milliseconds: 1800), () {
+        if (mounted) {
+          setState(() {
+            _showExportComplete = false;
+            _exportProgress = 0;
+          });
+        }
+      });
+      _showToast('Exported ${p.basename(outputPath)}');
     } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
         _isExporting = false;
+        _showExportComplete = false;
+        _exportProgress = 0;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to export trimmed video: $error')),
-      );
+      final message =
+          error is VideoExportException && error.message == 'Export cancelled.'
+          ? error.message
+          : 'Unable to export trimmed video: $error';
+      _showToast(message);
+    }
+  }
+
+  Future<void> _handleExportButtonPressed() async {
+    if (_isExporting) {
+      await widget.exportService.cancelActiveExport();
+      return;
+    }
+    await _exportTrimmedVideo();
+  }
+
+  Future<void> _openLastExport({bool revealInFolder = false}) async {
+    final exportPath = _lastExportPath;
+    if (exportPath == null) {
+      return;
+    }
+    if (!await File(exportPath).exists()) {
+      _showToast('Export file no longer exists: $exportPath');
+      return;
+    }
+
+    final targetDescription = revealInFolder
+        ? 'folder: ${p.dirname(exportPath)}'
+        : 'export: $exportPath';
+    try {
+      final result = await Process.run('open', <String>[
+        if (revealInFolder) '-R',
+        exportPath,
+      ]);
+      if (result.exitCode != 0) {
+        _showToast('Unable to open $targetDescription');
+      }
+    } catch (_) {
+      _showToast('Unable to open $targetDescription');
+    }
+  }
+
+  void _showToast(String message) {
+    if (!mounted) {
+      return;
+    }
+    _toastTimer?.cancel();
+    _toastOverlayEntry?.remove();
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final entry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: 24,
+        right: 24,
+        bottom: 36,
+        child: IgnorePointer(
+          child: Center(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xE3171A21),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Text(
+                  message,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+    _toastOverlayEntry = entry;
+    _toastTimer = Timer(const Duration(seconds: 2), () {
+      _toastOverlayEntry?.remove();
+      _toastOverlayEntry = null;
+      _toastTimer = null;
+    });
+  }
+
+  Future<void> _showLastExportMenu(TapDownDetails details) async {
+    if (_isExporting || _lastExportPath == null) {
+      return;
+    }
+
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final position = details.globalPosition;
+    final action = await showMenu<_TrimExportAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(position.dx, position.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: const <PopupMenuEntry<_TrimExportAction>>[
+        PopupMenuItem<_TrimExportAction>(
+          value: _TrimExportAction.openFile,
+          child: Text('Open File'),
+        ),
+        PopupMenuItem<_TrimExportAction>(
+          value: _TrimExportAction.openFolder,
+          child: Text('Open Folder'),
+        ),
+      ],
+    );
+
+    switch (action) {
+      case _TrimExportAction.openFile:
+        await _openLastExport();
+      case _TrimExportAction.openFolder:
+        await _openLastExport(revealInFolder: true);
+      case null:
+        return;
     }
   }
 
@@ -348,6 +500,9 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
 
   @override
   void dispose() {
+    _exportCompletionTimer?.cancel();
+    _toastTimer?.cancel();
+    _toastOverlayEntry?.remove();
     final controller = _controller;
     controller?.removeListener(_handleControllerChanged);
     unawaited(controller?.dispose());
@@ -471,19 +626,36 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
           width: 760,
           child: Row(
             children: <Widget>[
-              OutlinedButton.icon(
-                onPressed: _controller == null || _isExporting
+              _TrimExportButton(
+                onPressed: _controller == null
                     ? null
-                    : _exportTrimmedVideo,
-                icon: _isExporting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.file_upload_outlined),
-                label: Text(_isExporting ? 'Exporting...' : 'Export'),
+                    : () => unawaited(_handleExportButtonPressed()),
+                isExporting: _isExporting,
+                showCompleted: _showExportComplete,
+                progress: _exportProgress,
               ),
+              if (_lastExportPath != null) ...<Widget>[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onSecondaryTapDown: _isExporting
+                      ? null
+                      : (details) => unawaited(_showLastExportMenu(details)),
+                  child: IconButton(
+                    onPressed: _isExporting
+                        ? null
+                        : () => unawaited(_openLastExport()),
+                    tooltip: 'Open File',
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    iconSize: 18,
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 32,
+                      height: 32,
+                    ),
+                  ),
+                ),
+              ],
               const Spacer(),
               TextButton(
                 onPressed: _isExporting
@@ -591,40 +763,32 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                                     right: _trimHandleWidth,
                                     top: _timelineRailThickness,
                                     bottom: _timelineRailThickness,
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(6),
-                                      child: _thumbnailPaths.isEmpty
-                                          ? const ColoredBox(
-                                              color: Color(0xFF2B3038),
-                                            )
-                                          : Row(
-                                              children: <Widget>[
-                                                for (
-                                                  var index = 0;
-                                                  index < _thumbnailCount;
-                                                  index += 1
-                                                )
-                                                  Expanded(
-                                                    child: _buildThumbnailSlot(
-                                                      index,
-                                                    ),
+                                    child: _thumbnailPaths.isEmpty
+                                        ? const ColoredBox(
+                                            color: Color(0xFF2B3038),
+                                          )
+                                        : Row(
+                                            children: <Widget>[
+                                              for (
+                                                var index = 0;
+                                                index < _thumbnailCount;
+                                                index += 1
+                                              )
+                                                Expanded(
+                                                  child: _buildThumbnailSlot(
+                                                    index,
                                                   ),
-                                              ],
-                                            ),
-                                    ),
+                                                ),
+                                            ],
+                                          ),
                                   ),
                                   Positioned(
                                     left: _trimHandleWidth,
                                     top: _timelineRailThickness,
                                     bottom: _timelineRailThickness,
                                     width: startBoundary - _trimHandleWidth,
-                                    child: const ClipRRect(
-                                      borderRadius: BorderRadius.horizontal(
-                                        left: Radius.circular(6),
-                                      ),
-                                      child: ColoredBox(
-                                        color: Color(0x99000000),
-                                      ),
+                                    child: const ColoredBox(
+                                      color: Color(0x99000000),
                                     ),
                                   ),
                                   Positioned(
@@ -632,13 +796,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                                     right: _trimHandleWidth,
                                     top: _timelineRailThickness,
                                     bottom: _timelineRailThickness,
-                                    child: const ClipRRect(
-                                      borderRadius: BorderRadius.horizontal(
-                                        right: Radius.circular(6),
-                                      ),
-                                      child: ColoredBox(
-                                        color: Color(0x99000000),
-                                      ),
+                                    child: const ColoredBox(
+                                      color: Color(0x99000000),
                                     ),
                                   ),
                                   Positioned(
@@ -751,6 +910,143 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
           child: Icon(icon, size: 20, color: const Color(0xFF171717)),
         ),
       ),
+    );
+  }
+}
+
+class _TrimExportButton extends StatelessWidget {
+  const _TrimExportButton({
+    required this.onPressed,
+    required this.isExporting,
+    required this.showCompleted,
+    required this.progress,
+  });
+
+  final VoidCallback? onPressed;
+  final bool isExporting;
+  final bool showCompleted;
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = Radius.circular(16);
+    const buttonWidth = 124.0;
+    // Matches the compact desktop height used by the adjacent Material
+    // TextButton and FilledButton controls.
+    const buttonHeight = 32.0;
+    final colorScheme = Theme.of(context).colorScheme;
+    final sharedButtonColor = colorScheme.primary;
+    final clampedProgress = progress.clamp(0.0, 1.0);
+    final displayProgress = showCompleted
+        ? 1.0
+        : (isExporting ? clampedProgress : 0.0);
+    final icon = showCompleted
+        ? Icons.check_rounded
+        : isExporting
+        ? Icons.stop_rounded
+        : Icons.file_upload_outlined;
+    final label = isExporting ? 'Exporting' : 'Export';
+
+    return SizedBox(
+      width: buttonWidth,
+      height: buttonHeight,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.all(radius),
+        child: Material(
+          color: isExporting
+              ? colorScheme.primaryContainer
+              : Colors.transparent,
+          child: InkWell(
+            onTap: onPressed,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: sharedButtonColor),
+                borderRadius: const BorderRadius.all(radius),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final fillWidth = constraints.maxWidth * displayProgress;
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: AnimatedContainer(
+                          // Animate progress only while exporting. Completion
+                          // resets directly to the outline state so the fill
+                          // never appears to run backwards.
+                          duration: isExporting
+                              ? const Duration(milliseconds: 240)
+                              : Duration.zero,
+                          curve: Curves.easeOutCubic,
+                          width: fillWidth,
+                          decoration: BoxDecoration(
+                            color: sharedButtonColor,
+                            borderRadius: BorderRadius.horizontal(
+                              left: radius,
+                              right: displayProgress >= 0.999
+                                  ? radius
+                                  : Radius.zero,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Center(
+                        child: _TrimExportButtonContent(
+                          icon: icon,
+                          label: label,
+                          color: sharedButtonColor,
+                        ),
+                      ),
+                      if (displayProgress > 0)
+                        ClipRect(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: displayProgress,
+                            child: Center(
+                              child: _TrimExportButtonContent(
+                                icon: icon,
+                                label: label,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrimExportButtonContent extends StatelessWidget {
+  const _TrimExportButtonContent({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color),
+        ),
+      ],
     );
   }
 }

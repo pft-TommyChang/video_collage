@@ -2397,12 +2397,6 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                                       _pickMediaForSlot(
                                                                         index,
                                                                       )
-                                                                : clip.isVideo
-                                                                ? () => unawaited(
-                                                                    _openVideoTrimmer(
-                                                                      clip,
-                                                                    ),
-                                                                  )
                                                                 : null,
                                                             index: index,
                                                             backgroundColor:
@@ -3514,7 +3508,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
       _isPreviewPlaying = shouldPlay;
       _statusMessage = shouldPlay
-          ? 'Preview playback started.'
+          ? 'Preview started. For reference only; playback may be choppy. '
+                'Export for final results.'
           : 'Preview playback paused.';
     });
     if (!shouldPlay) {

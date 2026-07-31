@@ -128,37 +128,76 @@ class VideoExportService {
     required Duration start,
     required Duration duration,
     required String outputPath,
+    required bool hasAudio,
+    void Function(VideoExportProgress progress)? onProgress,
   }) async {
+    final totalMilliseconds = math.max(1, duration.inMilliseconds);
+    var lastProgress = 0.0;
+
+    void reportProgress({
+      required double progress,
+      required int processedMilliseconds,
+      double? speed,
+    }) {
+      if (onProgress == null) {
+        return;
+      }
+      final normalized = progress.clamp(0.0, 1.0);
+      if (normalized < lastProgress) {
+        return;
+      }
+      lastProgress = normalized;
+      onProgress(
+        VideoExportProgress(
+          progress: normalized,
+          processed: Duration(milliseconds: processedMilliseconds),
+          total: duration,
+          speed: speed,
+        ),
+      );
+    }
+
     final arguments = <String>[
       '-y',
-      '-ss',
-      _durationSeconds(start),
-      '-t',
-      _durationSeconds(duration),
       '-threads',
       _decoderThreadCount,
       '-i',
       filePath,
+      '-ss',
+      _durationSeconds(start),
+      '-t',
+      _durationSeconds(duration),
       '-map',
       '0:v:0',
       '-map',
       '0:a?',
-      ..._h264VideoEncodingArguments(),
+      // Reset the trimmed streams to t=0 so video players can display the
+      // opening frame immediately instead of waiting for a positive timestamp.
+      '-vf',
+      'setpts=PTS-STARTPTS',
+      if (hasAudio) ...<String>['-af', 'asetpts=PTS-STARTPTS'],
+      ..._h264VideoEncodingArguments(includeFrameRate: false),
       ..._aacAudioEncodingArguments(),
       '-movflags',
       '+faststart',
-      '-avoid_negative_ts',
-      'make_zero',
       outputPath,
     ];
-    final session = await FFmpegKit.executeWithArguments(arguments);
-    final returnCode = await session.getReturnCode();
-    if (!ReturnCode.isSuccess(returnCode)) {
-      final output = await session.getOutput();
-      throw VideoExportException(
-        'Trimmed video export failed: ${output ?? 'Unknown FFmpeg error'}',
-      );
-    }
+    reportProgress(progress: 0, processedMilliseconds: 0);
+    await _runFfmpegCommand(
+      arguments: arguments,
+      onStatistics: (statistics) {
+        final processedMilliseconds = statistics.getTime().round().clamp(
+          0,
+          totalMilliseconds,
+        );
+        reportProgress(
+          progress: processedMilliseconds / totalMilliseconds,
+          processedMilliseconds: processedMilliseconds,
+          speed: statistics.getSpeed(),
+        );
+      },
+    );
+    reportProgress(progress: 1, processedMilliseconds: totalMilliseconds);
   }
 
   Future<VideoClipInfo> probeMedia(String filePath) async {
@@ -1550,10 +1589,9 @@ class VideoExportService {
     ];
   }
 
-  List<String> _h264VideoEncodingArguments() {
+  List<String> _h264VideoEncodingArguments({bool includeFrameRate = true}) {
     return <String>[
-      '-r',
-      '30',
+      if (includeFrameRate) ...<String>['-r', '30'],
       '-c:v',
       'libx264',
       '-preset',
