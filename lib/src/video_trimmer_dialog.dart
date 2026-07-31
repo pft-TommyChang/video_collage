@@ -20,6 +20,41 @@ enum _TimelineDragTarget { trimStart, trimEnd, selection, playhead }
 
 enum _TrimExportAction { openFile, openFolder }
 
+enum _TrimExportResolution {
+  original('Original', null),
+  p720('720p', 720),
+  p1080('1080p', 1080),
+  p1440('2K', 1440),
+  p2160('4K', 2160);
+
+  const _TrimExportResolution(this.label, this.shortEdge);
+
+  final String label;
+  final int? shortEdge;
+}
+
+enum _TrimExportFrameRate {
+  original('Original', null),
+  fps24('24 FPS', 24),
+  fps30('30 FPS', 30),
+  fps60('60 FPS', 60);
+
+  const _TrimExportFrameRate(this.label, this.framesPerSecond);
+
+  final String label;
+  final int? framesPerSecond;
+}
+
+class _TrimExportSettings {
+  const _TrimExportSettings({
+    required this.resolution,
+    required this.frameRate,
+  });
+
+  final _TrimExportResolution resolution;
+  final _TrimExportFrameRate frameRate;
+}
+
 class VideoTrimmerDialog extends StatefulWidget {
   const VideoTrimmerDialog({
     super.key,
@@ -58,6 +93,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
   bool _showExportComplete = false;
   double _exportProgress = 0;
   String? _lastExportPath;
+  _TrimExportResolution _exportResolution = _TrimExportResolution.original;
+  _TrimExportFrameRate _exportFrameRate = _TrimExportFrameRate.original;
   _TimelineDragTarget? _activeDragTarget;
 
   double get _sourceMilliseconds => widget.clip.fullDuration.inMilliseconds
@@ -154,6 +191,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
     final selectedDuration = Duration(
       milliseconds: (_selection.end - _selection.start).round(),
     );
+    final outputSize = _exportOutputSize();
     setState(() {
       _exportCompletionTimer?.cancel();
       _isExporting = true;
@@ -167,6 +205,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
         duration: selectedDuration,
         outputPath: outputPath,
         hasAudio: widget.clip.hasAudio,
+        outputSize: outputSize,
+        frameRate: _exportFrameRate.framesPerSecond,
         onProgress: (progress) {
           if (mounted) {
             setState(() {
@@ -215,7 +255,93 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       await widget.exportService.cancelActiveExport();
       return;
     }
+    final settings = await _showExportSettings();
+    if (settings == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _exportResolution = settings.resolution;
+      _exportFrameRate = settings.frameRate;
+    });
     await _exportTrimmedVideo();
+  }
+
+  Future<_TrimExportSettings?> _showExportSettings() {
+    var resolution = _exportResolution;
+    var frameRate = _exportFrameRate;
+    return showDialog<_TrimExportSettings>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Export settings'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _TrimExportChoiceSection<_TrimExportResolution>(
+                  title: 'Resolution',
+                  options: _TrimExportResolution.values,
+                  selected: resolution,
+                  labelFor: (option) => option.label,
+                  onSelected: (option) {
+                    setDialogState(() => resolution = option);
+                  },
+                ),
+                const SizedBox(height: 20),
+                _TrimExportChoiceSection<_TrimExportFrameRate>(
+                  title: 'FPS',
+                  options: _TrimExportFrameRate.values,
+                  selected: frameRate,
+                  labelFor: (option) => option.label,
+                  onSelected: (option) {
+                    setDialogState(() => frameRate = option);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                _TrimExportSettings(
+                  resolution: resolution,
+                  frameRate: frameRate,
+                ),
+              ),
+              icon: const Icon(Icons.file_upload_outlined),
+              label: const Text('Export'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  ({int width, int height})? _exportOutputSize() {
+    final shortEdge = _exportResolution.shortEdge;
+    final sourceWidth = widget.clip.width;
+    final sourceHeight = widget.clip.height;
+    if (shortEdge == null || sourceWidth <= 0 || sourceHeight <= 0) {
+      return null;
+    }
+
+    int even(int value) => value.isEven ? value : value + 1;
+    if (sourceWidth <= sourceHeight) {
+      return (
+        width: shortEdge,
+        height: even((sourceHeight * shortEdge / sourceWidth).round()),
+      );
+    }
+    return (
+      width: even((sourceWidth * shortEdge / sourceHeight).round()),
+      height: shortEdge,
+    );
   }
 
   Future<void> _openLastExport({bool revealInFolder = false}) async {
@@ -910,6 +1036,51 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
           child: Icon(icon, size: 20, color: const Color(0xFF171717)),
         ),
       ),
+    );
+  }
+}
+
+class _TrimExportChoiceSection<T> extends StatelessWidget {
+  const _TrimExportChoiceSection({
+    required this.title,
+    required this.options,
+    required this.selected,
+    required this.labelFor,
+    required this.onSelected,
+  });
+
+  final String title;
+  final List<T> options;
+  final T selected;
+  final String Function(T option) labelFor;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            for (final option in options)
+              ChoiceChip(
+                label: Text(labelFor(option)),
+                selected: selected == option,
+                showCheckmark: false,
+                onSelected: (_) => onSelected(option),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

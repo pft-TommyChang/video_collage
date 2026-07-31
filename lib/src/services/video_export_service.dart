@@ -129,6 +129,8 @@ class VideoExportService {
     required Duration duration,
     required String outputPath,
     required bool hasAudio,
+    ({int width, int height})? outputSize,
+    int? frameRate,
     void Function(VideoExportProgress progress)? onProgress,
   }) async {
     final totalMilliseconds = math.max(1, duration.inMilliseconds);
@@ -157,6 +159,11 @@ class VideoExportService {
       );
     }
 
+    final videoFilters = <String>[
+      'setpts=PTS-STARTPTS',
+      if (outputSize != null)
+        'scale=${outputSize.width}:${outputSize.height}:flags=lanczos',
+    ];
     final arguments = <String>[
       '-y',
       '-threads',
@@ -174,9 +181,9 @@ class VideoExportService {
       // Reset the trimmed streams to t=0 so video players can display the
       // opening frame immediately instead of waiting for a positive timestamp.
       '-vf',
-      'setpts=PTS-STARTPTS',
+      videoFilters.join(','),
       if (hasAudio) ...<String>['-af', 'asetpts=PTS-STARTPTS'],
-      ..._h264VideoEncodingArguments(includeFrameRate: false),
+      ..._h264VideoEncodingArguments(frameRate: frameRate),
       ..._aacAudioEncodingArguments(),
       '-movflags',
       '+faststart',
@@ -1589,9 +1596,9 @@ class VideoExportService {
     ];
   }
 
-  List<String> _h264VideoEncodingArguments({bool includeFrameRate = true}) {
+  List<String> _h264VideoEncodingArguments({int? frameRate = 30}) {
     return <String>[
-      if (includeFrameRate) ...<String>['-r', '30'],
+      if (frameRate != null) ...<String>['-r', '$frameRate'],
       '-c:v',
       'libx264',
       '-preset',
