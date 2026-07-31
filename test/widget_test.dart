@@ -132,23 +132,76 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('reset all asks for confirmation', (WidgetTester tester) async {
+  testWidgets('reset options can keep or remove loaded media', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    const mediaOpenChannel = MethodChannel('video_collage/media_open');
+    final mediaPath = p.join(
+      Directory.current.path,
+      'macos',
+      'Runner',
+      'Assets.xcassets',
+      'AppIcon.appiconset',
+      'app_icon_32.png',
+    );
+    var didConsumeMedia = false;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      mediaOpenChannel,
+      (call) async {
+        if (call.method != 'consumePendingMediaFiles' || didConsumeMedia) {
+          return <String>[];
+        }
+        didConsumeMedia = true;
+        return <String>[mediaPath];
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        mediaOpenChannel,
+        null,
+      );
+    });
+
     await tester.pumpWidget(const VideoCollageApp());
-    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 30; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.textContaining('1 loaded').evaluate().isNotEmpty) {
+        break;
+      }
+    }
 
     await tester.tap(find.byTooltip('Reset all'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Reset everything?'), findsOneWidget);
+    expect(find.text('What would you like to reset?'), findsOneWidget);
     expect(
-      find.textContaining('History and exported files will be kept.'),
+      find.text('Export history and exported files will be kept.'),
       findsOneWidget,
     );
+    expect(find.text('Reset Settings Only'), findsOneWidget);
+    expect(find.text('Reset Settings + Media'), findsOneWidget);
+
+    await tester.tap(find.text('Reset Settings Only'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('1 loaded • capacity 3'), findsOneWidget);
+    expect(find.text('Settings reset. Loaded media kept.'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Reset all'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Reset Settings + Media'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('0 loaded • capacity 3'), findsOneWidget);
+    expect(find.text('Settings reset and all media removed.'), findsOneWidget);
   });
 
   testWidgets('aspect ratio dropdown includes 9:21 and 21:9', (

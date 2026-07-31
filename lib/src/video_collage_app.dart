@@ -108,6 +108,8 @@ enum _LastExportAction { openFile, openFolder }
 
 enum _AutoLayoutMode { automatic, verticalStack, horizontalStrip }
 
+enum _ResetEverythingAction { settingsOnly, settingsAndMedia }
+
 const ExportDurationMode _defaultDurationMode = ExportDurationMode.longest;
 const ClipFitMode _defaultFitMode = ClipFitMode.cropCenter;
 const int _minOutputDimensionExclusive = 360;
@@ -1066,38 +1068,50 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   }
 
   Future<void> _confirmResetAll() async {
-    final shouldReset = await showDialog<bool>(
+    final action = await showDialog<_ResetEverythingAction>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Reset everything?'),
+          title: const Text('What would you like to reset?'),
           content: const Text(
-            'This will remove all loaded media and restore Layout, Label, and Output settings to their defaults. History and exported files will be kept.',
+            'Export history and exported files will be kept.',
           ),
           actions: <Widget>[
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancel'),
             ),
+            OutlinedButton(
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(_ResetEverythingAction.settingsOnly),
+              child: const Text('Reset Settings Only'),
+            ),
             FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Reset All'),
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(_ResetEverythingAction.settingsAndMedia),
+              child: const Text('Reset Settings + Media'),
             ),
           ],
         );
       },
     );
 
-    if (shouldReset == true && mounted) {
-      await _resetAll();
+    if (action != null && mounted) {
+      await _resetAll(
+        removeMedia: action == _ResetEverythingAction.settingsAndMedia,
+      );
     }
   }
 
-  Future<void> _resetAll() async {
-    for (final controller in _controllers.values) {
-      controller.dispose();
+  Future<void> _resetAll({required bool removeMedia}) async {
+    if (removeMedia) {
+      for (final controller in _controllers.values) {
+        controller.dispose();
+      }
+      _controllers.clear();
     }
-    _controllers.clear();
     _parallelPreviewTimer?.cancel();
     _parallelPreviewTimer = null;
     _sequentialPreviewTimer?.cancel();
@@ -1108,11 +1122,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     );
 
     setState(() {
-      _clips.clear();
-      _slotAssignments.clear();
+      if (removeMedia) {
+        _clips.clear();
+        _slotAssignments.clear();
+        _loadingClipPaths.clear();
+        _clipErrors.clear();
+      }
       _clipViewports.clear();
-      _loadingClipPaths.clear();
-      _clipErrors.clear();
       _editingViewportClipPath = null;
       _selectedAspect = _defaultAspectPreset;
       _selectedResolution = _defaultResolutionPreset;
@@ -1154,7 +1170,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _sequentialPreviewStartedAt = null;
       _activeSequentialClipPath = null;
       _externalDropHoverSlotIndex = null;
-      _statusMessage = 'Everything reset to defaults.';
+      if (!removeMedia) {
+        _backfillVisibleSlotsFromOverflow();
+      }
+      _statusMessage = removeMedia
+          ? 'Settings reset and all media removed.'
+          : 'Settings reset. Loaded media kept.';
     });
     _scheduleSettingsSave();
     await _syncPreviewPlaybackMode();
