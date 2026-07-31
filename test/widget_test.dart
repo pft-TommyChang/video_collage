@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:video_collage_mac/src/models.dart';
 import 'package:video_collage_mac/src/video_collage_app.dart';
@@ -48,6 +52,69 @@ void main() {
       ),
     );
     expect(lastExportButton.onPressed, isNull);
+  });
+
+  testWidgets('Finder-opened media is imported and auto-laid out', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const mediaOpenChannel = MethodChannel('video_collage/media_open');
+    final mediaPaths = <String>[
+      p.join(
+        Directory.current.path,
+        'macos',
+        'Runner',
+        'Assets.xcassets',
+        'AppIcon.appiconset',
+        'app_icon_32.png',
+      ),
+      p.join(
+        Directory.current.path,
+        'macos',
+        'Runner',
+        'Assets.xcassets',
+        'AppIcon.appiconset',
+        'app_icon_64.png',
+      ),
+    ];
+    var didConsumeMedia = false;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      mediaOpenChannel,
+      (call) async {
+        if (call.method != 'consumePendingMediaFiles' || didConsumeMedia) {
+          return <String>[];
+        }
+        didConsumeMedia = true;
+        return mediaPaths;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        mediaOpenChannel,
+        null,
+      );
+    });
+
+    await tester.pumpWidget(const VideoCollageApp());
+    for (var attempt = 0; attempt < 30; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.text('Auto layout picked 1×2 • 16:9.').evaluate().isNotEmpty) {
+        break;
+      }
+    }
+
+    expect(find.text('2 loaded • capacity 2'), findsOneWidget);
+    expect(find.text('Auto layout picked 1×2 • 16:9.'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 
   testWidgets('reset all asks for confirmation', (WidgetTester tester) async {

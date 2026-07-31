@@ -16,6 +16,44 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>mp4</string>
+				<string>mov</string>
+				<string>m4v</string>
+				<string>avi</string>
+				<string>mkv</string>
+				<string>jpg</string>
+				<string>jpeg</string>
+				<string>png</string>
+				<string>webp</string>
+				<string>heic</string>
+				<string>heif</string>
+			</array>
+			<key>CFBundleTypeName</key>
+			<string>Photo and Video Media</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.mpeg-4</string>
+				<string>com.apple.quicktime-movie</string>
+				<string>com.apple.m4v-video</string>
+				<string>public.avi</string>
+				<string>org.matroska.mkv</string>
+				<string>public.jpeg</string>
+				<string>public.png</string>
+				<string>org.webmproject.webp</string>
+				<string>public.heic</string>
+				<string>public.heif</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleVersion</key>

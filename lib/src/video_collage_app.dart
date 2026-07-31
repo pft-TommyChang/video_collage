@@ -148,6 +148,10 @@ class VideoCollageScreen extends StatefulWidget {
 }
 
 class _VideoCollageScreenState extends State<VideoCollageScreen> {
+  static const MethodChannel _mediaOpenChannel = MethodChannel(
+    'video_collage/media_open',
+  );
+
   final SystemDialogService _dialogService = const SystemDialogService();
   final EditorSettingsStore _settingsStore = const EditorSettingsStore();
   final VideoExportService _exportService = VideoExportService();
@@ -172,6 +176,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   OverlayEntry? _toastOverlayEntry;
   bool _isRestoringSettings = false;
   bool _isSyncingSequentialPreview = false;
+  bool _isConsumingOpenedMedia = false;
+  bool _shouldConsumeOpenedMediaAgain = false;
   int? _externalDropHoverSlotIndex;
   int? _lastPreviewProgressSecond;
   Duration _parallelPreviewElapsed = Duration.zero;
@@ -226,6 +232,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     _outputHeight = initialSize.$2;
     _widthController = TextEditingController(text: '$_outputWidth');
     _heightController = TextEditingController(text: '$_outputHeight');
+    _mediaOpenChannel.setMethodCallHandler(_handleMediaOpenMethodCall);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_consumeOpenedMediaFiles());
+    });
     unawaited(_loadAppVersion());
     unawaited(_restoreSettings());
     unawaited(_restoreExportHistory());
@@ -247,6 +257,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
   @override
   void dispose() {
+    _mediaOpenChannel.setMethodCallHandler(null);
     _settingsSaveDebounce?.cancel();
     _toastTimer?.cancel();
     _parallelPreviewTimer?.cancel();
@@ -259,6 +270,63 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  Future<Object?> _handleMediaOpenMethodCall(MethodCall call) async {
+    if (call.method != 'mediaFilesOpened') {
+      throw MissingPluginException('Unknown method ${call.method}');
+    }
+    await _consumeOpenedMediaFiles();
+    return null;
+  }
+
+  Future<void> _consumeOpenedMediaFiles() async {
+    if (_isConsumingOpenedMedia) {
+      _shouldConsumeOpenedMediaAgain = true;
+      return;
+    }
+
+    _isConsumingOpenedMedia = true;
+    try {
+      do {
+        _shouldConsumeOpenedMediaAgain = false;
+        final openedPaths = await _mediaOpenChannel.invokeListMethod<String>(
+          'consumePendingMediaFiles',
+        );
+        if (!mounted || openedPaths == null || openedPaths.isEmpty) {
+          continue;
+        }
+
+        final supportedPaths = openedPaths
+            .where(_isSupportedMediaPath)
+            .toList(growable: false);
+        if (supportedPaths.isEmpty) {
+          setState(() {
+            _statusMessage = 'The opened files are not supported media.';
+          });
+          continue;
+        }
+
+        final importedCount = await _importExternalMedia(
+          supportedPaths,
+          alreadyAddedMessage: 'Opened media was already added.',
+        );
+        if (importedCount > 0 && mounted) {
+          _autoLayout();
+        }
+      } while (_shouldConsumeOpenedMediaAgain);
+    } on MissingPluginException {
+      // The channel only exists in the macOS app.
+    } on PlatformException catch (error) {
+      if (mounted) {
+        setState(() {
+          _statusMessage =
+              'Unable to import opened media: ${error.message ?? error.code}';
+        });
+      }
+    } finally {
+      _isConsumingOpenedMedia = false;
+    }
   }
 
   @override
@@ -3353,7 +3421,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     }
 
     if (supportedPaths.length > 1) {
-      await _handleExternalMultiDrop(supportedPaths);
+      await _importExternalMedia(supportedPaths);
       return;
     }
 
@@ -3418,10 +3486,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       return;
     }
 
-    await _handleExternalMultiDrop(supportedPaths);
+    await _importExternalMedia(supportedPaths);
   }
 
-  Future<void> _handleExternalMultiDrop(List<String> paths) async {
+  Future<int> _importExternalMedia(
+    List<String> paths, {
+    String alreadyAddedMessage = 'Dropped media was already added.',
+  }) async {
     final uniquePaths = <String>[];
     final seenPaths = <String>{};
     for (final path in paths) {
@@ -3439,14 +3510,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     ).where((slotIndex) => !_slotAssignments.containsKey(slotIndex)).length;
 
     if (!mounted) {
-      return;
+      return 0;
     }
 
     if (uniquePaths.isEmpty) {
       setState(() {
-        _statusMessage = 'Dropped media was already added.';
+        _statusMessage = alreadyAddedMessage;
       });
-      return;
+      return 0;
     }
 
     setState(() {
@@ -3470,6 +3541,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     for (final path in uniquePaths) {
       await _loadClip(path);
     }
+    return uniquePaths.length;
   }
 
   List<String> _supportedMediaDropPaths(List<DropItem> items) {

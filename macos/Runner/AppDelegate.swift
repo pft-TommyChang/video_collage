@@ -6,6 +6,9 @@ import FlutterMacOS
 class AppDelegate: FlutterAppDelegate {
   private let mediaProbeChannelName = "video_collage/media_probe"
   private let mediaDialogChannelName = "video_collage/media_dialogs"
+  private let mediaOpenChannelName = "video_collage/media_open"
+  private var mediaOpenChannel: FlutterMethodChannel?
+  private var pendingOpenFilePaths: [String] = []
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
     guard let flutterViewController = mainFlutterWindow?.contentViewController as? FlutterViewController else {
@@ -21,6 +24,11 @@ class AppDelegate: FlutterAppDelegate {
       name: mediaDialogChannelName,
       binaryMessenger: flutterViewController.engine.binaryMessenger
     )
+    let openChannel = FlutterMethodChannel(
+      name: mediaOpenChannelName,
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    mediaOpenChannel = openChannel
 
     channel.setMethodCallHandler { [weak self] call, result in
       guard call.method == "probeVideoMetadata" else {
@@ -52,7 +60,30 @@ class AppDelegate: FlutterAppDelegate {
       self?.pickMediaWithMetadata(result: result)
     }
 
+    openChannel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "consumePendingMediaFiles" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+
+      let paths = self?.pendingOpenFilePaths ?? []
+      self?.pendingOpenFilePaths.removeAll()
+      result(paths)
+    }
+
     super.applicationDidFinishLaunching(notification)
+  }
+
+  override func application(_ sender: NSApplication, openFiles filenames: [String]) {
+    queueOpenedMediaFiles(filenames, application: sender)
+    sender.reply(toOpenOrPrint: .success)
+  }
+
+  override func application(_ application: NSApplication, open urls: [URL]) {
+    queueOpenedMediaFiles(
+      urls.filter(\.isFileURL).map(\.path),
+      application: application
+    )
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -61,6 +92,19 @@ class AppDelegate: FlutterAppDelegate {
 
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     return true
+  }
+
+  private func queueOpenedMediaFiles(_ paths: [String], application: NSApplication) {
+    for path in paths where !pendingOpenFilePaths.contains(path) {
+      pendingOpenFilePaths.append(path)
+    }
+
+    guard !paths.isEmpty else {
+      return
+    }
+    mainFlutterWindow?.makeKeyAndOrderFront(nil)
+    application.activate(ignoringOtherApps: true)
+    mediaOpenChannel?.invokeMethod("mediaFilesOpened", arguments: nil)
   }
 
   private func probeVideoMetadata(path: String, result: @escaping FlutterResult) {
