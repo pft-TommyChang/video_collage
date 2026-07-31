@@ -16,6 +16,25 @@ void main() {
     expect(ClipFitMode.centerInside.previewFit, BoxFit.contain);
   });
 
+  test('visible area fraction reflects crop and inside fit modes', () {
+    expect(
+      visibleAreaFractionForFit(
+        fitMode: ClipFitMode.cropCenter,
+        sourceAspect: 9 / 16,
+        targetAspect: 16 / 9,
+      ),
+      closeTo(81 / 256, 0.000001),
+    );
+    expect(
+      visibleAreaFractionForFit(
+        fitMode: ClipFitMode.centerInside,
+        sourceAspect: 9 / 16,
+        targetAspect: 16 / 9,
+      ),
+      1,
+    );
+  });
+
   test('bottom center label padding only affects the bottom edge', () {
     final style = clipLabelStyleForOverlayScale(
       1,

@@ -99,6 +99,21 @@ enum ClipFitMode {
   };
 }
 
+double visibleAreaFractionForFit({
+  required ClipFitMode fitMode,
+  required double sourceAspect,
+  required double targetAspect,
+}) {
+  if (fitMode == ClipFitMode.centerInside) {
+    return 1;
+  }
+  if (sourceAspect <= 0 || targetAspect <= 0) {
+    return 0;
+  }
+  final aspectRatio = sourceAspect / targetAspect;
+  return (aspectRatio <= 1 ? aspectRatio : 1 / aspectRatio).clamp(0.0, 1.0);
+}
+
 enum ClipLabelDisplayMode {
   labelOnly,
   indexOnly,

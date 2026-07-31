@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:video_player/video_player.dart';
 
@@ -213,6 +214,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   List<ExportHistoryEntry> _exportHistory = const <ExportHistoryEntry>[];
   ExportHistoryEntry? _sessionLastExportEntry;
   String _lastExportDirectory = '';
+  String _appVersion = '…';
 
   ExportHistoryEntry? get _lastExportEntry => _sessionLastExportEntry;
 
@@ -224,8 +226,23 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     _outputHeight = initialSize.$2;
     _widthController = TextEditingController(text: '$_outputWidth');
     _heightController = TextEditingController(text: '$_outputHeight');
+    unawaited(_loadAppVersion());
     unawaited(_restoreSettings());
     unawaited(_restoreExportHistory());
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _appVersion = '${packageInfo.version} (${packageInfo.buildNumber})';
+      });
+    } catch (_) {
+      // Keep the header usable if package metadata is unavailable.
+    }
   }
 
   @override
@@ -1511,16 +1528,36 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
-                                      child: Text(
-                                        'Perfect Collage',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(
+                                            'Perfect Collage',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .headlineMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                          Text(
+                                            'Version $_appVersion',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.copyWith(
+                                                  color: const Color(
+                                                    0xFF697180,
+                                                  ),
+                                                  fontSize: 10,
+                                                  height: 1,
+                                                ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     const SizedBox(width: 8),
@@ -1537,7 +1574,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 20),
+                                const SizedBox(height: 12),
                                 _SectionCard(
                                   title: 'Media',
                                   subtitle:
@@ -1602,6 +1639,14 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                   .contains(clip.path),
                                               errorMessage:
                                                   _clipErrors[clip.path],
+                                              visibleAreaFraction:
+                                                  visibleAreaFractionForFit(
+                                                    fitMode: _selectedFitMode,
+                                                    sourceAspect:
+                                                        _clipAspectRatio(clip),
+                                                    targetAspect:
+                                                        previewCellAspectRatio,
+                                                  ),
                                               onTap: () => unawaited(
                                                 _toggleClipActive(clip),
                                               ),
@@ -4460,6 +4505,7 @@ class _ClipListTile extends StatelessWidget {
     required this.isUsed,
     required this.isLoading,
     required this.errorMessage,
+    required this.visibleAreaFraction,
     required this.onTap,
     required this.onTrim,
     required this.onEditLabel,
@@ -4471,6 +4517,7 @@ class _ClipListTile extends StatelessWidget {
   final bool isUsed;
   final bool isLoading;
   final String? errorMessage;
+  final double visibleAreaFraction;
   final VoidCallback onTap;
   final VoidCallback? onTrim;
   final VoidCallback onEditLabel;
@@ -4495,7 +4542,7 @@ class _ClipListTile extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
                 _buildThumbnail(),
                 const SizedBox(width: 12),
@@ -4541,6 +4588,13 @@ class _ClipListTile extends StatelessWidget {
                           color: errorMessage == null
                               ? const Color(0xFF697180)
                               : const Color(0xFFB42318),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Visible • ${(visibleAreaFraction * 100).round()}%',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFF697180),
                         ),
                       ),
                       if (errorMessage != null) ...<Widget>[
