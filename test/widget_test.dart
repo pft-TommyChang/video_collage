@@ -113,6 +113,21 @@ void main() {
     expect(find.text('2 loaded • capacity 2'), findsOneWidget);
     expect(find.text('Auto layout picked 1×2 • 16:9.'), findsOneWidget);
 
+    expect(find.byTooltip('Vertical Auto'), findsOneWidget);
+    expect(find.byTooltip('Horizontal Auto'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Vertical Auto'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 loaded • capacity 2'), findsOneWidget);
+    expect(find.text('Vertical Auto picked 2×1 • 9:16.'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Horizontal Auto'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 loaded • capacity 2'), findsOneWidget);
+    expect(find.text('Horizontal Auto picked 1×2 • 16:9.'), findsOneWidget);
+
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });

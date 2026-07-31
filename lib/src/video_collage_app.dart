@@ -106,6 +106,8 @@ const AudioMode _defaultAudioMode = AudioMode.firstClip;
 
 enum _LastExportAction { openFile, openFolder }
 
+enum _AutoLayoutMode { automatic, verticalStack, horizontalStrip }
+
 const ExportDurationMode _defaultDurationMode = ExportDurationMode.longest;
 const ClipFitMode _defaultFitMode = ClipFitMode.cropCenter;
 const int _minOutputDimensionExclusive = 360;
@@ -1296,7 +1298,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     });
   }
 
-  void _autoLayout() {
+  void _autoLayout({_AutoLayoutMode mode = _AutoLayoutMode.automatic}) {
     if (_clips.isEmpty) {
       return;
     }
@@ -1316,8 +1318,15 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     final dominantOrientation = _dominantOrientation(clipAspects);
     _AutoLayoutChoice? bestChoice;
 
-    for (var rows = 1; rows <= _maxGridDimension; rows++) {
-      for (var columns = 1; columns <= _maxGridDimension; columns++) {
+    final rowEnd = mode == _AutoLayoutMode.horizontalStrip
+        ? 1
+        : _maxGridDimension;
+    final columnEnd = mode == _AutoLayoutMode.verticalStack
+        ? 1
+        : _maxGridDimension;
+
+    for (var rows = 1; rows <= rowEnd; rows++) {
+      for (var columns = 1; columns <= columnEnd; columns++) {
         final capacity = rows * columns;
         if (capacity < clipCount) {
           continue;
@@ -1340,6 +1349,15 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     }
 
     if (bestChoice == null) {
+      final modeName = switch (mode) {
+        _AutoLayoutMode.automatic => 'Auto Layout',
+        _AutoLayoutMode.verticalStack => 'Vertical Auto',
+        _AutoLayoutMode.horizontalStrip => 'Horizontal Auto',
+      };
+      setState(() {
+        _statusMessage =
+            '$modeName supports up to $_maxGridDimension media items.';
+      });
       return;
     }
 
@@ -1354,8 +1372,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       _selectedAspect = resolvedChoice.aspectPreset;
       _setAppliedResolution(width: size.$1, height: size.$2);
       _backfillVisibleSlotsFromOverflow();
+      final modeName = switch (mode) {
+        _AutoLayoutMode.automatic => 'Auto layout',
+        _AutoLayoutMode.verticalStack => 'Vertical Auto',
+        _AutoLayoutMode.horizontalStrip => 'Horizontal Auto',
+      };
       _statusMessage =
-          'Auto layout picked ${resolvedChoice.rows}×${resolvedChoice.columns} • ${resolvedChoice.aspectPreset.label}.';
+          '$modeName picked ${resolvedChoice.rows}×${resolvedChoice.columns} • ${resolvedChoice.aspectPreset.label}.';
     });
   }
 
@@ -2301,6 +2324,44 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                     ),
                                     icon: const Icon(
                                       Icons.auto_fix_high,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  IconButton.outlined(
+                                    onPressed: _clips.isEmpty
+                                        ? null
+                                        : () => _autoLayout(
+                                            mode: _AutoLayoutMode.verticalStack,
+                                          ),
+                                    tooltip: 'Vertical Auto',
+                                    style: IconButton.styleFrom(
+                                      minimumSize: const Size(34, 34),
+                                      maximumSize: const Size(34, 34),
+                                    ),
+                                    icon: const RotatedBox(
+                                      quarterTurns: 1,
+                                      child: Icon(
+                                        Icons.view_column_outlined,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  IconButton.outlined(
+                                    onPressed: _clips.isEmpty
+                                        ? null
+                                        : () => _autoLayout(
+                                            mode:
+                                                _AutoLayoutMode.horizontalStrip,
+                                          ),
+                                    tooltip: 'Horizontal Auto',
+                                    style: IconButton.styleFrom(
+                                      minimumSize: const Size(34, 34),
+                                      maximumSize: const Size(34, 34),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.view_column_outlined,
                                       size: 18,
                                     ),
                                   ),
