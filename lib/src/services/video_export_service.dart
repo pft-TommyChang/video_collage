@@ -44,7 +44,7 @@ class VideoExportService {
   VideoExportService();
 
   static const String _decoderThreadCount = '1';
-  static const String _complexFilterThreadCount = '1';
+  static const String _complexFilterThreadCount = '4';
   static const String _encoderThreadCount = '4';
   static const MethodChannel _metadataChannel = MethodChannel(
     'video_collage/media_probe',
@@ -419,14 +419,16 @@ class VideoExportService {
       final filters = <String>[
         'color=c=${options.borderColor.ffmpegHex}:s=${options.outputWidth}x${options.outputHeight}:d=$targetDurationSeconds[base]',
       ];
+      final hasRoundedCornerMask = _addRoundedCornerMaskFilters(
+        filters: filters,
+        cellWidth: cellWidth,
+        cellHeight: cellHeight,
+        radius: options.tileCornerRadiusPx,
+        outputCount: slotClips.length,
+      );
 
       for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex++) {
         final clip = slotClips[inputIndex].clip;
-        final roundedCornerFilter = _roundedCornerFilter(
-          cellWidth: cellWidth,
-          cellHeight: cellHeight,
-          radius: options.tileCornerRadiusPx,
-        );
 
         if (clip.isPhoto) {
           filters.addAll(
@@ -470,8 +472,12 @@ class VideoExportService {
           decoratedClipName = labeledClipName;
         }
 
-        filters.add(
-          '[$decoratedClipName]${_filterChainFrom(roundedCornerFilter)}[v$inputIndex]',
+        _addRoundedCornerApplicationFilters(
+          filters: filters,
+          inputLabel: decoratedClipName,
+          outputLabel: 'v$inputIndex',
+          maskIndex: inputIndex,
+          hasMask: hasRoundedCornerMask,
         );
       }
 
@@ -636,14 +642,16 @@ class VideoExportService {
       final filters = <String>[
         'color=c=${options.borderColor.ffmpegHex}:s=${options.outputWidth}x${options.outputHeight}:d=1[base]',
       ];
+      final hasRoundedCornerMask = _addRoundedCornerMaskFilters(
+        filters: filters,
+        cellWidth: cellWidth,
+        cellHeight: cellHeight,
+        radius: options.tileCornerRadiusPx,
+        outputCount: slotClips.length,
+      );
 
       for (var inputIndex = 0; inputIndex < slotClips.length; inputIndex++) {
         final clip = slotClips[inputIndex].clip;
-        final roundedCornerFilter = _roundedCornerFilter(
-          cellWidth: cellWidth,
-          cellHeight: cellHeight,
-          radius: options.tileCornerRadiusPx,
-        );
 
         if (clip.isPhoto) {
           filters.addAll(
@@ -679,8 +687,12 @@ class VideoExportService {
           decoratedClipName = labeledClipName;
         }
 
-        filters.add(
-          '[$decoratedClipName]${_filterChainFrom(roundedCornerFilter)}[v$inputIndex]',
+        _addRoundedCornerApplicationFilters(
+          filters: filters,
+          inputLabel: decoratedClipName,
+          outputLabel: 'v$inputIndex',
+          maskIndex: inputIndex,
+          hasMask: hasRoundedCornerMask,
         );
       }
 
@@ -777,13 +789,6 @@ class VideoExportService {
     );
     try {
       final border = options.borderPx;
-      final roundedCornerFilter = _filterChainFrom(
-        _roundedCornerFilter(
-          cellWidth: cellWidth,
-          cellHeight: cellHeight,
-          radius: options.tileCornerRadiusPx,
-        ),
-      );
       final tilePositions = <(int x, int y)>[
         for (final slotClip in slotClips)
           (
@@ -836,6 +841,13 @@ class VideoExportService {
         final filters = <String>[
           'color=c=${options.borderColor.ffmpegHex}:s=${options.outputWidth}x${options.outputHeight}:d=$segmentDurationSeconds[base]',
         ];
+        final hasRoundedCornerMask = _addRoundedCornerMaskFilters(
+          filters: filters,
+          cellWidth: cellWidth,
+          cellHeight: cellHeight,
+          radius: options.tileCornerRadiusPx,
+          outputCount: slotClips.length,
+        );
 
         for (
           var inputIndex = 0;
@@ -845,9 +857,9 @@ class VideoExportService {
           final slotClip = slotClips[inputIndex];
           final videoOrder = videoOrderByPath[slotClip.clip.path];
           final tileLabel = 'tile$inputIndex';
+          final preparedTileLabel = 'prepared_$tileLabel';
           switch (slotClip.clip.mediaKind) {
             case MediaKind.photo:
-              final preparedTileLabel = 'prepared_$tileLabel';
               filters.addAll(
                 _scaledPhotoFilters(
                   fitMode: options.fitMode,
@@ -861,9 +873,6 @@ class VideoExportService {
                   outputLabel: preparedTileLabel,
                 ),
               );
-              filters.add(
-                '[$preparedTileLabel]$roundedCornerFilter[$tileLabel]',
-              );
             case MediaKind.video when inputIndex == activeInputIndex:
               filters.add(
                 _sequentialActiveVideoFilter(
@@ -874,8 +883,7 @@ class VideoExportService {
                   durationSeconds: segmentDurationSeconds,
                   cellWidth: cellWidth,
                   cellHeight: cellHeight,
-                  roundedCornerFilter: roundedCornerFilter,
-                  outputLabel: tileLabel,
+                  outputLabel: preparedTileLabel,
                 ),
               );
             case MediaKind.video
@@ -891,8 +899,7 @@ class VideoExportService {
                   durationSeconds: segmentDurationSeconds,
                   cellWidth: cellWidth,
                   cellHeight: cellHeight,
-                  roundedCornerFilter: roundedCornerFilter,
-                  outputLabel: tileLabel,
+                  outputLabel: preparedTileLabel,
                 ),
               );
             case MediaKind.video:
@@ -907,11 +914,17 @@ class VideoExportService {
                   durationSeconds: segmentDurationSeconds,
                   cellWidth: cellWidth,
                   cellHeight: cellHeight,
-                  roundedCornerFilter: roundedCornerFilter,
-                  outputLabel: tileLabel,
+                  outputLabel: preparedTileLabel,
                 ),
               );
           }
+          _addRoundedCornerApplicationFilters(
+            filters: filters,
+            inputLabel: preparedTileLabel,
+            outputLabel: tileLabel,
+            maskIndex: inputIndex,
+            hasMask: hasRoundedCornerMask,
+          );
         }
 
         var stageLabel = 'base';
@@ -1364,15 +1377,13 @@ class VideoExportService {
     required String durationSeconds,
     required int cellWidth,
     required int cellHeight,
-    required String roundedCornerFilter,
     required String outputLabel,
   }) {
     return '[$inputIndex:v]'
         'setpts=PTS-STARTPTS,'
         '${_videoTileScaleFilterChain(fitMode: fitMode, viewport: viewport, backgroundColor: backgroundColor, cellWidth: cellWidth, cellHeight: cellHeight)},'
         'trim=duration=$durationSeconds,'
-        'setpts=PTS-STARTPTS,'
-        '$roundedCornerFilter'
+        'setpts=PTS-STARTPTS'
         '[$outputLabel]';
   }
 
@@ -1386,7 +1397,6 @@ class VideoExportService {
     required String durationSeconds,
     required int cellWidth,
     required int cellHeight,
-    required String roundedCornerFilter,
     required String outputLabel,
   }) {
     final tailSampleSeconds = math.min(0.5, clipDuration.inMilliseconds / 1000);
@@ -1410,8 +1420,7 @@ class VideoExportService {
         'fps=30,'
         'tpad=stop_mode=clone:stop_duration=$durationSeconds,'
         'trim=duration=$durationSeconds,'
-        'setpts=PTS-STARTPTS,'
-        '$roundedCornerFilter'
+        'setpts=PTS-STARTPTS'
         '[$outputLabel]';
   }
 
@@ -1648,14 +1657,16 @@ class VideoExportService {
     return <String>['-c:a', 'aac', '-b:a', '192k'];
   }
 
-  String _roundedCornerFilter({
+  bool _addRoundedCornerMaskFilters({
+    required List<String> filters,
     required int cellWidth,
     required int cellHeight,
     required int radius,
+    required int outputCount,
   }) {
     final safeRadius = math.min(radius, math.min(cellWidth, cellHeight) ~/ 2);
-    if (safeRadius <= 0) {
-      return ',format=yuv420p';
+    if (safeRadius <= 0 || outputCount <= 0) {
+      return false;
     }
 
     final right = cellWidth - safeRadius - 1;
@@ -1667,7 +1678,52 @@ class VideoExportService {
         "if(lt(X,$safeRadius)*gt(Y,$bottom),if(lte((X-$safeRadius)^2+(Y-$bottom)^2,$radiusSquared),255,0),"
         "if(gt(X,$right)*gt(Y,$bottom),if(lte((X-$right)^2+(Y-$bottom)^2,$radiusSquared),255,0),255))))";
 
-    return ",format=yuva420p,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='$alphaExpression'";
+    final maskOutputs = <String>[
+      for (var index = 0; index < outputCount; index += 1)
+        '[corner_mask_$index]',
+    ].join();
+    final splitFilter = outputCount == 1 ? '' : 'split=$outputCount';
+    filters.add(
+      'nullsrc=s=${cellWidth}x$cellHeight,'
+      'format=gray,'
+      "geq=lum='$alphaExpression',"
+      'trim=end_frame=1,'
+      // Reuse the computed frame for the full export. mergeplanes ends when
+      // its mask input ends, so a single unlooped mask freezes video tiles.
+      'loop=loop=-1:size=1:start=0,'
+      'setpts=N/(30*TB)'
+      '${splitFilter.isEmpty ? '' : ',$splitFilter'}'
+      '$maskOutputs',
+    );
+    return true;
+  }
+
+  void _addRoundedCornerApplicationFilters({
+    required List<String> filters,
+    required String inputLabel,
+    required String outputLabel,
+    required int maskIndex,
+    required bool hasMask,
+  }) {
+    if (!hasMask) {
+      filters.add('[$inputLabel]format=yuv420p[$outputLabel]');
+      return;
+    }
+
+    final foregroundLabel = 'corner_foreground_$maskIndex';
+    filters
+      // Preserve the prior rounded-corner color conversion exactly while the
+      // expensive alpha expression is evaluated only once in the shared mask.
+      ..add('[$inputLabel]format=yuva420p,format=gbrap[$foregroundLabel]')
+      ..add(
+        '[$foregroundLabel][corner_mask_$maskIndex]'
+        'mergeplanes='
+        'map0s=0:map0p=0:'
+        'map1s=0:map1p=1:'
+        'map2s=0:map2p=2:'
+        'map3s=1:map3p=0:'
+        'format=gbrap[$outputLabel]',
+      );
   }
 }
 
@@ -1679,10 +1735,6 @@ const Set<String> _photoExtensions = <String>{
   '.heic',
   '.heif',
 };
-
-String _filterChainFrom(String filterChain) {
-  return filterChain.startsWith(',') ? filterChain.substring(1) : filterChain;
-}
 
 Uint8List _bytesFromByteData(ByteData byteData) {
   return byteData.buffer.asUint8List(
