@@ -16,6 +16,27 @@ void main() {
     expect(ClipFitMode.centerInside.previewFit, BoxFit.contain);
   });
 
+  test('clip viewport defaults to centered framing', () {
+    const viewport = ClipViewport();
+
+    expect(viewport.zoom, 1);
+    expect(viewport.focusX, 0.5);
+    expect(viewport.focusY, 0.5);
+    expect(viewport.previewAlignment, Alignment.center);
+    expect(viewport.isDefault, isTrue);
+  });
+
+  test('clip viewport clamps zoom and focus to supported bounds', () {
+    const viewport = ClipViewport();
+    final adjusted = viewport.copyWith(zoom: 8, focusX: -1, focusY: 2);
+
+    expect(adjusted.zoom, 4);
+    expect(adjusted.focusX, 0);
+    expect(adjusted.focusY, 1);
+    expect(adjusted.previewAlignment, const Alignment(-1, 1));
+    expect(adjusted.isDefault, isFalse);
+  });
+
   test('visible area fraction reflects crop and inside fit modes', () {
     expect(
       visibleAreaFractionForFit(

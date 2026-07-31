@@ -446,10 +446,38 @@ EdgeInsets clipLabelMarginForAlignment({
 }
 
 class CollageSlotClip {
-  const CollageSlotClip({required this.slotIndex, required this.clip});
+  const CollageSlotClip({
+    required this.slotIndex,
+    required this.clip,
+    this.viewport = const ClipViewport(),
+  });
 
   final int slotIndex;
   final VideoClipInfo clip;
+  final ClipViewport viewport;
+}
+
+class ClipViewport {
+  const ClipViewport({this.zoom = 1, this.focusX = 0.5, this.focusY = 0.5});
+
+  final double zoom;
+  final double focusX;
+  final double focusY;
+
+  bool get isDefault =>
+      (zoom - 1).abs() < 0.0001 &&
+      (focusX - 0.5).abs() < 0.0001 &&
+      (focusY - 0.5).abs() < 0.0001;
+
+  Alignment get previewAlignment => Alignment(focusX * 2 - 1, focusY * 2 - 1);
+
+  ClipViewport copyWith({double? zoom, double? focusX, double? focusY}) {
+    return ClipViewport(
+      zoom: (zoom ?? this.zoom).clamp(1.0, 4.0),
+      focusX: (focusX ?? this.focusX).clamp(0.0, 1.0),
+      focusY: (focusY ?? this.focusY).clamp(0.0, 1.0),
+    );
+  }
 }
 
 String formatDuration(Duration duration) {

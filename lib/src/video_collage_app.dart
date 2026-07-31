@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -158,6 +159,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
 
   final List<VideoClipInfo> _clips = <VideoClipInfo>[];
   final Map<int, String> _slotAssignments = <int, String>{};
+  final Map<String, ClipViewport> _clipViewports = <String, ClipViewport>{};
   final Map<String, VideoPlayerController> _controllers =
       <String, VideoPlayerController>{};
   final Set<String> _loadingClipPaths = <String>{};
@@ -185,6 +187,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   Duration _sequentialPreviewElapsed = Duration.zero;
   DateTime? _sequentialPreviewStartedAt;
   String? _activeSequentialClipPath;
+  String? _editingViewportClipPath;
 
   AspectRatioPreset _selectedAspect = _defaultAspectPreset;
   ResolutionPreset _selectedResolution = _defaultResolutionPreset;
@@ -990,6 +993,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     setState(() {
       _clips.removeWhere((candidate) => candidate.path == clip.path);
       _slotAssignments.removeWhere((_, path) => path == clip.path);
+      _clipViewports.remove(clip.path);
+      if (_editingViewportClipPath == clip.path) {
+        _editingViewportClipPath = null;
+      }
       _compactSlotAssignments();
       _backfillVisibleSlotsFromOverflow();
       _loadingClipPaths.remove(clip.path);
@@ -1018,10 +1025,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     setState(() {
       _clips.clear();
       _slotAssignments.clear();
+      _clipViewports.clear();
       _loadingClipPaths.clear();
       _clipErrors.clear();
       _isPreviewPlaying = false;
       _activeSequentialClipPath = null;
+      _editingViewportClipPath = null;
       _statusMessage = 'Cleared all media.';
     });
   }
@@ -1099,8 +1108,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     setState(() {
       _clips.clear();
       _slotAssignments.clear();
+      _clipViewports.clear();
       _loadingClipPaths.clear();
       _clipErrors.clear();
+      _editingViewportClipPath = null;
       _selectedAspect = _defaultAspectPreset;
       _selectedResolution = _defaultResolutionPreset;
       _selectedBorderColor = _defaultBorderColor;
@@ -1868,6 +1879,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                         onSelected: (mode) {
                                           _setStateAndSave(() {
                                             _selectedFitMode = mode;
+                                            if (mode !=
+                                                ClipFitMode.cropCenter) {
+                                              _editingViewportClipPath = null;
+                                            }
                                           });
                                         },
                                       ),
@@ -2546,6 +2561,51 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                                 _clipLabelPadding,
                                                             fitMode:
                                                                 _selectedFitMode,
+                                                            viewport:
+                                                                clip == null
+                                                                ? const ClipViewport()
+                                                                : _clipViewports[clip
+                                                                          .path] ??
+                                                                      const ClipViewport(),
+                                                            isEditingViewport:
+                                                                clip != null &&
+                                                                _editingViewportClipPath ==
+                                                                    clip.path,
+                                                            onEditViewport:
+                                                                clip == null
+                                                                ? null
+                                                                : () =>
+                                                                      _startViewportEditing(
+                                                                        clip,
+                                                                      ),
+                                                            onTrim:
+                                                                clip?.isVideo ==
+                                                                    true
+                                                                ? () => unawaited(
+                                                                    _openVideoTrimmer(
+                                                                      clip!,
+                                                                    ),
+                                                                  )
+                                                                : null,
+                                                            onViewportChanged:
+                                                                clip == null
+                                                                ? null
+                                                                : (
+                                                                    viewport,
+                                                                  ) => _updateClipViewport(
+                                                                    clip.path,
+                                                                    viewport,
+                                                                  ),
+                                                            onResetViewport:
+                                                                clip == null
+                                                                ? null
+                                                                : () => _resetClipViewport(
+                                                                    clip.path,
+                                                                  ),
+                                                            onFinishViewport:
+                                                                clip == null
+                                                                ? null
+                                                                : _finishViewportEditing,
                                                             isDragTarget:
                                                                 candidateData
                                                                     .isNotEmpty ||
@@ -2850,10 +2910,55 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
       final clip = _clipForSlot(slotIndex);
       if (clip != null) {
-        entries.add(CollageSlotClip(slotIndex: slotIndex, clip: clip));
+        entries.add(
+          CollageSlotClip(
+            slotIndex: slotIndex,
+            clip: clip,
+            viewport: _clipViewports[clip.path] ?? const ClipViewport(),
+          ),
+        );
       }
     }
     return entries;
+  }
+
+  void _startViewportEditing(VideoClipInfo clip) {
+    if (_selectedFitMode != ClipFitMode.cropCenter) {
+      _showToast('Switch Fit to Crop to adjust framing');
+      return;
+    }
+    setState(() {
+      _editingViewportClipPath = clip.path;
+      _statusMessage =
+          'Adjusting ${clip.name} • drag to pan, pinch or use the slider to zoom.';
+    });
+  }
+
+  void _finishViewportEditing() {
+    if (_editingViewportClipPath == null) {
+      return;
+    }
+    setState(() {
+      _editingViewportClipPath = null;
+      _statusMessage = 'Framing updated.';
+    });
+  }
+
+  void _updateClipViewport(String path, ClipViewport viewport) {
+    setState(() {
+      if (viewport.isDefault) {
+        _clipViewports.remove(path);
+      } else {
+        _clipViewports[path] = viewport;
+      }
+    });
+  }
+
+  void _resetClipViewport(String path) {
+    setState(() {
+      _clipViewports.remove(path);
+      _statusMessage = 'Framing reset.';
+    });
   }
 
   List<CollageSlotClip> _sequentialVideoSlotClips() {
@@ -4868,6 +4973,13 @@ class _PreviewTile extends StatelessWidget {
     required this.clipLabelVisualStyle,
     required this.clipLabelPadding,
     required this.fitMode,
+    required this.viewport,
+    required this.isEditingViewport,
+    required this.onEditViewport,
+    required this.onTrim,
+    required this.onViewportChanged,
+    required this.onResetViewport,
+    required this.onFinishViewport,
     required this.isDragTarget,
     required this.overlayLabelScale,
   });
@@ -4890,6 +5002,13 @@ class _PreviewTile extends StatelessWidget {
   final ClipLabelVisualStyle clipLabelVisualStyle;
   final double clipLabelPadding;
   final ClipFitMode fitMode;
+  final ClipViewport viewport;
+  final bool isEditingViewport;
+  final VoidCallback? onEditViewport;
+  final VoidCallback? onTrim;
+  final ValueChanged<ClipViewport>? onViewportChanged;
+  final VoidCallback? onResetViewport;
+  final VoidCallback? onFinishViewport;
   final bool isDragTarget;
   final double overlayLabelScale;
 
@@ -4949,12 +5068,27 @@ class _PreviewTile extends StatelessWidget {
       clipLabelVisualStyle: clipLabelVisualStyle,
       clipLabelPadding: clipLabelPadding,
       fitMode: fitMode,
+      viewport: viewport,
       isDragTarget: isDragTarget,
       overlayLabelScale: overlayLabelScale,
     );
+    final interactiveTile = clip == null
+        ? tile
+        : _ViewportControls(
+            clip: clip!,
+            viewport: viewport,
+            isEditing: isEditingViewport,
+            canEdit: fitMode == ClipFitMode.cropCenter,
+            onEdit: onEditViewport,
+            onTrim: onTrim,
+            onChanged: onViewportChanged,
+            onReset: onResetViewport,
+            onDone: onFinishViewport,
+            child: tile,
+          );
 
-    if (dragData == null) {
-      return tile;
+    if (dragData == null || isEditingViewport) {
+      return interactiveTile;
     }
 
     final dragFeedbackSize = _dragFeedbackSize();
@@ -4995,14 +5129,284 @@ class _PreviewTile extends StatelessWidget {
               clipLabelVisualStyle: clipLabelVisualStyle,
               clipLabelPadding: clipLabelPadding,
               fitMode: fitMode,
+              viewport: viewport,
               isDragTarget: false,
               overlayLabelScale: overlayLabelScale,
             ),
           ),
         ),
       ),
-      childWhenDragging: Opacity(opacity: 0.30, child: tile),
-      child: tile,
+      childWhenDragging: Opacity(opacity: 0.30, child: interactiveTile),
+      child: interactiveTile,
+    );
+  }
+}
+
+class _ViewportControls extends StatefulWidget {
+  const _ViewportControls({
+    required this.clip,
+    required this.viewport,
+    required this.isEditing,
+    required this.canEdit,
+    required this.onEdit,
+    required this.onTrim,
+    required this.onChanged,
+    required this.onReset,
+    required this.onDone,
+    required this.child,
+  });
+
+  final VideoClipInfo clip;
+  final ClipViewport viewport;
+  final bool isEditing;
+  final bool canEdit;
+  final VoidCallback? onEdit;
+  final VoidCallback? onTrim;
+  final ValueChanged<ClipViewport>? onChanged;
+  final VoidCallback? onReset;
+  final VoidCallback? onDone;
+  final Widget child;
+
+  @override
+  State<_ViewportControls> createState() => _ViewportControlsState();
+}
+
+class _ViewportControlsState extends State<_ViewportControls> {
+  bool _isHovered = false;
+  double _gestureStartZoom = 1;
+
+  void _updateZoom(double zoom) {
+    widget.onChanged?.call(widget.viewport.copyWith(zoom: zoom));
+  }
+
+  void _panBy(Offset delta, Size tileSize) {
+    if (tileSize.width <= 0 ||
+        tileSize.height <= 0 ||
+        widget.clip.width <= 0 ||
+        widget.clip.height <= 0) {
+      return;
+    }
+
+    final sourceAspect = widget.clip.width / widget.clip.height;
+    final targetAspect = tileSize.width / tileSize.height;
+    final baseWidth = sourceAspect >= targetAspect
+        ? tileSize.height * sourceAspect
+        : tileSize.width;
+    final baseHeight = sourceAspect >= targetAspect
+        ? tileSize.height
+        : tileSize.width / sourceAspect;
+    final overflowX = baseWidth * widget.viewport.zoom - tileSize.width;
+    final overflowY = baseHeight * widget.viewport.zoom - tileSize.height;
+    final focusX = overflowX > 0.5
+        ? widget.viewport.focusX - delta.dx / overflowX
+        : 0.5;
+    final focusY = overflowY > 0.5
+        ? widget.viewport.focusY - delta.dy / overflowY
+        : 0.5;
+    widget.onChanged?.call(
+      widget.viewport.copyWith(focusX: focusX, focusY: focusY),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controls = MouseRegion(
+      cursor: widget.isEditing
+          ? SystemMouseCursors.move
+          : SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tileSize = constraints.biggest;
+          final shortSide = tileSize.shortestSide;
+          final iconSize = (shortSide * 0.075).clamp(24.0, 58.0);
+          final controlPadding = (shortSide * 0.035).clamp(10.0, 28.0);
+          final useCompactEditingControls =
+              tileSize.width < 360 || tileSize.height < 180;
+
+          return Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              widget.child,
+              if (widget.isEditing)
+                Listener(
+                  onPointerSignal: (event) {
+                    if (event is PointerScrollEvent &&
+                        (HardwareKeyboard.instance.isMetaPressed ||
+                            HardwareKeyboard.instance.isControlPressed)) {
+                      _updateZoom(
+                        widget.viewport.zoom *
+                            (event.scrollDelta.dy > 0 ? 0.92 : 1.08),
+                      );
+                    }
+                  },
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onScaleStart: (_) {
+                      _gestureStartZoom = widget.viewport.zoom;
+                    },
+                    onScaleUpdate: (details) {
+                      if (details.pointerCount > 1 ||
+                          (details.scale - 1).abs() > 0.001) {
+                        _updateZoom(_gestureStartZoom * details.scale);
+                      } else {
+                        _panBy(details.focalPointDelta, tileSize);
+                      }
+                    },
+                    onDoubleTap: widget.onReset,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: const Color(0xFFFF7657),
+                          width: math.max(2, shortSide * 0.008),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (!widget.isEditing &&
+                  _isHovered &&
+                  (widget.onTrim != null || widget.canEdit))
+                Positioned(
+                  bottom: controlPadding,
+                  right: controlPadding,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      if (_isHovered && widget.onTrim != null) ...<Widget>[
+                        IconButton.filled(
+                          onPressed: widget.onTrim,
+                          tooltip: 'Trim video',
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(0xCC241B16),
+                            foregroundColor: Colors.white,
+                            minimumSize: Size.square(iconSize * 1.65),
+                            maximumSize: Size.square(iconSize * 1.65),
+                            padding: EdgeInsets.zero,
+                          ),
+                          icon: Icon(
+                            Icons.content_cut_rounded,
+                            size: iconSize * 0.72,
+                          ),
+                        ),
+                        if (widget.canEdit)
+                          SizedBox(width: controlPadding * 0.5),
+                      ],
+                      if (widget.canEdit)
+                        IconButton.filled(
+                          onPressed: widget.onEdit,
+                          tooltip: 'Adjust framing',
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(0xCC241B16),
+                            foregroundColor: widget.viewport.isDefault
+                                ? Colors.white
+                                : const Color(0xFFFFC83D),
+                            minimumSize: Size.square(iconSize * 1.65),
+                            maximumSize: Size.square(iconSize * 1.65),
+                            padding: EdgeInsets.zero,
+                          ),
+                          icon: Icon(
+                            widget.viewport.isDefault
+                                ? Icons.crop_free_rounded
+                                : Icons.center_focus_strong_rounded,
+                            size: iconSize,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              if (widget.isEditing && useCompactEditingControls)
+                Positioned(
+                  right: controlPadding,
+                  bottom: controlPadding,
+                  child: Material(
+                    color: const Color(0xEFFFFFFF),
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(iconSize),
+                    child: Padding(
+                      padding: EdgeInsets.all(controlPadding * 0.35),
+                      child: FilledButton(
+                        onPressed: widget.onDone,
+                        style: FilledButton.styleFrom(
+                          minimumSize: Size(iconSize * 2.2, iconSize * 1.6),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: controlPadding,
+                          ),
+                        ),
+                        child: Text(
+                          'Done',
+                          style: TextStyle(fontSize: iconSize * 0.58),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (widget.isEditing && !useCompactEditingControls)
+                Positioned(
+                  left: controlPadding,
+                  right: controlPadding,
+                  bottom: controlPadding,
+                  child: Material(
+                    color: const Color(0xEFFFFFFF),
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(iconSize),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: controlPadding,
+                        vertical: controlPadding * 0.35,
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(Icons.zoom_out_rounded, size: iconSize * 0.9),
+                          Expanded(
+                            child: Slider(
+                              value: widget.viewport.zoom,
+                              min: 1,
+                              max: 4,
+                              onChanged: _updateZoom,
+                            ),
+                          ),
+                          Icon(Icons.zoom_in_rounded, size: iconSize * 0.9),
+                          SizedBox(width: controlPadding * 0.5),
+                          IconButton(
+                            onPressed: widget.viewport.isDefault
+                                ? null
+                                : widget.onReset,
+                            tooltip: 'Reset framing',
+                            iconSize: iconSize,
+                            icon: const Icon(Icons.restart_alt_rounded),
+                          ),
+                          SizedBox(width: controlPadding * 0.25),
+                          FilledButton(
+                            onPressed: widget.onDone,
+                            style: FilledButton.styleFrom(
+                              minimumSize: Size(iconSize * 2.2, iconSize * 1.6),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: controlPadding,
+                              ),
+                            ),
+                            child: Text(
+                              'Done',
+                              style: TextStyle(fontSize: iconSize * 0.58),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+    if (!widget.isEditing) {
+      return controls;
+    }
+    return TapRegion(
+      onTapOutside: (_) => widget.onDone?.call(),
+      child: controls,
     );
   }
 }
@@ -5024,6 +5428,7 @@ class _PreviewTileBody extends StatelessWidget {
     required this.clipLabelVisualStyle,
     required this.clipLabelPadding,
     required this.fitMode,
+    required this.viewport,
     required this.isDragTarget,
     required this.overlayLabelScale,
   });
@@ -5043,6 +5448,7 @@ class _PreviewTileBody extends StatelessWidget {
   final ClipLabelVisualStyle clipLabelVisualStyle;
   final double clipLabelPadding;
   final ClipFitMode fitMode;
+  final ClipViewport viewport;
   final bool isDragTarget;
   final double overlayLabelScale;
 
@@ -5101,28 +5507,42 @@ class _PreviewTileBody extends StatelessWidget {
                       if (controller != null &&
                           controller!.value.isInitialized &&
                           previewVideoSize != null)
-                        FittedBox(
-                          fit: fitMode.previewFit,
-                          child: SizedBox(
-                            width: previewVideoSize.width,
-                            height: previewVideoSize.height,
-                            child: VideoPlayer(controller!),
+                        Transform.scale(
+                          scale: fitMode == ClipFitMode.cropCenter
+                              ? viewport.zoom
+                              : 1,
+                          alignment: viewport.previewAlignment,
+                          child: FittedBox(
+                            fit: fitMode.previewFit,
+                            alignment: viewport.previewAlignment,
+                            child: SizedBox(
+                              width: previewVideoSize.width,
+                              height: previewVideoSize.height,
+                              child: VideoPlayer(controller!),
+                            ),
                           ),
                         )
                       else if (clip?.isPhoto == true)
                         Positioned.fill(
-                          child: Image.file(
-                            File(clip!.path),
-                            fit: fitMode.previewFit,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Center(
-                                child: Icon(
-                                  Icons.warning_amber_rounded,
-                                  size: 34,
-                                  color: Colors.black.withValues(alpha: 0.28),
-                                ),
-                              );
-                            },
+                          child: Transform.scale(
+                            scale: fitMode == ClipFitMode.cropCenter
+                                ? viewport.zoom
+                                : 1,
+                            alignment: viewport.previewAlignment,
+                            child: Image.file(
+                              File(clip!.path),
+                              fit: fitMode.previewFit,
+                              alignment: viewport.previewAlignment,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Center(
+                                  child: Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 34,
+                                    color: Colors.black.withValues(alpha: 0.28),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         )
                       else if (isLoading)
