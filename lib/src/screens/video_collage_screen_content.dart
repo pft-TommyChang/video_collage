@@ -771,395 +771,266 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                           padding: const EdgeInsets.all(28),
                           child: Column(
                             children: <Widget>[
-                              Row(
-                                children: <Widget>[
-                                  Text(
-                                    'Preview',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineSmall
-                                        ?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  IconButton.outlined(
-                                    onPressed: _clips.isEmpty
-                                        ? null
-                                        : _autoLayout,
-                                    tooltip: 'Auto Layout',
-                                    style: IconButton.styleFrom(
-                                      minimumSize: const Size(34, 34),
-                                      maximumSize: const Size(34, 34),
-                                    ),
-                                    icon: const Icon(
-                                      Icons.auto_fix_high,
-                                      size: 18,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  IconButton.outlined(
-                                    onPressed: _clips.isEmpty
-                                        ? null
-                                        : () => _autoLayout(
-                                            mode: _AutoLayoutMode.verticalStack,
-                                          ),
-                                    tooltip: 'Vertical Auto',
-                                    style: IconButton.styleFrom(
-                                      minimumSize: const Size(34, 34),
-                                      maximumSize: const Size(34, 34),
-                                    ),
-                                    icon: const RotatedBox(
-                                      quarterTurns: 1,
-                                      child: Icon(
-                                        Icons.view_column_outlined,
-                                        size: 18,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  IconButton.outlined(
-                                    onPressed: _clips.isEmpty
-                                        ? null
-                                        : () => _autoLayout(
-                                            mode:
-                                                _AutoLayoutMode.horizontalStrip,
-                                          ),
-                                    tooltip: 'Horizontal Auto',
-                                    style: IconButton.styleFrom(
-                                      minimumSize: const Size(34, 34),
-                                      maximumSize: const Size(34, 34),
-                                    ),
-                                    icon: const Icon(
-                                      Icons.view_column_outlined,
-                                      size: 18,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.74,
-                                      ),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                        color: const Color(0xFFD0C5B5),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: <Widget>[
-                                        IconButton(
-                                          onPressed: !hasPreviewMotion
-                                              ? null
-                                              : () {
-                                                  unawaited(
-                                                    _setPreviewPlayback(
-                                                      !_isPreviewPlaying,
-                                                    ),
-                                                  );
-                                                },
-                                          tooltip: !hasPreviewMotion
-                                              ? 'Preview playback unavailable for photos only'
-                                              : _isPreviewPlaying
-                                              ? 'Pause preview'
-                                              : 'Play preview',
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 24,
-                                            minHeight: 24,
-                                          ),
-                                          visualDensity: VisualDensity.compact,
-                                          iconSize: 24,
-                                          splashRadius: 16,
-                                          icon: Icon(
-                                            _isPreviewPlaying
-                                                ? Icons.pause_rounded
-                                                : Icons.play_arrow_rounded,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        IconButton(
-                                          onPressed: !canStopPreview
-                                              ? null
-                                              : () {
-                                                  unawaited(
-                                                    _stopPreviewPlayback(),
-                                                  );
-                                                },
-                                          tooltip: 'Reset preview to start',
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 24,
-                                            minHeight: 24,
-                                          ),
-                                          visualDensity: VisualDensity.compact,
-                                          iconSize: 23,
-                                          splashRadius: 16,
-                                          icon: const Icon(Icons.refresh),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        IconButton(
-                                          onPressed: _clips.isEmpty
-                                              ? null
-                                              : () {
-                                                  unawaited(
-                                                    _togglePreviewMute(),
-                                                  );
-                                                },
-                                          tooltip: _isPreviewMuted
-                                              ? 'Unmute preview'
-                                              : 'Mute preview',
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(
-                                            minWidth: 24,
-                                            minHeight: 24,
-                                          ),
-                                          visualDensity: VisualDensity.compact,
-                                          iconSize: 22,
-                                          splashRadius: 16,
-                                          icon: Icon(
-                                            _isPreviewMuted
-                                                ? Icons.volume_off_rounded
-                                                : Icons.volume_up_rounded,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          '${formatDuration(previewPosition)} / ${formatDuration(exportDuration)}',
-                                          style: (() {
-                                            final baseStyle = Theme.of(
-                                              context,
-                                            ).textTheme.bodyMedium;
-                                            final baseFontSize =
-                                                baseStyle?.fontSize ?? 14;
-                                            return baseStyle?.copyWith(
-                                              fontSize: baseFontSize * 1.17,
-                                              fontFeatures: const <FontFeature>[
-                                                FontFeature.tabularFigures(),
-                                              ],
-                                            );
-                                          })(),
-                                        ),
-                                        const SizedBox(width: 8),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                              _PreviewToolbar(
+                                hasClips: _clips.isNotEmpty,
+                                hasPreviewMotion: hasPreviewMotion,
+                                isPreviewPlaying: _isPreviewPlaying,
+                                canResetPreview: canStopPreview,
+                                isPreviewMuted: _isPreviewMuted,
+                                previewPosition: previewPosition,
+                                previewDuration: exportDuration,
+                                onAutoLayout: _autoLayout,
+                                onVerticalAutoLayout: () => _autoLayout(
+                                  mode: _AutoLayoutMode.verticalStack,
+                                ),
+                                onHorizontalAutoLayout: () => _autoLayout(
+                                  mode: _AutoLayoutMode.horizontalStrip,
+                                ),
+                                onTogglePlayback: () => unawaited(
+                                  _setPreviewPlayback(!_isPreviewPlaying),
+                                ),
+                                onResetPreview: () =>
+                                    unawaited(_stopPreviewPlayback()),
+                                onToggleMute: () =>
+                                    unawaited(_togglePreviewMute()),
                               ),
                               const SizedBox(height: 20),
                               Expanded(
-                                child: Center(
-                                  child: FittedBox(
-                                    fit: BoxFit.contain,
-                                    child: SizedBox(
-                                      width: previewCanvasWidth,
-                                      height: previewCanvasHeight,
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          color: _selectedBorderColor.color,
-                                          boxShadow: const <BoxShadow>[
-                                            BoxShadow(
-                                              color: Color(0x2A000000),
-                                              blurRadius: 28,
-                                              offset: Offset(0, 18),
+                                child: LayoutBuilder(
+                                  builder: (context, previewConstraints) {
+                                    final previewDisplayScale = math.min(
+                                      previewConstraints.maxWidth /
+                                          previewCanvasWidth,
+                                      previewConstraints.maxHeight /
+                                          previewCanvasHeight,
+                                    );
+                                    return Center(
+                                      child: FittedBox(
+                                        fit: BoxFit.contain,
+                                        child: SizedBox(
+                                          width: previewCanvasWidth,
+                                          height: previewCanvasHeight,
+                                          child: DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              color: _selectedBorderColor.color,
+                                              boxShadow: const <BoxShadow>[
+                                                BoxShadow(
+                                                  color: Color(0x2A000000),
+                                                  blurRadius: 28,
+                                                  offset: Offset(0, 18),
+                                                ),
+                                              ],
                                             ),
-                                          ],
-                                        ),
-                                        child: Padding(
-                                          padding: EdgeInsets.all(
-                                            scaledBorderThickness,
-                                          ),
-                                          child: SizedBox.expand(
-                                            key: _previewGridKey,
-                                            child: GridView.builder(
-                                              physics:
-                                                  const NeverScrollableScrollPhysics(),
-                                              itemCount: _gridCapacity,
-                                              gridDelegate:
-                                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                                    crossAxisCount: _columns,
-                                                    crossAxisSpacing:
-                                                        scaledBorderThickness,
-                                                    mainAxisSpacing:
-                                                        scaledBorderThickness,
-                                                    childAspectRatio:
-                                                        previewCellAspectRatio,
-                                                  ),
-                                              itemBuilder: (context, index) {
-                                                final clip = _clipForSlot(
-                                                  index,
-                                                );
-                                                return DragTarget<int>(
-                                                  onWillAcceptWithDetails:
-                                                      (details) =>
-                                                          details.data != index,
-                                                  onAcceptWithDetails:
-                                                      (details) {
-                                                        _moveOrSwapPreviewSlot(
-                                                          details.data,
-                                                          index,
-                                                        );
-                                                      },
-                                                  builder:
-                                                      (
-                                                        context,
-                                                        candidateData,
-                                                        rejectedData,
-                                                      ) {
-                                                        return DropTarget(
-                                                          onDragEntered: (_) {
-                                                            if (_externalDropHoverSlotIndex !=
-                                                                index) {
-                                                              _updateState(() {
-                                                                _externalDropHoverSlotIndex =
-                                                                    index;
-                                                              });
-                                                            }
+                                            child: Padding(
+                                              padding: EdgeInsets.all(
+                                                scaledBorderThickness,
+                                              ),
+                                              child: SizedBox.expand(
+                                                key: _previewGridKey,
+                                                child: GridView.builder(
+                                                  physics:
+                                                      const NeverScrollableScrollPhysics(),
+                                                  itemCount: _gridCapacity,
+                                                  gridDelegate:
+                                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                                        crossAxisCount:
+                                                            _columns,
+                                                        crossAxisSpacing:
+                                                            scaledBorderThickness,
+                                                        mainAxisSpacing:
+                                                            scaledBorderThickness,
+                                                        childAspectRatio:
+                                                            previewCellAspectRatio,
+                                                      ),
+                                                  itemBuilder: (context, index) {
+                                                    final clip = _clipForSlot(
+                                                      index,
+                                                    );
+                                                    return DragTarget<int>(
+                                                      onWillAcceptWithDetails:
+                                                          (details) =>
+                                                              details.data !=
+                                                              index,
+                                                      onAcceptWithDetails:
+                                                          (details) {
+                                                            _moveOrSwapPreviewSlot(
+                                                              details.data,
+                                                              index,
+                                                            );
                                                           },
-                                                          onDragExited: (_) {
-                                                            if (_externalDropHoverSlotIndex ==
-                                                                index) {
-                                                              _updateState(() {
-                                                                _externalDropHoverSlotIndex =
-                                                                    null;
-                                                              });
-                                                            }
-                                                          },
-                                                          child: _PreviewTile(
-                                                            clip: clip,
-                                                            controller:
-                                                                clip == null
-                                                                ? null
-                                                                : _controllers[clip
-                                                                      .path],
-                                                            cornerRadius:
-                                                                scaledTileCornerRadius,
-                                                            isLoading:
-                                                                clip != null &&
-                                                                _loadingClipPaths
-                                                                    .contains(
-                                                                      clip.path,
-                                                                    ),
-                                                            errorMessage:
-                                                                clip == null
-                                                                ? null
-                                                                : _clipErrors[clip
-                                                                      .path],
-                                                            onPickMedia:
-                                                                clip == null
-                                                                ? () =>
-                                                                      _pickMediaForSlot(
+                                                      builder:
+                                                          (
+                                                            context,
+                                                            candidateData,
+                                                            rejectedData,
+                                                          ) {
+                                                            return DropTarget(
+                                                              onDragEntered: (_) {
+                                                                if (_externalDropHoverSlotIndex !=
+                                                                    index) {
+                                                                  _updateState(
+                                                                    () {
+                                                                      _externalDropHoverSlotIndex =
+                                                                          index;
+                                                                    },
+                                                                  );
+                                                                }
+                                                              },
+                                                              onDragExited: (_) {
+                                                                if (_externalDropHoverSlotIndex ==
+                                                                    index) {
+                                                                  _updateState(
+                                                                    () {
+                                                                      _externalDropHoverSlotIndex =
+                                                                          null;
+                                                                    },
+                                                                  );
+                                                                }
+                                                              },
+                                                              child: _PreviewTile(
+                                                                clip: clip,
+                                                                controller:
+                                                                    clip == null
+                                                                    ? null
+                                                                    : _controllers[clip
+                                                                          .path],
+                                                                cornerRadius:
+                                                                    scaledTileCornerRadius,
+                                                                isLoading:
+                                                                    clip !=
+                                                                        null &&
+                                                                    _loadingClipPaths
+                                                                        .contains(
+                                                                          clip.path,
+                                                                        ),
+                                                                errorMessage:
+                                                                    clip == null
+                                                                    ? null
+                                                                    : _clipErrors[clip
+                                                                          .path],
+                                                                onPickMedia:
+                                                                    clip == null
+                                                                    ? () => _pickMediaForSlot(
                                                                         index,
                                                                       )
-                                                                : null,
-                                                            index: index,
-                                                            backgroundColor:
-                                                                _selectedBackgroundColor
-                                                                    .color,
-                                                            dragData:
-                                                                clip == null
-                                                                ? null
-                                                                : index,
-                                                            showLabel:
-                                                                _includeClipLabelsInOutput,
-                                                            labelDisplayMode:
-                                                                _clipLabelDisplayMode,
-                                                            onEditLabel:
-                                                                clip == null
-                                                                ? null
-                                                                : () => unawaited(
-                                                                    _editClipTitle(
-                                                                      clip,
-                                                                    ),
-                                                                  ),
-                                                            isActiveLabel:
-                                                                _isSequentialPlayMode &&
-                                                                _isPreviewPlaying &&
-                                                                _activeSequentialClipPath ==
-                                                                    clip?.path,
-                                                            clipLabelFontSize:
-                                                                _clipLabelFontSize,
-                                                            clipLabelAlignment:
-                                                                _clipLabelAlignment,
-                                                            clipLabelVisualStyle:
-                                                                _clipLabelVisualStyle,
-                                                            clipLabelPadding:
-                                                                _clipLabelPadding,
-                                                            fitMode:
-                                                                _selectedFitMode,
-                                                            viewport:
-                                                                clip == null
-                                                                ? const ClipViewport()
-                                                                : _clipViewports[clip
-                                                                          .path] ??
-                                                                      const ClipViewport(),
-                                                            isEditingViewport:
-                                                                clip != null &&
-                                                                _editingViewportClipPath ==
-                                                                    clip.path,
-                                                            isVeiled:
-                                                                _editingViewportClipPath !=
-                                                                    null &&
-                                                                clip?.path !=
-                                                                    _editingViewportClipPath,
-                                                            onVeilTap:
-                                                                _finishViewportEditing,
-                                                            onEditViewport:
-                                                                clip == null
-                                                                ? null
-                                                                : () =>
-                                                                      _startViewportEditing(
-                                                                        clip,
+                                                                    : null,
+                                                                index: index,
+                                                                backgroundColor:
+                                                                    _selectedBackgroundColor
+                                                                        .color,
+                                                                dragData:
+                                                                    clip == null
+                                                                    ? null
+                                                                    : index,
+                                                                showLabel:
+                                                                    _includeClipLabelsInOutput,
+                                                                labelDisplayMode:
+                                                                    _clipLabelDisplayMode,
+                                                                onEditLabel:
+                                                                    clip == null
+                                                                    ? null
+                                                                    : () => unawaited(
+                                                                        _editClipTitle(
+                                                                          clip,
+                                                                        ),
                                                                       ),
-                                                            onTrim:
-                                                                clip?.isVideo ==
-                                                                    true
-                                                                ? () => unawaited(
-                                                                    _openVideoTrimmer(
-                                                                      clip!,
-                                                                    ),
-                                                                  )
-                                                                : null,
-                                                            onViewportChanged:
-                                                                clip == null
-                                                                ? null
-                                                                : (
-                                                                    viewport,
-                                                                  ) => _updateClipViewport(
-                                                                    clip.path,
-                                                                    viewport,
-                                                                  ),
-                                                            onResetViewport:
-                                                                clip == null
-                                                                ? null
-                                                                : () => _resetClipViewport(
-                                                                    clip.path,
-                                                                  ),
-                                                            onFinishViewport:
-                                                                clip == null
-                                                                ? null
-                                                                : _finishViewportEditing,
-                                                            isDragTarget:
-                                                                candidateData
-                                                                    .isNotEmpty ||
-                                                                _externalDropHoverSlotIndex ==
-                                                                    index,
-                                                            overlayLabelScale:
-                                                                overlayLabelScale,
-                                                          ),
-                                                        );
-                                                      },
-                                                );
-                                              },
+                                                                isActiveLabel:
+                                                                    _isSequentialPlayMode &&
+                                                                    _isPreviewPlaying &&
+                                                                    _activeSequentialClipPath ==
+                                                                        clip?.path,
+                                                                clipLabelFontSize:
+                                                                    _clipLabelFontSize,
+                                                                clipLabelAlignment:
+                                                                    _clipLabelAlignment,
+                                                                clipLabelVisualStyle:
+                                                                    _clipLabelVisualStyle,
+                                                                clipLabelPadding:
+                                                                    _clipLabelPadding,
+                                                                fitMode:
+                                                                    _selectedFitMode,
+                                                                viewport:
+                                                                    clip == null
+                                                                    ? const ClipViewport()
+                                                                    : _clipViewports[clip
+                                                                              .path] ??
+                                                                          const ClipViewport(),
+                                                                isEditingViewport:
+                                                                    clip !=
+                                                                        null &&
+                                                                    _editingViewportClipPath ==
+                                                                        clip.path,
+                                                                isVeiled:
+                                                                    _editingViewportClipPath !=
+                                                                        null &&
+                                                                    clip?.path !=
+                                                                        _editingViewportClipPath,
+                                                                onVeilTap:
+                                                                    _finishViewportEditing,
+                                                                onEditViewport:
+                                                                    clip == null
+                                                                    ? null
+                                                                    : () =>
+                                                                          _startViewportEditing(
+                                                                            clip,
+                                                                          ),
+                                                                onTrim:
+                                                                    clip?.isVideo ==
+                                                                        true
+                                                                    ? () => unawaited(
+                                                                        _openVideoTrimmer(
+                                                                          clip!,
+                                                                        ),
+                                                                      )
+                                                                    : null,
+                                                                onRemove:
+                                                                    clip == null
+                                                                    ? null
+                                                                    : () =>
+                                                                          _removeClip(
+                                                                            clip,
+                                                                          ),
+                                                                onViewportChanged:
+                                                                    clip == null
+                                                                    ? null
+                                                                    : (
+                                                                        viewport,
+                                                                      ) => _updateClipViewport(
+                                                                        clip.path,
+                                                                        viewport,
+                                                                      ),
+                                                                onResetViewport:
+                                                                    clip == null
+                                                                    ? null
+                                                                    : () => _resetClipViewport(
+                                                                        clip.path,
+                                                                      ),
+                                                                onFinishViewport:
+                                                                    clip == null
+                                                                    ? null
+                                                                    : _finishViewportEditing,
+                                                                isDragTarget:
+                                                                    candidateData
+                                                                        .isNotEmpty ||
+                                                                    _externalDropHoverSlotIndex ==
+                                                                        index,
+                                                                overlayLabelScale:
+                                                                    overlayLabelScale,
+                                                                previewDisplayScale:
+                                                                    previewDisplayScale,
+                                                              ),
+                                                            );
+                                                          },
+                                                    );
+                                                  },
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  },
                                 ),
                               ),
                               const SizedBox(height: 16),

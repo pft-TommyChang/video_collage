@@ -77,6 +77,10 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
   static const double _timelineGap = 0;
   static const double _trimHandleWidth = 20;
   static const double _timelineRailThickness = 4;
+  static const double _dialogVerticalChromeHeight = 220;
+  static const double _minimumDialogContentHeight = 250;
+  static const double _maximumDialogContentHeight = 532;
+  static const double _maximumPreviewHeight = 420;
   static const SystemDialogService _dialogService = SystemDialogService();
 
   VideoPlayerController? _controller;
@@ -656,6 +660,11 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
     final selectedDuration = Duration(
       milliseconds: (_selection.end - _selection.start).round(),
     );
+    final availableContentHeight =
+        (MediaQuery.sizeOf(context).height - _dialogVerticalChromeHeight).clamp(
+          _minimumDialogContentHeight,
+          _maximumDialogContentHeight,
+        );
     return AlertDialog(
       title: Row(
         children: <Widget>[
@@ -672,48 +681,52 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       ),
       content: SizedBox(
         width: 760,
+        height: availableContentHeight,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 420),
-                child: AspectRatio(
-                  aspectRatio: widget.clip.width > 0 && widget.clip.height > 0
-                      ? widget.clip.width / widget.clip.height
-                      : 16 / 9,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: _isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : _error != null
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(24),
-                                child: Text(
-                                  _error!,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(color: Colors.white),
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: _maximumPreviewHeight,
+                  ),
+                  child: AspectRatio(
+                    aspectRatio: widget.clip.width > 0 && widget.clip.height > 0
+                        ? widget.clip.width / widget.clip.height
+                        : 16 / 9,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: _isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : _error != null
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Text(
+                                    _error!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                              )
+                            : FittedBox(
+                                fit: BoxFit.contain,
+                                child: SizedBox(
+                                  width: widget.clip.width > 0
+                                      ? widget.clip.width.toDouble()
+                                      : controller!.value.size.width,
+                                  height: widget.clip.height > 0
+                                      ? widget.clip.height.toDouble()
+                                      : controller!.value.size.height,
+                                  child: VideoPlayer(controller!),
                                 ),
                               ),
-                            )
-                          : FittedBox(
-                              fit: BoxFit.contain,
-                              child: SizedBox(
-                                width: widget.clip.width > 0
-                                    ? widget.clip.width.toDouble()
-                                    : controller!.value.size.width,
-                                height: widget.clip.height > 0
-                                    ? widget.clip.height.toDouble()
-                                    : controller!.value.size.height,
-                                child: VideoPlayer(controller!),
-                              ),
-                            ),
+                      ),
                     ),
                   ),
                 ),

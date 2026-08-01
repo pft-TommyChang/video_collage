@@ -1,5 +1,61 @@
 part of '../video_collage_app.dart';
 
+const double _viewportActionIconDisplaySize = 18;
+const double _viewportActionButtonDisplaySize = 20;
+const double _viewportActionGapDisplaySize = 4;
+const double _viewportActionEdgeDisplayPadding = 5;
+const double _cropActionsMinimumDisplayWidth =
+    _viewportActionEdgeDisplayPadding +
+    _viewportActionButtonDisplaySize * 2 +
+    _viewportActionGapDisplaySize;
+const double _trimActionsMinimumDisplayWidth =
+    _viewportActionEdgeDisplayPadding +
+    _viewportActionButtonDisplaySize * 3 +
+    _viewportActionGapDisplaySize * 2;
+
+class _ViewportActionButton extends StatelessWidget {
+  const _ViewportActionButton({
+    required this.onPressed,
+    required this.tooltip,
+    required this.icon,
+    required this.iconSize,
+    required this.buttonSize,
+    required this.color,
+  });
+
+  final VoidCallback? onPressed;
+  final String tooltip;
+  final IconData icon;
+  final double iconSize;
+  final double buttonSize;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: tooltip,
+      style: IconButton.styleFrom(
+        minimumSize: Size.square(buttonSize),
+        maximumSize: Size.square(buttonSize),
+        padding: EdgeInsets.zero,
+        backgroundColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+      ),
+      icon: Icon(
+        icon,
+        size: iconSize,
+        color: color,
+        shadows: const <Shadow>[
+          Shadow(color: Color(0xE0000000), blurRadius: 8, offset: Offset(0, 2)),
+          Shadow(color: Colors.black87, blurRadius: 2),
+        ],
+      ),
+    );
+  }
+}
+
 class _PreviewTile extends StatelessWidget {
   static const Size _dragFeedbackFallbackSize = Size(240, 160);
   static const double _dragFeedbackMaxSide = 240;
@@ -30,11 +86,13 @@ class _PreviewTile extends StatelessWidget {
     required this.onVeilTap,
     required this.onEditViewport,
     required this.onTrim,
+    required this.onRemove,
     required this.onViewportChanged,
     required this.onResetViewport,
     required this.onFinishViewport,
     required this.isDragTarget,
     required this.overlayLabelScale,
+    required this.previewDisplayScale,
   });
 
   final VideoClipInfo? clip;
@@ -61,11 +119,13 @@ class _PreviewTile extends StatelessWidget {
   final VoidCallback onVeilTap;
   final VoidCallback? onEditViewport;
   final VoidCallback? onTrim;
+  final VoidCallback? onRemove;
   final ValueChanged<ClipViewport>? onViewportChanged;
   final VoidCallback? onResetViewport;
   final VoidCallback? onFinishViewport;
   final bool isDragTarget;
   final double overlayLabelScale;
+  final double previewDisplayScale;
 
   Size _dragFeedbackSize() {
     final mediaSize = _previewVideoDisplaySize(
@@ -136,9 +196,11 @@ class _PreviewTile extends StatelessWidget {
             canEdit: fitMode == ClipFitMode.cropCenter,
             onEdit: onEditViewport,
             onTrim: onTrim,
+            onRemove: onRemove,
             onChanged: onViewportChanged,
             onReset: onResetViewport,
             onDone: onFinishViewport,
+            previewDisplayScale: previewDisplayScale,
             child: tile,
           );
 
@@ -228,9 +290,11 @@ class _ViewportControls extends StatefulWidget {
     required this.canEdit,
     required this.onEdit,
     required this.onTrim,
+    required this.onRemove,
     required this.onChanged,
     required this.onReset,
     required this.onDone,
+    required this.previewDisplayScale,
     required this.child,
   });
 
@@ -240,9 +304,11 @@ class _ViewportControls extends StatefulWidget {
   final bool canEdit;
   final VoidCallback? onEdit;
   final VoidCallback? onTrim;
+  final VoidCallback? onRemove;
   final ValueChanged<ClipViewport>? onChanged;
   final VoidCallback? onReset;
   final VoidCallback? onDone;
+  final double previewDisplayScale;
   final Widget child;
 
   @override
@@ -312,8 +378,28 @@ class _ViewportControlsState extends State<_ViewportControls> {
           final tileSize = constraints.biggest;
           final shortSide = tileSize.shortestSide;
           final iconSize = (shortSide * 0.065).clamp(16.0, 40.0);
-          final controlSize = iconSize * 1.55;
           final controlPadding = (shortSide * 0.035).clamp(10.0, 28.0);
+          final previewDisplayScale = widget.previewDisplayScale.clamp(
+            0.001,
+            double.infinity,
+          );
+          final displayedTileWidth = tileSize.width * previewDisplayScale;
+          final hoverIconSize =
+              _viewportActionIconDisplaySize / previewDisplayScale;
+          final hoverControlSize =
+              _viewportActionButtonDisplaySize / previewDisplayScale;
+          final hoverControlGap =
+              _viewportActionGapDisplaySize / previewDisplayScale;
+          final hoverControlPadding =
+              _viewportActionEdgeDisplayPadding / previewDisplayScale;
+          final showCropAction =
+              displayedTileWidth >= _cropActionsMinimumDisplayWidth;
+          final showTrimAction =
+              widget.onTrim != null &&
+              displayedTileWidth >= _trimActionsMinimumDisplayWidth;
+          const editingControlScale = 1.2;
+          final editingIconSize = iconSize * editingControlScale;
+          final editingControlPadding = controlPadding * editingControlScale;
           final useCompactEditingControls =
               tileSize.width < 360 || tileSize.height < 180;
 
@@ -369,54 +455,47 @@ class _ViewportControlsState extends State<_ViewportControls> {
                     ),
                   ),
                 ),
-              if (!widget.isEditing &&
-                  _isHovered &&
-                  (widget.onTrim != null || widget.canEdit))
+              if (!widget.isEditing && _isHovered && widget.onRemove != null)
                 Positioned(
-                  bottom: controlPadding,
-                  right: controlPadding,
+                  bottom: hoverControlPadding,
+                  right: hoverControlPadding,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      if (_isHovered && widget.onTrim != null) ...<Widget>[
-                        IconButton.filled(
+                      if (showTrimAction) ...<Widget>[
+                        _ViewportActionButton(
                           onPressed: widget.onTrim,
-                          tooltip: 'Trim video',
-                          style: IconButton.styleFrom(
-                            backgroundColor: const Color(0xCC241B16),
-                            foregroundColor: Colors.white,
-                            minimumSize: Size.square(controlSize),
-                            maximumSize: Size.square(controlSize),
-                            padding: EdgeInsets.zero,
-                          ),
-                          icon: Icon(
-                            Icons.content_cut_rounded,
-                            size: iconSize * 0.72,
-                          ),
+                          tooltip: 'Trim',
+                          icon: Icons.content_cut_rounded,
+                          iconSize: hoverIconSize,
+                          buttonSize: hoverControlSize,
+                          color: Colors.white,
                         ),
-                        if (widget.canEdit)
-                          SizedBox(width: controlPadding * 0.5),
+                        SizedBox(width: hoverControlGap),
                       ],
-                      if (widget.canEdit)
-                        IconButton.filled(
-                          onPressed: widget.onEdit,
-                          tooltip: 'Adjust framing',
-                          style: IconButton.styleFrom(
-                            backgroundColor: const Color(0xCC241B16),
-                            foregroundColor: widget.viewport.isDefault
-                                ? Colors.white
-                                : const Color(0xFFFFC83D),
-                            minimumSize: Size.square(controlSize),
-                            maximumSize: Size.square(controlSize),
-                            padding: EdgeInsets.zero,
-                          ),
-                          icon: Icon(
-                            widget.viewport.isDefault
-                                ? Icons.crop_free_rounded
-                                : Icons.center_focus_strong_rounded,
-                            size: iconSize,
-                          ),
+                      if (showCropAction) ...<Widget>[
+                        _ViewportActionButton(
+                          onPressed: widget.canEdit ? widget.onEdit : null,
+                          tooltip: 'Crop Area',
+                          icon: widget.viewport.isDefault
+                              ? Icons.crop_free_rounded
+                              : Icons.center_focus_strong_rounded,
+                          iconSize: hoverIconSize,
+                          buttonSize: hoverControlSize,
+                          color: !widget.canEdit
+                              ? Colors.white54
+                              : Colors.white,
                         ),
+                        SizedBox(width: hoverControlGap),
+                      ],
+                      _ViewportActionButton(
+                        onPressed: widget.onRemove,
+                        tooltip: 'Remove',
+                        icon: Icons.close_rounded,
+                        iconSize: hoverIconSize,
+                        buttonSize: hoverControlSize,
+                        color: Colors.white,
+                      ),
                     ],
                   ),
                 ),
@@ -427,20 +506,23 @@ class _ViewportControlsState extends State<_ViewportControls> {
                   child: Material(
                     color: const Color(0xEFFFFFFF),
                     elevation: 8,
-                    borderRadius: BorderRadius.circular(iconSize),
+                    borderRadius: BorderRadius.circular(editingIconSize),
                     child: Padding(
-                      padding: EdgeInsets.all(controlPadding * 0.35),
+                      padding: EdgeInsets.all(editingControlPadding * 0.35),
                       child: FilledButton(
                         onPressed: widget.onDone,
                         style: FilledButton.styleFrom(
-                          minimumSize: Size(iconSize * 2.2, iconSize * 1.6),
+                          minimumSize: Size(
+                            editingIconSize * 2.2,
+                            editingIconSize * 1.6,
+                          ),
                           padding: EdgeInsets.symmetric(
-                            horizontal: controlPadding,
+                            horizontal: editingControlPadding,
                           ),
                         ),
                         child: Text(
                           'Done',
-                          style: TextStyle(fontSize: iconSize * 0.58),
+                          style: TextStyle(fontSize: editingIconSize * 0.58),
                         ),
                       ),
                     ),
@@ -454,15 +536,19 @@ class _ViewportControlsState extends State<_ViewportControls> {
                   child: Material(
                     color: const Color(0xEFFFFFFF),
                     elevation: 8,
-                    borderRadius: BorderRadius.circular(iconSize),
+                    borderRadius: BorderRadius.circular(editingIconSize),
                     child: Padding(
                       padding: EdgeInsets.symmetric(
-                        horizontal: controlPadding,
-                        vertical: controlPadding * 0.35,
+                        horizontal: editingControlPadding,
+                        vertical: editingControlPadding * 0.35,
                       ),
                       child: Row(
                         children: <Widget>[
-                          Icon(Icons.zoom_out_rounded, size: iconSize * 0.9),
+                          Icon(
+                            Icons.zoom_out_rounded,
+                            size: editingIconSize * 0.9,
+                          ),
+                          SizedBox(width: editingControlPadding * 0.25),
                           Expanded(
                             child: Slider(
                               value: widget.viewport.zoom,
@@ -471,28 +557,37 @@ class _ViewportControlsState extends State<_ViewportControls> {
                               onChanged: _updateZoom,
                             ),
                           ),
-                          Icon(Icons.zoom_in_rounded, size: iconSize * 0.9),
-                          SizedBox(width: controlPadding * 0.5),
+                          SizedBox(width: editingControlPadding * 0.25),
+                          Icon(
+                            Icons.zoom_in_rounded,
+                            size: editingIconSize * 0.9,
+                          ),
+                          SizedBox(width: editingControlPadding * 0.5),
                           IconButton(
                             onPressed: widget.viewport.isDefault
                                 ? null
                                 : widget.onReset,
                             tooltip: 'Reset framing',
-                            iconSize: iconSize,
+                            iconSize: editingIconSize,
                             icon: const Icon(Icons.restart_alt_rounded),
                           ),
-                          SizedBox(width: controlPadding * 0.25),
+                          SizedBox(width: editingControlPadding * 0.25),
                           FilledButton(
                             onPressed: widget.onDone,
                             style: FilledButton.styleFrom(
-                              minimumSize: Size(iconSize * 2.2, iconSize * 1.6),
+                              minimumSize: Size(
+                                editingIconSize * 2.2,
+                                editingIconSize * 1.6,
+                              ),
                               padding: EdgeInsets.symmetric(
-                                horizontal: controlPadding,
+                                horizontal: editingControlPadding,
                               ),
                             ),
                             child: Text(
                               'Done',
-                              style: TextStyle(fontSize: iconSize * 0.58),
+                              style: TextStyle(
+                                fontSize: editingIconSize * 0.58,
+                              ),
                             ),
                           ),
                         ],

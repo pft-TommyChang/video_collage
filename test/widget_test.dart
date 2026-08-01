@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:video_collage_mac/src/models.dart';
+import 'package:video_collage_mac/src/services/video_export_service.dart';
 import 'package:video_collage_mac/src/video_collage_app.dart';
+import 'package:video_collage_mac/src/video_trimmer_dialog.dart';
 
 void main() {
   Future<void> scrollSettingsIntoView(
@@ -31,7 +33,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Perfect Collage'), findsWidgets);
-    expect(find.text('Preview'), findsOneWidget);
+    expect(find.byTooltip('Auto Layout'), findsOneWidget);
   });
 
   testWidgets('last export is disabled at the start of each app session', (
@@ -52,6 +54,61 @@ void main() {
       ),
     );
     expect(lastExportButton.onPressed, isNull);
+  });
+
+  testWidgets('compact preview header keeps duration without overflowing', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('0:00 / 0:00'), findsOneWidget);
+  });
+
+  testWidgets('trim dialog fits the minimum window height', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const clip = VideoClipInfo(
+      path: '/missing-test-video.mp4',
+      name: 'Test clip',
+      duration: Duration(seconds: 8),
+      width: 1280,
+      height: 720,
+      hasAudio: false,
+      mediaKind: MediaKind.video,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (context) => VideoTrimmerDialog(
+                clip: clip,
+                exportService: VideoExportService(),
+              ),
+            ),
+            child: const Text('Open trimmer'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open trimmer'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Trim video'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Finder-opened media is imported and auto-laid out', (

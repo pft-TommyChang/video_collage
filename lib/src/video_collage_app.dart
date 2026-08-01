@@ -30,6 +30,7 @@ part 'widgets/common_controls.dart';
 part 'widgets/export_controls.dart';
 part 'widgets/media_widgets.dart';
 part 'widgets/preview_widgets.dart';
+part 'widgets/preview_toolbar.dart';
 part 'widgets/selection_widgets.dart';
 
 class VideoCollageApp extends StatelessWidget {
