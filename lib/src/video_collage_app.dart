@@ -2679,6 +2679,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
                                                                 clip != null &&
                                                                 _editingViewportClipPath ==
                                                                     clip.path,
+                                                            isVeiled:
+                                                                _editingViewportClipPath !=
+                                                                    null &&
+                                                                clip?.path !=
+                                                                    _editingViewportClipPath,
+                                                            onVeilTap:
+                                                                _finishViewportEditing,
                                                             onEditViewport:
                                                                 clip == null
                                                                 ? null
@@ -5084,6 +5091,8 @@ class _PreviewTile extends StatelessWidget {
     required this.fitMode,
     required this.viewport,
     required this.isEditingViewport,
+    required this.isVeiled,
+    required this.onVeilTap,
     required this.onEditViewport,
     required this.onTrim,
     required this.onViewportChanged,
@@ -5113,6 +5122,8 @@ class _PreviewTile extends StatelessWidget {
   final ClipFitMode fitMode;
   final ClipViewport viewport;
   final bool isEditingViewport;
+  final bool isVeiled;
+  final VoidCallback onVeilTap;
   final VoidCallback? onEditViewport;
   final VoidCallback? onTrim;
   final ValueChanged<ClipViewport>? onViewportChanged;
@@ -5196,8 +5207,31 @@ class _PreviewTile extends StatelessWidget {
             child: tile,
           );
 
-    if (dragData == null || isEditingViewport) {
-      return interactiveTile;
+    final focusedTile = Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        interactiveTile,
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !isVeiled,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              opacity: isVeiled ? 1 : 0,
+              child: Material(
+                color: Colors.white.withValues(alpha: 0.58),
+                borderRadius: BorderRadius.circular(cornerRadius),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(onTap: onVeilTap),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (dragData == null || isEditingViewport || isVeiled) {
+      return focusedTile;
     }
 
     final dragFeedbackSize = _dragFeedbackSize();
@@ -5245,8 +5279,8 @@ class _PreviewTile extends StatelessWidget {
           ),
         ),
       ),
-      childWhenDragging: Opacity(opacity: 0.30, child: interactiveTile),
-      child: interactiveTile,
+      childWhenDragging: Opacity(opacity: 0.30, child: focusedTile),
+      child: focusedTile,
     );
   }
 }
