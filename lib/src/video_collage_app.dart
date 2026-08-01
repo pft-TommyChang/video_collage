@@ -118,6 +118,32 @@ const double _maxBorderThickness = 100;
 const double _maxTileCornerRadius = 100;
 const double _maxClipLabelFontSize = 50;
 const double _maxClipLabelPadding = 48;
+const Duration _previewInitializationTimeout = Duration(seconds: 12);
+
+String _previewErrorSummary(Object error) {
+  if (error is TimeoutException) {
+    return 'Preview timed out after '
+        '${_previewInitializationTimeout.inSeconds} seconds.';
+  }
+
+  final rawMessage = switch (error) {
+    VideoExportException() => error.message,
+    PlatformException() => error.message ?? error.code,
+    _ => error.toString(),
+  };
+  final message = rawMessage
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceFirst(RegExp(r'^\w*Exception(?::\s*|\s+)'), '')
+      .trim();
+  if (message.isEmpty) {
+    return 'Could not create a preview.';
+  }
+
+  const maxLength = 100;
+  return message.length <= maxLength
+      ? message
+      : '${message.substring(0, maxLength - 1).trimRight()}…';
+}
 
 class VideoCollageApp extends StatelessWidget {
   const VideoCollageApp({super.key});
@@ -3012,7 +3038,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     setState(() {
       _editingViewportClipPath = clip.path;
       _statusMessage =
-          'Adjusting ${clip.name} • drag to pan, pinch or use the slider to zoom.';
+          'Adjust framing • Drag to pan • Slider to zoom • '
+          'Done or click outside to exit';
     });
   }
 
@@ -3949,7 +3976,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
         }
         setState(() {
           _loadingClipPaths.remove(path);
-          _clipErrors[path] = '$error';
+          _clipErrors[path] = _previewErrorSummary(error);
           _statusMessage =
               'Preview failed for ${path.split(Platform.pathSeparator).last}.';
         });
@@ -3975,7 +4002,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       }
 
       controller = VideoPlayerController.file(File(path));
-      await controller.initialize().timeout(const Duration(seconds: 12));
+      await controller.initialize().timeout(_previewInitializationTimeout);
       await controller.setLooping(false);
       await controller.setVolume(0);
       await controller.pause();
@@ -4029,7 +4056,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       setState(() {
         _loadingClipPaths.remove(path);
         if (probedClip == null) {
-          _clipErrors[path] = '$error';
+          _clipErrors[path] = _previewErrorSummary(error);
           _statusMessage =
               'Preview failed for ${path.split(Platform.pathSeparator).last}.';
           return;
@@ -5126,7 +5153,7 @@ class _PreviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rawLabel = !showLabel || clip == null
+    final rawLabel = !showLabel || clip == null || isEditingViewport
         ? null
         : buildClipLabelText(
             slotIndex: index,
@@ -5255,7 +5282,18 @@ class _ViewportControls extends StatefulWidget {
 
 class _ViewportControlsState extends State<_ViewportControls> {
   bool _isHovered = false;
+  final Set<int> _pressedViewportPointers = <int>{};
   double _gestureStartZoom = 1;
+
+  void _setViewportPointerPressed(int pointer, {required bool isPressed}) {
+    setState(() {
+      if (isPressed) {
+        _pressedViewportPointers.add(pointer);
+      } else {
+        _pressedViewportPointers.remove(pointer);
+      }
+    });
+  }
 
   void _updateZoom(double zoom) {
     widget.onChanged?.call(widget.viewport.copyWith(zoom: zoom));
@@ -5294,7 +5332,9 @@ class _ViewportControlsState extends State<_ViewportControls> {
   Widget build(BuildContext context) {
     final controls = MouseRegion(
       cursor: widget.isEditing
-          ? SystemMouseCursors.move
+          ? _pressedViewportPointers.isNotEmpty
+                ? SystemMouseCursors.grabbing
+                : SystemMouseCursors.grab
           : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -5302,7 +5342,8 @@ class _ViewportControlsState extends State<_ViewportControls> {
         builder: (context, constraints) {
           final tileSize = constraints.biggest;
           final shortSide = tileSize.shortestSide;
-          final iconSize = (shortSide * 0.075).clamp(24.0, 58.0);
+          final iconSize = (shortSide * 0.065).clamp(16.0, 40.0);
+          final controlSize = iconSize * 1.55;
           final controlPadding = (shortSide * 0.035).clamp(10.0, 28.0);
           final useCompactEditingControls =
               tileSize.width < 360 || tileSize.height < 180;
@@ -5313,6 +5354,18 @@ class _ViewportControlsState extends State<_ViewportControls> {
               widget.child,
               if (widget.isEditing)
                 Listener(
+                  onPointerDown: (event) => _setViewportPointerPressed(
+                    event.pointer,
+                    isPressed: true,
+                  ),
+                  onPointerUp: (event) => _setViewportPointerPressed(
+                    event.pointer,
+                    isPressed: false,
+                  ),
+                  onPointerCancel: (event) => _setViewportPointerPressed(
+                    event.pointer,
+                    isPressed: false,
+                  ),
                   onPointerSignal: (event) {
                     if (event is PointerScrollEvent &&
                         (HardwareKeyboard.instance.isMetaPressed ||
@@ -5363,8 +5416,8 @@ class _ViewportControlsState extends State<_ViewportControls> {
                           style: IconButton.styleFrom(
                             backgroundColor: const Color(0xCC241B16),
                             foregroundColor: Colors.white,
-                            minimumSize: Size.square(iconSize * 1.65),
-                            maximumSize: Size.square(iconSize * 1.65),
+                            minimumSize: Size.square(controlSize),
+                            maximumSize: Size.square(controlSize),
                             padding: EdgeInsets.zero,
                           ),
                           icon: Icon(
@@ -5384,8 +5437,8 @@ class _ViewportControlsState extends State<_ViewportControls> {
                             foregroundColor: widget.viewport.isDefault
                                 ? Colors.white
                                 : const Color(0xFFFFC83D),
-                            minimumSize: Size.square(iconSize * 1.65),
-                            maximumSize: Size.square(iconSize * 1.65),
+                            minimumSize: Size.square(controlSize),
+                            maximumSize: Size.square(controlSize),
                             padding: EdgeInsets.zero,
                           ),
                           icon: Icon(
@@ -5637,40 +5690,48 @@ class _PreviewTileBody extends StatelessWidget {
                         )
                       else
                         Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              Icon(
-                                clip == null
-                                    ? Icons.add
-                                    : errorMessage == null
-                                    ? clip!.isPhoto
-                                          ? Icons.photo_outlined
-                                          : Icons.movie_creation_outlined
-                                    : Icons.warning_amber_rounded,
-                                size: clip == null ? emptyTileIconSize : 34,
-                                color: Colors.black.withValues(alpha: 0.28),
-                              ),
-                              if (errorMessage != null) ...<Widget>[
-                                const SizedBox(height: 8),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Icon(
+                                    clip == null
+                                        ? Icons.add
+                                        : errorMessage == null
+                                        ? clip!.isPhoto
+                                              ? Icons.photo_outlined
+                                              : Icons.movie_creation_outlined
+                                        : Icons.warning_amber_rounded,
+                                    size: clip == null
+                                        ? emptyTileIconSize
+                                        : errorMessage != null
+                                        ? 68
+                                        : 34,
+                                    color: Colors.black.withValues(alpha: 0.28),
                                   ),
-                                  child: Text(
-                                    'Preview failed',
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.55,
+                                  if (errorMessage != null) ...<Widget>[
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'Preview failed',
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.55,
+                                            ),
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.w600,
                                           ),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                ),
-                              ],
-                            ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       if (isDragTarget)
