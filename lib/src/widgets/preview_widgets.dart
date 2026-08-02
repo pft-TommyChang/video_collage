@@ -10,10 +10,10 @@ const double _viewportEditingControlPaddingDisplaySize = 9.6;
 const double _viewportEditingPanelPaddingDisplaySize = 2.4;
 const double _viewportEditingPanelLeftPaddingDisplaySize = 6.4;
 const double _viewportEditingDoneHorizontalPaddingDisplaySize = 6.4;
-const double _viewportEditingDoneButtonDisplayWidth = 44;
+const double _viewportEditingDoneButtonDisplayWidth = 48;
 const double _viewportEditingBottomInsetDisplaySize = 6.4;
 const double _viewportEditingControlHeightDisplaySize = 32;
-const double _viewportEditingCompactControlsDisplayWidth = 88;
+const double _viewportEditingCompactControlsDisplayWidth = 92;
 const double _viewportEditingSliderMinimumDisplayWidth = 156;
 const double _viewportEditingZoomIconsMinimumDisplayWidth = 200;
 const double _viewportEditingControlsMinimumDisplayHeight = 48;
@@ -114,6 +114,7 @@ class _ViewportEditingPanel extends StatelessWidget {
 
     return SizedBox(
       width: width,
+      height: 32,
       child: Material(
         key: ValueKey<String>(
           showSlider
@@ -183,7 +184,7 @@ class _ViewportEditingPanel extends StatelessWidget {
                 style: doneButtonStyle,
                 child: const Text(
                   'Done',
-                  style: TextStyle(fontSize: iconSize * 0.58),
+                  style: TextStyle(fontSize: iconSize * 0.8),
                 ),
               ),
             ],
