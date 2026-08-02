@@ -4,6 +4,20 @@ const double _viewportActionIconDisplaySize = 18;
 const double _viewportActionButtonDisplaySize = 20;
 const double _viewportActionGapDisplaySize = 4;
 const double _viewportActionEdgeDisplayPadding = 5;
+const double _viewportEditingIconDisplaySize = 16;
+const double _viewportEditingZoomIconDisplaySize = 18;
+const double _viewportEditingControlPaddingDisplaySize = 9.6;
+const double _viewportEditingPanelPaddingDisplaySize = 2.4;
+const double _viewportEditingPanelLeftPaddingDisplaySize = 6.4;
+const double _viewportEditingDoneHorizontalPaddingDisplaySize = 6.4;
+const double _viewportEditingDoneButtonDisplayWidth = 44;
+const double _viewportEditingBottomInsetDisplaySize = 6.4;
+const double _viewportEditingControlHeightDisplaySize = 32;
+const double _viewportEditingCompactControlsDisplayWidth = 88;
+const double _viewportEditingSliderMinimumDisplayWidth = 156;
+const double _viewportEditingZoomIconsMinimumDisplayWidth = 200;
+const double _viewportEditingControlsMinimumDisplayHeight = 48;
+const double _viewportEditingControlsMaximumDisplayWidth = 294;
 const double _cropActionsMinimumDisplayWidth =
     _viewportActionEdgeDisplayPadding +
     _viewportActionButtonDisplaySize * 2 +
@@ -51,6 +65,130 @@ class _ViewportActionButton extends StatelessWidget {
           Shadow(color: Color(0xE0000000), blurRadius: 8, offset: Offset(0, 2)),
           Shadow(color: Colors.black87, blurRadius: 2),
         ],
+      ),
+    );
+  }
+}
+
+class _ViewportEditingPanel extends StatelessWidget {
+  const _ViewportEditingPanel({
+    required this.width,
+    required this.viewport,
+    required this.showSlider,
+    required this.showZoomIcons,
+    required this.onZoomChanged,
+    required this.onReset,
+    required this.onDone,
+  });
+
+  final double width;
+  final ClipViewport viewport;
+  final bool showSlider;
+  final bool showZoomIcons;
+  final ValueChanged<double> onZoomChanged;
+  final VoidCallback? onReset;
+  final VoidCallback? onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    const iconSize = _viewportEditingIconDisplaySize;
+    const controlGap = _viewportEditingControlPaddingDisplaySize;
+    final compactButtonStyle = IconButton.styleFrom(
+      minimumSize: const Size.square(_viewportEditingControlHeightDisplaySize),
+      maximumSize: const Size.square(_viewportEditingControlHeightDisplaySize),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+    final doneButtonStyle = FilledButton.styleFrom(
+      fixedSize: const Size(
+        _viewportEditingDoneButtonDisplayWidth,
+        _viewportEditingControlHeightDisplaySize,
+      ),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.symmetric(
+        horizontal: _viewportEditingDoneHorizontalPaddingDisplaySize,
+      ),
+    );
+
+    return SizedBox(
+      width: width,
+      child: Material(
+        key: ValueKey<String>(
+          showSlider
+              ? 'viewport-editing-controls-full'
+              : 'viewport-editing-controls-compact',
+        ),
+        color: const Color(0xEFFFFFFF),
+        elevation: 8,
+        borderRadius: BorderRadius.circular(iconSize),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            _viewportEditingPanelLeftPaddingDisplaySize,
+            _viewportEditingPanelPaddingDisplaySize,
+            _viewportEditingPanelPaddingDisplaySize,
+            _viewportEditingPanelPaddingDisplaySize,
+          ),
+          child: Row(
+            children: <Widget>[
+              if (showSlider) ...<Widget>[
+                if (showZoomIcons) ...<Widget>[
+                  const Icon(
+                    Icons.remove_circle_outline,
+                    size: _viewportEditingZoomIconDisplaySize,
+                  ),
+                  const SizedBox(width: controlGap * 0.25),
+                ],
+                Expanded(
+                  child: SizedBox(
+                    height: _viewportEditingControlHeightDisplaySize,
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 2.4,
+                        overlayColor: Colors.transparent,
+                        overlayShape: SliderComponentShape.noOverlay,
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 8,
+                        ),
+                      ),
+                      child: Slider(
+                        value: viewport.zoom,
+                        min: 1,
+                        max: 4,
+                        onChanged: onZoomChanged,
+                      ),
+                    ),
+                  ),
+                ),
+                if (showZoomIcons) ...<Widget>[
+                  const SizedBox(width: controlGap * 0.25),
+                  const Icon(
+                    Icons.add_circle_outline,
+                    size: _viewportEditingZoomIconDisplaySize,
+                  ),
+                ],
+                const SizedBox(width: controlGap * 0.5),
+              ],
+              IconButton(
+                onPressed: viewport.isDefault ? null : onReset,
+                tooltip: 'Reset framing',
+                iconSize: iconSize,
+                style: compactButtonStyle,
+                icon: const Icon(Icons.restart_alt_rounded),
+              ),
+              const SizedBox(width: controlGap * 0.25),
+              FilledButton(
+                onPressed: onDone,
+                style: doneButtonStyle,
+                child: const Text(
+                  'Done',
+                  style: TextStyle(fontSize: iconSize * 0.58),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -377,13 +515,12 @@ class _ViewportControlsState extends State<_ViewportControls> {
         builder: (context, constraints) {
           final tileSize = constraints.biggest;
           final shortSide = tileSize.shortestSide;
-          final iconSize = (shortSide * 0.065).clamp(16.0, 40.0);
-          final controlPadding = (shortSide * 0.035).clamp(10.0, 28.0);
           final previewDisplayScale = widget.previewDisplayScale.clamp(
             0.001,
             double.infinity,
           );
           final displayedTileWidth = tileSize.width * previewDisplayScale;
+          final displayedTileHeight = tileSize.height * previewDisplayScale;
           final hoverIconSize =
               _viewportActionIconDisplaySize / previewDisplayScale;
           final hoverControlSize =
@@ -397,11 +534,35 @@ class _ViewportControlsState extends State<_ViewportControls> {
           final showTrimAction =
               widget.onTrim != null &&
               displayedTileWidth >= _trimActionsMinimumDisplayWidth;
-          const editingControlScale = 1.2;
-          final editingIconSize = iconSize * editingControlScale;
-          final editingControlPadding = controlPadding * editingControlScale;
-          final useCompactEditingControls =
-              tileSize.width < 360 || tileSize.height < 180;
+          const editingControlPadding =
+              _viewportEditingControlPaddingDisplaySize;
+          final showEditingSlider =
+              displayedTileWidth >= _viewportEditingSliderMinimumDisplayWidth &&
+              displayedTileHeight >=
+                  _viewportEditingControlsMinimumDisplayHeight;
+          final showEditingZoomIcons =
+              displayedTileWidth >=
+              _viewportEditingZoomIconsMinimumDisplayWidth;
+          final canShowEditingControls =
+              displayedTileWidth >=
+                  _viewportEditingCompactControlsDisplayWidth +
+                      editingControlPadding &&
+              displayedTileHeight >=
+                  _viewportEditingControlHeightDisplaySize +
+                      _viewportEditingPanelPaddingDisplaySize * 2 +
+                      _viewportEditingBottomInsetDisplaySize;
+          final editingPanelWidth = showEditingSlider
+              ? math.max(
+                  0.0,
+                  math.min(
+                    _viewportEditingControlsMaximumDisplayWidth,
+                    displayedTileWidth - editingControlPadding * 2,
+                  ),
+                )
+              : _viewportEditingCompactControlsDisplayWidth;
+          final editingPanelAlignment = showEditingSlider
+              ? Alignment.bottomCenter
+              : Alignment.bottomRight;
 
           return Stack(
             fit: StackFit.expand,
@@ -499,98 +660,32 @@ class _ViewportControlsState extends State<_ViewportControls> {
                     ],
                   ),
                 ),
-              if (widget.isEditing && useCompactEditingControls)
+              // The entire preview canvas is painted through a FittedBox.
+              // Counter-scale editing controls so their on-screen dimensions
+              // stay stable when the canvas or cell dimensions change.
+              if (widget.isEditing && canShowEditingControls)
                 Positioned(
-                  right: controlPadding,
-                  bottom: controlPadding,
-                  child: Material(
-                    color: const Color(0xEFFFFFFF),
-                    elevation: 8,
-                    borderRadius: BorderRadius.circular(editingIconSize),
-                    child: Padding(
-                      padding: EdgeInsets.all(editingControlPadding * 0.35),
-                      child: FilledButton(
-                        onPressed: widget.onDone,
-                        style: FilledButton.styleFrom(
-                          minimumSize: Size(
-                            editingIconSize * 2.2,
-                            editingIconSize * 1.6,
-                          ),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: editingControlPadding,
-                          ),
-                        ),
-                        child: Text(
-                          'Done',
-                          style: TextStyle(fontSize: editingIconSize * 0.58),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              if (widget.isEditing && !useCompactEditingControls)
-                Positioned(
-                  left: controlPadding,
-                  right: controlPadding,
-                  bottom: controlPadding,
-                  child: Material(
-                    color: const Color(0xEFFFFFFF),
-                    elevation: 8,
-                    borderRadius: BorderRadius.circular(editingIconSize),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: editingControlPadding,
-                        vertical: editingControlPadding * 0.35,
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          Icon(
-                            Icons.zoom_out_rounded,
-                            size: editingIconSize * 0.9,
-                          ),
-                          SizedBox(width: editingControlPadding * 0.25),
-                          Expanded(
-                            child: Slider(
-                              value: widget.viewport.zoom,
-                              min: 1,
-                              max: 4,
-                              onChanged: _updateZoom,
-                            ),
-                          ),
-                          SizedBox(width: editingControlPadding * 0.25),
-                          Icon(
-                            Icons.zoom_in_rounded,
-                            size: editingIconSize * 0.9,
-                          ),
-                          SizedBox(width: editingControlPadding * 0.5),
-                          IconButton(
-                            onPressed: widget.viewport.isDefault
-                                ? null
-                                : widget.onReset,
-                            tooltip: 'Reset framing',
-                            iconSize: editingIconSize,
-                            icon: const Icon(Icons.restart_alt_rounded),
-                          ),
-                          SizedBox(width: editingControlPadding * 0.25),
-                          FilledButton(
-                            onPressed: widget.onDone,
-                            style: FilledButton.styleFrom(
-                              minimumSize: Size(
-                                editingIconSize * 2.2,
-                                editingIconSize * 1.6,
-                              ),
-                              padding: EdgeInsets.symmetric(
-                                horizontal: editingControlPadding,
-                              ),
-                            ),
-                            child: Text(
-                              'Done',
-                              style: TextStyle(
-                                fontSize: editingIconSize * 0.58,
-                              ),
-                            ),
-                          ),
-                        ],
+                  left: 0,
+                  right: showEditingSlider
+                      ? 0
+                      : editingControlPadding / previewDisplayScale,
+                  bottom:
+                      _viewportEditingBottomInsetDisplaySize /
+                      previewDisplayScale,
+                  child: UnconstrainedBox(
+                    constrainedAxis: Axis.vertical,
+                    alignment: editingPanelAlignment,
+                    child: Transform.scale(
+                      scale: 1 / previewDisplayScale,
+                      alignment: editingPanelAlignment,
+                      child: _ViewportEditingPanel(
+                        width: editingPanelWidth,
+                        viewport: widget.viewport,
+                        showSlider: showEditingSlider,
+                        showZoomIcons: showEditingZoomIcons,
+                        onZoomChanged: _updateZoom,
+                        onReset: widget.onReset,
+                        onDone: widget.onDone,
                       ),
                     ),
                   ),
