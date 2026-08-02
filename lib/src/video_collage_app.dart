@@ -12,6 +12,7 @@ import 'package:video_player/video_player.dart';
 
 import 'models.dart';
 import 'services/editor_settings_store.dart';
+import 'services/desktop_file_service.dart';
 import 'services/system_dialog_service.dart';
 import 'services/video_export_service.dart';
 import 'video_trimmer_dialog.dart';

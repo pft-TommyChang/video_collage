@@ -31,17 +31,8 @@ extension _HistoryController on _VideoCollageScreenState {
       return;
     }
 
-    try {
-      final result = await Process.run('open', <String>[resolvedPath]);
-      if (result.exitCode != 0 && mounted) {
-        _updateState(() {
-          _statusMessage = 'Unable to open export: $resolvedPath';
-        });
-      }
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
+    final didOpen = await DesktopFileService.openFile(resolvedPath);
+    if (!didOpen && mounted) {
       _updateState(() {
         _statusMessage = 'Unable to open export: $resolvedPath';
       });
@@ -126,17 +117,8 @@ extension _HistoryController on _VideoCollageScreenState {
       return;
     }
 
-    try {
-      final result = await Process.run('open', <String>['-R', resolvedPath]);
-      if (result.exitCode != 0 && mounted) {
-        _updateState(() {
-          _statusMessage = 'Unable to open folder: $directoryPath';
-        });
-      }
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
+    final didOpen = await DesktopFileService.revealFile(resolvedPath);
+    if (!didOpen && mounted) {
       _updateState(() {
         _statusMessage = 'Unable to open folder: $directoryPath';
       });

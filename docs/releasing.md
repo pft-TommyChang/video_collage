@@ -22,15 +22,17 @@ When a GitHub Release is published, the workflow in `.github/workflows/release.y
 
 1. Read the release tag.
 2. Verify that the tag version matches `pubspec.yaml`.
-3. Build a macOS release app with Flutter.
-4. Package the app into a DMG file.
-5. Generate a SHA-256 checksum file.
-6. Upload both files back to the GitHub Release as assets.
+3. Build the macOS and Windows release apps on native GitHub-hosted runners.
+4. Package macOS as a DMG and Windows x64 as a portable ZIP.
+5. Generate SHA-256 checksum files.
+6. Upload all files back to the GitHub Release as assets.
 
 Expected release assets:
 
 - `PerfectCollage-<version>-macos-arm64.dmg`
 - `PerfectCollage-<version>-macos-arm64.sha256`
+- `PerfectCollage-<version>-windows-x64.zip`
+- `PerfectCollage-<version>-windows-x64.sha256`
 
 ## How to publish a release on GitHub
 
@@ -42,12 +44,12 @@ Expected release assets:
 6. Choose the target branch or commit you want to release.
 7. Set the release title, for example `v1.4.0`.
 8. Publish the release.
-9. Wait for the `Release macOS build` GitHub Actions workflow to finish.
-10. Refresh the release page and download the generated DMG asset.
+9. Wait for the `Release desktop builds` GitHub Actions workflow to finish.
+10. Refresh the release page and download the generated desktop assets.
 
 ## Local build for verification
 
-You can generate the same release asset locally:
+On macOS, generate the macOS release asset locally:
 
 ```bash
 ./scripts/build_release_artifacts.sh
@@ -58,6 +60,17 @@ The generated files will be placed in:
 ```text
 dist/
 ```
+
+On Windows, generate the Windows x64 portable release locally from PowerShell:
+
+```powershell
+.\scripts\build_windows_release.ps1
+```
+
+Flutter desktop builds are host-specific: macOS cannot run `flutter build
+windows`. To produce Windows artifacts while working from a Mac, use this
+repository's GitHub Actions release workflow or a Windows VM/machine with
+Visual Studio's Desktop development with C++ workload installed.
 
 ## Local build and upload
 
@@ -92,15 +105,17 @@ Notes:
 
 ## Important note about signing
 
-This workflow currently builds an unsigned macOS app and DMG.
+This workflow currently builds unsigned macOS and Windows artifacts.
 
 That means:
 
 - the release artifact is still distributable
 - macOS may show Gatekeeper warnings on another machine
+- Windows may show a Microsoft Defender SmartScreen warning
 
 If you want a smoother end-user install flow later, the next step is to add:
 
 - Apple code signing
 - notarization
 - stapling
+- Windows Authenticode code signing

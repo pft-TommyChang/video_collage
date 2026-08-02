@@ -87,7 +87,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(14),
                                         child: Image.asset(
-                                          'macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png',
+                                          'assets/app_icon_128.png',
                                           width: 44,
                                           height: 44,
                                           fit: BoxFit.cover,

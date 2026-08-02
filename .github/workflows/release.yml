@@ -1,4 +1,4 @@
-name: Release macOS build
+name: Release desktop builds
 
 on:
   release:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing git tag to build and upload assets for, for example v1.0.0
+        description: Existing git tag to build and upload assets for, for example v1.4.0
         required: true
         type: string
 
@@ -15,18 +15,19 @@ permissions:
   contents: write
 
 jobs:
-  build-macos-release:
-    runs-on: macos-latest
-
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release_meta.outputs.tag }}
+      version: ${{ steps.release_meta.outputs.version }}
     env:
-      FLUTTER_VERSION: 3.38.10
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
-      PACKAGE_ARCH: arm64
 
     steps:
       - name: Resolve release tag
         id: release_meta
+        shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "release" ]]; then
             tag="${{ github.event.release.tag_name }}"
@@ -39,9 +40,8 @@ jobs:
             exit 1
           fi
 
-          version="${tag#v}"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
       - name: Check out release source
         uses: actions/checkout@v4
@@ -54,7 +54,6 @@ jobs:
         run: |
           pubspec_version="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"
           release_version="${{ steps.release_meta.outputs.version }}"
-
           if [[ "$pubspec_version" != "$release_version" ]]; then
             echo "Tag version ($release_version) does not match pubspec.yaml ($pubspec_version)." >&2
             exit 1
@@ -65,35 +64,39 @@ jobs:
         shell: bash
         run: |
           tag="${{ steps.release_meta.outputs.tag }}"
-
           if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
             echo "GitHub Release $tag already exists."
-            exit 0
+          else
+            gh release create "$tag" --repo "$GH_REPO" --verify-tag --generate-notes
           fi
 
-          gh release create "$tag" \
-            --repo "$GH_REPO" \
-            --verify-tag \
-            --generate-notes
+  build-macos-release:
+    needs: prepare-release
+    runs-on: macos-latest
+    env:
+      FLUTTER_VERSION: 3.38.10
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      PACKAGE_ARCH: arm64
 
-          gh release view "$tag" --repo "$GH_REPO" >/dev/null
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.prepare-release.outputs.tag }}
+          fetch-depth: 0
 
       - name: Install Flutter SDK
         shell: bash
         run: |
-          git clone https://github.com/flutter/flutter.git \
-            --depth 1 \
-            --branch "${FLUTTER_VERSION}" \
-            "${HOME}/flutter"
-          export PATH="${HOME}/flutter/bin:${PATH}"
+          git clone https://github.com/flutter/flutter.git --depth 1 --branch "${FLUTTER_VERSION}" "${HOME}/flutter"
           echo "${HOME}/flutter/bin" >> "${GITHUB_PATH}"
-          flutter --disable-analytics --version
+          "${HOME}/flutter/bin/flutter" --disable-analytics --version
 
-      - name: Enable macOS desktop
-        run: flutter config --enable-macos-desktop
-
-      - name: Precache macOS artifacts
-        run: flutter precache --macos
+      - name: Enable and precache macOS desktop
+        run: |
+          flutter config --enable-macos-desktop
+          flutter precache --macos
 
       - name: Build release artifacts
         run: ./scripts/build_release_artifacts.sh
@@ -101,7 +104,7 @@ jobs:
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-release-${{ steps.release_meta.outputs.version }}-arm64
+          name: macos-release-${{ needs.prepare-release.outputs.version }}-arm64
           path: |
             dist/*.dmg
             dist/*.sha256
@@ -110,8 +113,49 @@ jobs:
       - name: Upload assets to GitHub Release
         shell: bash
         run: |
-          gh release upload "${{ steps.release_meta.outputs.tag }}" \
-            --repo "$GH_REPO" \
-            dist/*.dmg \
-            dist/*.sha256 \
-            --clobber
+          gh release upload "${{ needs.prepare-release.outputs.tag }}" --repo "$GH_REPO" dist/*.dmg dist/*.sha256 --clobber
+
+  build-windows-release:
+    needs: prepare-release
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.prepare-release.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Install Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.38.10
+          channel: stable
+          cache: true
+
+      - name: Enable and precache Windows desktop
+        shell: pwsh
+        run: |
+          flutter config --enable-windows-desktop
+          flutter precache --windows
+
+      - name: Build release artifacts
+        shell: pwsh
+        run: ./scripts/build_windows_release.ps1
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-${{ needs.prepare-release.outputs.version }}-x64
+          path: |
+            dist/*-windows-x64.zip
+            dist/*-windows-x64.sha256
+          if-no-files-found: error
+
+      - name: Upload assets to GitHub Release
+        shell: pwsh
+        run: |
+          gh release upload "${{ needs.prepare-release.outputs.tag }}" --repo "$env:GH_REPO" (Get-ChildItem dist/*-windows-x64.zip) (Get-ChildItem dist/*-windows-x64.sha256) --clobber

@@ -40,6 +40,7 @@ dependencies:
   file_selector: ^1.1.0
   video_player_media_kit: ^2.0.0
   media_kit_libs_macos_video: ^1.1.4
+  media_kit_libs_windows_video: ^1.0.11
   ffmpeg_kit_flutter_new: ^4.5.2
   desktop_drop: ^0.7.1
 
@@ -66,7 +67,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_128.png
+    - assets/app_icon_128.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

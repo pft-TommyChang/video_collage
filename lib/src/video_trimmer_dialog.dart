@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:video_player/video_player.dart';
 
 import 'models.dart';
+import 'services/desktop_file_service.dart';
 import 'services/system_dialog_service.dart';
 import 'services/video_export_service.dart';
 
@@ -361,15 +362,10 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
     final targetDescription = revealInFolder
         ? 'folder: ${p.dirname(exportPath)}'
         : 'export: $exportPath';
-    try {
-      final result = await Process.run('open', <String>[
-        if (revealInFolder) '-R',
-        exportPath,
-      ]);
-      if (result.exitCode != 0) {
-        _showToast('Unable to open $targetDescription');
-      }
-    } catch (_) {
+    final didOpen = revealInFolder
+        ? await DesktopFileService.revealFile(exportPath)
+        : await DesktopFileService.openFile(exportPath);
+    if (!didOpen) {
       _showToast('Unable to open $targetDescription');
     }
   }

@@ -4,7 +4,7 @@
 
 # 🎬 Perfect Collage
 
-> 快速、直覺的 macOS 圖片與影片拼貼工具。
+> 快速、直覺的 macOS 與 Windows 圖片及影片拼貼工具。
 
 [English README](../README.md)
 
@@ -34,15 +34,17 @@ Perfect Collage 適合製作比較畫面、社群貼文、多鏡頭畫面與簡�
 - 影片：`mp4`、`mov`、`m4v`、`avi`、`mkv`、`webm`
 - 圖片：`jpg`、`jpeg`、`png`、`webp`、`heic`、`heif`
 
-實際可用格式仍可能受到 macOS 系統編解碼器影響。
+實際可用格式仍可能受到作業系統與可用編解碼器影響。
 
 ## 🛠 本機開發
 
-需要 macOS、Flutter 與 Xcode。
+需要 Flutter，以及目標平台所需的原生開發工具鏈。
 
 ```bash
 flutter pub get
 flutter run -d macos
+# 在 Windows 上：
+flutter run -d windows
 ```
 
 執行檢查：
@@ -57,6 +59,16 @@ flutter test
 ```bash
 flutter build macos
 ```
+
+在 Windows x64 建置並打包：
+
+```powershell
+.\scripts\build_windows_release.ps1
+```
+
+Flutter Windows desktop 無法直接從 macOS 本機交叉編譯。請使用 Windows
+電腦／虛擬機，或推送 release tag，交給 GitHub Actions 的 Windows runner
+自動建立 release ZIP。
 
 打包與發布方式請參考 [Release 說明](releasing.md)。
 

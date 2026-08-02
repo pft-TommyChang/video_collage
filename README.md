@@ -4,7 +4,7 @@
 
 # 🎬 Perfect Collage
 
-> A fast, visual macOS app for turning photos and videos into polished grid collages.
+> A fast, visual macOS and Windows app for turning photos and videos into polished grid collages.
 
 [繁體中文版](docs/README.zh-TW.md)
 
@@ -34,15 +34,17 @@ Perfect Collage is built for comparisons, social posts, multi-camera views, and 
 - Video: `mp4`, `mov`, `m4v`, `avi`, `mkv`, `webm`
 - Image: `jpg`, `jpeg`, `png`, `webp`, `heic`, `heif`
 
-Format support may also depend on the codecs available in macOS.
+Format support may also depend on the codecs available on the host platform.
 
 ## 🛠 Development
 
-Requirements: macOS, Flutter, and Xcode.
+Requirements: Flutter plus the native desktop toolchain for your platform.
 
 ```bash
 flutter pub get
 flutter run -d macos
+# On Windows:
+flutter run -d windows
 ```
 
 Run checks:
@@ -57,6 +59,16 @@ Build the macOS app:
 ```bash
 flutter build macos
 ```
+
+Build and package the Windows x64 app (run on Windows):
+
+```powershell
+.\scripts\build_windows_release.ps1
+```
+
+Windows builds cannot be cross-compiled locally from macOS. Use a Windows
+machine/VM or publish a tag and let the GitHub Actions Windows runner create the
+release ZIP automatically.
 
 For packaging and release instructions, see [Releasing Perfect Collage](docs/releasing.md).
 

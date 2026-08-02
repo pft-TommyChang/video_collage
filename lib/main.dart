@@ -6,7 +6,7 @@ import 'src/video_collage_app.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  VideoPlayerMediaKit.ensureInitialized(macOS: true);
+  VideoPlayerMediaKit.ensureInitialized(macOS: true, windows: true);
   _installKnownFlutterDesktopWorkarounds();
   runApp(const VideoCollageApp());
 }
@@ -25,7 +25,7 @@ void _installKnownFlutterDesktopWorkarounds() {
       if (!duplicateKeyAssertionReported) {
         duplicateKeyAssertionReported = true;
         debugPrint(
-          'Ignored known Flutter macOS keyboard assertion: duplicate KeyDownEvent state mismatch.',
+          'Ignored known Flutter desktop keyboard assertion: duplicate KeyDownEvent state mismatch.',
         );
       }
       return;
