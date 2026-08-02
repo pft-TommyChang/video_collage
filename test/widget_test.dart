@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,57 @@ import 'package:video_collage_mac/src/video_collage_app.dart';
 import 'package:video_collage_mac/src/video_trimmer_dialog.dart';
 
 void main() {
+  const mediaOpenChannel = MethodChannel('video_collage/media_open');
+
+  void useTestWindow(WidgetTester tester, Size size) {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+  }
+
+  String appIconPath(int size) => p.join(
+    Directory.current.path,
+    'macos',
+    'Runner',
+    'Assets.xcassets',
+    'AppIcon.appiconset',
+    'app_icon_$size.png',
+  );
+
+  void mockPendingMediaFiles(WidgetTester tester, List<String> mediaPaths) {
+    var didConsumeMedia = false;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      mediaOpenChannel,
+      (call) async {
+        if (call.method != 'consumePendingMediaFiles' || didConsumeMedia) {
+          return <String>[];
+        }
+        didConsumeMedia = true;
+        return mediaPaths;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        mediaOpenChannel,
+        null,
+      );
+    });
+  }
+
+  Future<void> pumpUntilFound(WidgetTester tester, Finder finder) async {
+    for (var attempt = 0; attempt < 30; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      if (finder.evaluate().isNotEmpty) {
+        return;
+      }
+    }
+    fail('Timed out waiting for $finder.');
+  }
+
   Future<void> scrollSettingsIntoView(
     WidgetTester tester,
     Finder finder,
@@ -24,10 +76,7 @@ void main() {
   }
 
   testWidgets('renders app shell', (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    useTestWindow(tester, const Size(1600, 1000));
 
     await tester.pumpWidget(const VideoCollageApp());
     await tester.pumpAndSettle();
@@ -39,10 +88,7 @@ void main() {
   testWidgets('last export is disabled at the start of each app session', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    useTestWindow(tester, const Size(1600, 1000));
 
     await tester.pumpWidget(const VideoCollageApp());
     await tester.pumpAndSettle();
@@ -59,10 +105,7 @@ void main() {
   testWidgets('compact preview header keeps duration without overflowing', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(800, 640);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    useTestWindow(tester, const Size(800, 640));
 
     await tester.pumpWidget(const VideoCollageApp());
     await tester.pumpAndSettle();
@@ -73,10 +116,7 @@ void main() {
   testWidgets('trim dialog fits the minimum window height', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(800, 640);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    useTestWindow(tester, const Size(800, 640));
 
     const clip = VideoClipInfo(
       path: '/missing-test-video.mp4',
@@ -114,58 +154,11 @@ void main() {
   testWidgets('Finder-opened media is imported and auto-laid out', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    const mediaOpenChannel = MethodChannel('video_collage/media_open');
-    final mediaPaths = <String>[
-      p.join(
-        Directory.current.path,
-        'macos',
-        'Runner',
-        'Assets.xcassets',
-        'AppIcon.appiconset',
-        'app_icon_32.png',
-      ),
-      p.join(
-        Directory.current.path,
-        'macos',
-        'Runner',
-        'Assets.xcassets',
-        'AppIcon.appiconset',
-        'app_icon_64.png',
-      ),
-    ];
-    var didConsumeMedia = false;
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      mediaOpenChannel,
-      (call) async {
-        if (call.method != 'consumePendingMediaFiles' || didConsumeMedia) {
-          return <String>[];
-        }
-        didConsumeMedia = true;
-        return mediaPaths;
-      },
-    );
-    addTearDown(() {
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        mediaOpenChannel,
-        null,
-      );
-    });
+    useTestWindow(tester, const Size(1600, 1000));
+    mockPendingMediaFiles(tester, <String>[appIconPath(32), appIconPath(64)]);
 
     await tester.pumpWidget(const VideoCollageApp());
-    for (var attempt = 0; attempt < 30; attempt++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pump(const Duration(milliseconds: 100));
-      if (find.text('Auto layout picked 1×2 • 16:9.').evaluate().isNotEmpty) {
-        break;
-      }
-    }
+    await pumpUntilFound(tester, find.text('Auto layout picked 1×2 • 16:9.'));
 
     expect(find.text('2 loaded • capacity 2'), findsOneWidget);
     expect(find.text('Auto layout picked 1×2 • 16:9.'), findsOneWidget);
@@ -189,51 +182,64 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('removing a preview clip leaves its slot empty', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    mockPendingMediaFiles(tester, <String>[
+      appIconPath(32),
+      appIconPath(64),
+      appIconPath(128),
+    ]);
+
+    await tester.pumpWidget(const VideoCollageApp());
+    await pumpUntilFound(tester, find.text('3 loaded • capacity 3'));
+
+    final middleSlot = find.byKey(const ValueKey<String>('preview-slot-1'));
+    final rightSlot = find.byKey(const ValueKey<String>('preview-slot-2'));
+    expect(
+      find.descendant(of: middleSlot, matching: find.byType(Image)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: rightSlot, matching: find.byType(Image)),
+      findsOneWidget,
+    );
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: tester.getCenter(middleSlot));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(
+      find.descendant(of: middleSlot, matching: find.byTooltip('Remove')),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.descendant(of: middleSlot, matching: find.byType(Image)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: middleSlot, matching: find.byIcon(Icons.add)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: rightSlot, matching: find.byType(Image)),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets('reset options can keep or remove loaded media', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    const mediaOpenChannel = MethodChannel('video_collage/media_open');
-    final mediaPath = p.join(
-      Directory.current.path,
-      'macos',
-      'Runner',
-      'Assets.xcassets',
-      'AppIcon.appiconset',
-      'app_icon_32.png',
-    );
-    var didConsumeMedia = false;
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      mediaOpenChannel,
-      (call) async {
-        if (call.method != 'consumePendingMediaFiles' || didConsumeMedia) {
-          return <String>[];
-        }
-        didConsumeMedia = true;
-        return <String>[mediaPath];
-      },
-    );
-    addTearDown(() {
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        mediaOpenChannel,
-        null,
-      );
-    });
+    useTestWindow(tester, const Size(1600, 1000));
+    mockPendingMediaFiles(tester, <String>[appIconPath(32)]);
 
     await tester.pumpWidget(const VideoCollageApp());
-    for (var attempt = 0; attempt < 30; attempt++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pump(const Duration(milliseconds: 100));
-      if (find.textContaining('1 loaded').evaluate().isNotEmpty) {
-        break;
-      }
-    }
+    await pumpUntilFound(tester, find.textContaining('1 loaded'));
 
     await tester.tap(find.byTooltip('Reset all'));
     await tester.pump(const Duration(milliseconds: 500));
@@ -264,10 +270,7 @@ void main() {
   testWidgets('aspect ratio dropdown includes 9:21 and 21:9', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    useTestWindow(tester, const Size(1600, 1000));
 
     await tester.pumpWidget(const VideoCollageApp());
     await tester.pumpAndSettle();
@@ -286,10 +289,7 @@ void main() {
   testWidgets('rows and columns can be increased to 8', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    useTestWindow(tester, const Size(1600, 1000));
 
     await tester.pumpWidget(const VideoCollageApp());
     await tester.pumpAndSettle();
@@ -316,10 +316,7 @@ void main() {
   testWidgets('fit mode dropdown includes crop center and center inside', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    useTestWindow(tester, const Size(1600, 1000));
 
     await tester.pumpWidget(const VideoCollageApp());
     await tester.pumpAndSettle();

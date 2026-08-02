@@ -202,6 +202,7 @@ class _PreviewTile extends StatelessWidget {
   static const double _dragFeedbackCornerRadius = 8;
 
   const _PreviewTile({
+    super.key,
     required this.clip,
     required this.controller,
     required this.cornerRadius,

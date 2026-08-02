@@ -51,23 +51,6 @@ extension _CollageController on _VideoCollageScreenState {
     return slotIndex;
   }
 
-  void _compactSlotAssignments() {
-    if (_slotAssignments.isEmpty) {
-      return;
-    }
-
-    final sortedEntries = _slotAssignments.entries.toList()
-      ..sort((left, right) => left.key.compareTo(right.key));
-
-    _slotAssignments
-      ..clear()
-      ..addEntries(
-        sortedEntries.indexed.map(
-          (entry) => MapEntry(entry.$1, entry.$2.value),
-        ),
-      );
-  }
-
   void _backfillVisibleSlotsFromOverflow() {
     final emptyVisibleSlots = <int>[
       for (var slotIndex = 0; slotIndex < _gridCapacity; slotIndex += 1)

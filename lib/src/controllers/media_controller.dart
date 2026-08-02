@@ -95,8 +95,6 @@ extension _MediaController on _VideoCollageScreenState {
       if (_editingViewportClipPath == clip.path) {
         _editingViewportClipPath = null;
       }
-      _compactSlotAssignments();
-      _backfillVisibleSlotsFromOverflow();
       _loadingClipPaths.remove(clip.path);
       _clipErrors.remove(clip.path);
       if (_controllers.isEmpty) {

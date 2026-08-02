@@ -888,6 +888,9 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                                                 }
                                                               },
                                                               child: _PreviewTile(
+                                                                key: ValueKey(
+                                                                  'preview-slot-$index',
+                                                                ),
                                                                 clip: clip,
                                                                 controller:
                                                                     clip == null
