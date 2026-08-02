@@ -199,6 +199,7 @@ class _PreviewTile extends StatelessWidget {
   static const Size _dragFeedbackFallbackSize = Size(240, 160);
   static const double _dragFeedbackMaxSide = 240;
   static const double _dragFeedbackMinSide = 120;
+  static const double _dragFeedbackCornerRadius = 8;
 
   const _PreviewTile({
     required this.clip,
@@ -298,6 +299,7 @@ class _PreviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tileCornerRadius = isEditingViewport ? 0.0 : cornerRadius;
     final rawLabel = !showLabel || clip == null || isEditingViewport
         ? null
         : buildClipLabelText(
@@ -309,7 +311,7 @@ class _PreviewTile extends StatelessWidget {
     final tile = _PreviewTileBody(
       clip: clip,
       controller: controller,
-      cornerRadius: cornerRadius,
+      cornerRadius: tileCornerRadius,
       isLoading: isLoading,
       errorMessage: errorMessage,
       onTap: onPickMedia,
@@ -356,7 +358,7 @@ class _PreviewTile extends StatelessWidget {
               opacity: isVeiled ? 1 : 0,
               child: Material(
                 color: Colors.white.withValues(alpha: 0.58),
-                borderRadius: BorderRadius.circular(cornerRadius),
+                borderRadius: BorderRadius.circular(tileCornerRadius),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(onTap: onVeilTap),
               ),
@@ -391,11 +393,11 @@ class _PreviewTile extends StatelessWidget {
             color: Colors.transparent,
             elevation: 24,
             shadowColor: const Color(0x55000000),
-            borderRadius: BorderRadius.circular(cornerRadius + 8),
+            borderRadius: BorderRadius.circular(_dragFeedbackCornerRadius),
             child: _PreviewTileBody(
               clip: clip,
               controller: controller,
-              cornerRadius: cornerRadius,
+              cornerRadius: _dragFeedbackCornerRadius,
               isLoading: isLoading,
               errorMessage: errorMessage,
               onTap: null,
