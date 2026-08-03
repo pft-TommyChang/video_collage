@@ -11,6 +11,28 @@ void main() {
     expect(settings.clipLabelPadding, 10);
   });
 
+  test('persisted settings restore custom colors and border image', () {
+    final settings = PersistedEditorSettings.fromJson(<String, dynamic>{
+      'borderColorValue': 0xFF123456,
+      'backgroundColorValue': 0x00000000,
+      'borderImagePath': '/tmp/border.png',
+    });
+
+    expect(settings.borderColorValue, 0xFF123456);
+    expect(settings.backgroundColorValue, 0x00000000);
+    expect(settings.borderImagePath, '/tmp/border.png');
+  });
+
+  test('transparent color choice is identified by its alpha channel', () {
+    const choice = ColorChoice(
+      label: 'Transparent',
+      color: Color(0x00000000),
+      ffmpegHex: 'black@0.0',
+    );
+
+    expect(choice.isTransparent, isTrue);
+  });
+
   test('crop center fit mode uses cover preview fit', () {
     expect(ClipFitMode.cropCenter.previewFit, BoxFit.cover);
     expect(ClipFitMode.centerInside.previewFit, BoxFit.contain);

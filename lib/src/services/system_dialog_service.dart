@@ -65,6 +65,14 @@ class SystemDialogService {
     return file?.path;
   }
 
+  Future<String?> pickPhoto() async {
+    final file = await openFile(
+      acceptedTypeGroups: const <XTypeGroup>[_photoTypeGroup],
+      confirmButtonText: 'Choose Image',
+    );
+    return file?.path;
+  }
+
   Future<String?> pickSavePath({
     required ExportFormat format,
     required String suggestedName,

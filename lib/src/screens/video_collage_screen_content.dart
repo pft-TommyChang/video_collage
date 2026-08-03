@@ -341,7 +341,11 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                       ),
                                       const SizedBox(height: 6),
                                       _ColorSelector(
-                                        label: 'Border',
+                                        label: 'Canvas',
+                                        imagePath: _borderImagePath,
+                                        onPickImage: () =>
+                                            unawaited(_pickBorderImage()),
+                                        onClearImage: _clearBorderImage,
                                         selected: _selectedBorderColor,
                                         onSelected: (choice) {
                                           _setStateAndSave(() {
@@ -351,7 +355,8 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                       ),
                                       const SizedBox(height: 12),
                                       _ColorSelector(
-                                        label: 'Background',
+                                        label: 'Tile background',
+                                        allowTransparent: true,
                                         selected: _selectedBackgroundColor,
                                         onSelected: (choice) {
                                           _setStateAndSave(() {
@@ -823,6 +828,16 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                           child: DecoratedBox(
                                             decoration: BoxDecoration(
                                               color: _selectedBorderColor.color,
+                                              image: _borderImagePath == null
+                                                  ? null
+                                                  : DecorationImage(
+                                                      image: FileImage(
+                                                        File(_borderImagePath!),
+                                                      ),
+                                                      fit: BoxFit.cover,
+                                                      alignment:
+                                                          Alignment.center,
+                                                    ),
                                               boxShadow: const <BoxShadow>[
                                                 BoxShadow(
                                                   color: Color(0x2A000000),

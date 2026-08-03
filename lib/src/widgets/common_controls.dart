@@ -115,70 +115,380 @@ class _ColorSelector extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onSelected,
+    this.allowTransparent = false,
+    this.imagePath,
+    this.onPickImage,
+    this.onClearImage,
   });
 
   final String label;
   final ColorChoice selected;
   final ValueChanged<ColorChoice> onSelected;
+  final bool allowTransparent;
+  final String? imagePath;
+  final VoidCallback? onPickImage;
+  final VoidCallback? onClearImage;
+
+  Future<void> _openPalette(BuildContext context) async {
+    var hsv = HSVColor.fromColor(
+      selected.isTransparent ? Colors.white : selected.color,
+    );
+    final color = await showDialog<Color>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final previewColor = hsv.toColor();
+          final hex = (previewColor.toARGB32() & 0xFFFFFF)
+              .toRadixString(16)
+              .padLeft(6, '0')
+              .toUpperCase();
+          return AlertDialog(
+            title: Text('Choose $label color'),
+            content: SizedBox(
+              width: 360,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _SaturationValuePicker(
+                    hsvColor: hsv,
+                    onChanged: (color) => setDialogState(() => hsv = color),
+                  ),
+                  const SizedBox(height: 16),
+                  _HuePicker(
+                    hue: hsv.hue,
+                    onChanged: (value) =>
+                        setDialogState(() => hsv = hsv.withHue(value)),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: <Widget>[
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: previewColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFD7CEC2)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '#$hex',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, previewColor),
+                child: const Text('Use color'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (color != null) {
+      onSelected(_colorChoiceFromColor(color));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final hasImage = imagePath != null;
+    final hasTransparentBackground = allowTransparent && selected.isTransparent;
+    const imageChoice = ColorChoice(
+      label: 'Image',
+      color: Colors.transparent,
+      ffmpegHex: 'black',
+    );
+    final overrideChoice = hasImage
+        ? imageChoice
+        : hasTransparentBackground
+        ? _transparentColor
+        : null;
+    final hasOverride = overrideChoice != null;
+    final choices = <ColorChoice>[..._colorChoices, ?overrideChoice];
+    final selectedChoice =
+        overrideChoice ??
+        choices.firstWhere(
+          (choice) => choice.color.toARGB32() == selected.color.toARGB32(),
+          orElse: () => selected,
+        );
+    if (!choices.contains(selectedChoice)) {
+      choices.add(selectedChoice);
+    }
+    Widget actionButton({
+      required String tooltip,
+      required VoidCallback? onPressed,
+      required IconData icon,
+    }) => Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: IconButton.outlined(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        style: IconButton.styleFrom(
+          fixedSize: const Size.square(32),
+          padding: EdgeInsets.zero,
+        ),
+        iconSize: 18,
+        icon: Icon(icon),
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text('$label color', style: Theme.of(context).textTheme.titleSmall),
+        Text(label, style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 10),
-        DropdownButtonFormField<ColorChoice>(
-          initialValue: selected,
-          isExpanded: true,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFF171A21), width: 2),
-            ),
-          ),
-          icon: const Icon(Icons.keyboard_arrow_down_rounded),
-          items: _colorChoices.map((choice) {
-            return DropdownMenuItem<ColorChoice>(
-              value: choice,
-              child: Row(
-                children: <Widget>[
-                  Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: choice.color,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFD7CEC2)),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: DropdownButtonFormField<ColorChoice>(
+                key: ValueKey(
+                  '$label-${selected.color.toARGB32()}-$hasOverride',
+                ),
+                initialValue: selectedChoice,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: hasOverride
+                      ? const Color(0xFFF1EEE9)
+                      : Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF171A21),
+                      width: 2,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Text(choice.label),
-                ],
+                ),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                items: choices.map((choice) {
+                  final isImageChoice = identical(choice, imageChoice);
+                  return DropdownMenuItem<ColorChoice>(
+                    value: choice,
+                    child: Row(
+                      children: <Widget>[
+                        if (isImageChoice)
+                          const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: Icon(Icons.image, size: 19),
+                          )
+                        else if (choice.isTransparent)
+                          const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: Icon(Icons.layers_clear_outlined, size: 19),
+                          )
+                        else
+                          Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: choice.color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFFD7CEC2),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            choice.label,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: hasOverride
+                    ? null
+                    : (choice) {
+                        if (choice != null) {
+                          onSelected(choice);
+                        }
+                      },
               ),
-            );
-          }).toList(),
-          onChanged: (choice) {
-            if (choice != null) {
-              onSelected(choice);
-            }
-          },
+            ),
+            actionButton(
+              tooltip: 'Open color palette',
+              onPressed: hasOverride ? null : () => _openPalette(context),
+              icon: Icons.palette_outlined,
+            ),
+            if (onPickImage != null)
+              actionButton(
+                tooltip: hasImage ? 'Remove border image' : 'Use border image',
+                onPressed: hasImage ? onClearImage : onPickImage,
+                icon: hasImage
+                    ? Icons.image_not_supported_outlined
+                    : Icons.image_outlined,
+              ),
+            if (allowTransparent)
+              actionButton(
+                tooltip: hasTransparentBackground
+                    ? 'Use solid background'
+                    : 'Use transparent background',
+                onPressed: () => onSelected(
+                  hasTransparentBackground
+                      ? _defaultBackgroundColor
+                      : _transparentColor,
+                ),
+                icon: hasTransparentBackground
+                    ? Icons.layers_outlined
+                    : Icons.layers_clear_outlined,
+              ),
+          ],
         ),
       ],
+    );
+  }
+}
+
+class _SaturationValuePicker extends StatelessWidget {
+  const _SaturationValuePicker({
+    required this.hsvColor,
+    required this.onChanged,
+  });
+
+  final HSVColor hsvColor;
+  final ValueChanged<HSVColor> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const height = 220.0;
+        void update(Offset position) {
+          final saturation = (position.dx / constraints.maxWidth).clamp(
+            0.0,
+            1.0,
+          );
+          final value = (1 - position.dy / height).clamp(0.0, 1.0);
+          onChanged(hsvColor.withSaturation(saturation).withValue(value));
+        }
+
+        return GestureDetector(
+          onPanDown: (details) => update(details.localPosition),
+          onPanUpdate: (details) => update(details.localPosition),
+          child: CustomPaint(
+            size: Size(constraints.maxWidth, height),
+            painter: _SaturationValuePainter(hsvColor),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SaturationValuePainter extends CustomPainter {
+  const _SaturationValuePainter(this.hsvColor);
+
+  final HSVColor hsvColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final radius = Radius.circular(12);
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(rect, radius));
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          colors: <Color>[
+            Colors.white,
+            HSVColor.fromAHSV(1, hsvColor.hue, 1, 1).toColor(),
+          ],
+        ).createShader(rect),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Colors.transparent, Colors.black],
+        ).createShader(rect),
+    );
+    canvas.restore();
+
+    final marker = Offset(
+      hsvColor.saturation * size.width,
+      (1 - hsvColor.value) * size.height,
+    );
+    canvas.drawCircle(marker, 8, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      marker,
+      8,
+      Paint()
+        ..color = Colors.black54
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SaturationValuePainter oldDelegate) =>
+      oldDelegate.hsvColor != hsvColor;
+}
+
+class _HuePicker extends StatelessWidget {
+  const _HuePicker({required this.hue, required this.onChanged});
+
+  final double hue;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: <Color>[
+            Color(0xFFFF0000),
+            Color(0xFFFFFF00),
+            Color(0xFF00FF00),
+            Color(0xFF00FFFF),
+            Color(0xFF0000FF),
+            Color(0xFFFF00FF),
+            Color(0xFFFF0000),
+          ],
+        ),
+      ),
+      child: SliderTheme(
+        data: SliderTheme.of(context).copyWith(
+          activeTrackColor: Colors.transparent,
+          inactiveTrackColor: Colors.transparent,
+          trackHeight: 32,
+          thumbColor: Colors.white,
+          overlayColor: Colors.white24,
+        ),
+        child: Slider(value: hue, min: 0, max: 360, onChanged: onChanged),
+      ),
     );
   }
 }

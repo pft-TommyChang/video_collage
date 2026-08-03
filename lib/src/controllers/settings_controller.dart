@@ -11,6 +11,7 @@ extension _SettingsController on _VideoCollageScreenState {
       tileCornerRadius: _tileCornerRadius,
       backgroundColor: _selectedBackgroundColor,
       borderColor: _selectedBorderColor,
+      borderImagePath: _borderImagePath,
       fitMode: _selectedFitMode,
       includeClipLabelsInOutput: _includeClipLabelsInOutput,
       clipLabelDisplayMode: _clipLabelDisplayMode,
@@ -102,14 +103,17 @@ extension _SettingsController on _VideoCollageScreenState {
         orElse: () => _selectedDurationMode,
       );
       _lastExportDirectory = savedSettings.lastExportDirectory;
-      _selectedBorderColor = _colorChoices.firstWhere(
-        (choice) => choice.label == savedSettings.borderColorLabel,
-        orElse: () => _selectedBorderColor,
+      _selectedBorderColor = _colorChoiceFromColor(
+        Color(savedSettings.borderColorValue),
       );
-      _selectedBackgroundColor = _colorChoices.firstWhere(
-        (choice) => choice.label == savedSettings.backgroundColorLabel,
-        orElse: () => _selectedBackgroundColor,
+      _selectedBackgroundColor = _colorChoiceFromColor(
+        Color(savedSettings.backgroundColorValue),
       );
+      _borderImagePath =
+          savedSettings.borderImagePath != null &&
+              File(savedSettings.borderImagePath!).existsSync()
+          ? savedSettings.borderImagePath
+          : null;
       _outputWidth = _ensureEven(savedSettings.outputWidth);
       _outputHeight = _ensureEven(savedSettings.outputHeight);
       _syncResolutionDraft(_outputWidth, _outputHeight);
@@ -168,6 +172,9 @@ extension _SettingsController on _VideoCollageScreenState {
         lastExportDirectory: _lastExportDirectory,
         borderColorLabel: _selectedBorderColor.label,
         backgroundColorLabel: _selectedBackgroundColor.label,
+        borderColorValue: _selectedBorderColor.color.toARGB32(),
+        backgroundColorValue: _selectedBackgroundColor.color.toARGB32(),
+        borderImagePath: _borderImagePath,
       ),
     );
   }
@@ -175,6 +182,24 @@ extension _SettingsController on _VideoCollageScreenState {
   void _setStateAndSave(VoidCallback update) {
     _updateState(update);
     _scheduleSettingsSave();
+  }
+
+  Future<void> _pickBorderImage() async {
+    final path = await _dialogService.pickPhoto();
+    if (!mounted || path == null) {
+      return;
+    }
+    _setStateAndSave(() {
+      _borderImagePath = path;
+      _statusMessage = 'Border image selected. It will be center-cropped.';
+    });
+  }
+
+  void _clearBorderImage() {
+    _setStateAndSave(() {
+      _borderImagePath = null;
+      _statusMessage = 'Border image removed.';
+    });
   }
 
   void _toggleMediaSection() {

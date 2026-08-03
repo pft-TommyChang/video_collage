@@ -112,6 +112,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   ResolutionPreset _selectedResolution = _defaultResolutionPreset;
   ColorChoice _selectedBorderColor = _defaultBorderColor;
   ColorChoice _selectedBackgroundColor = _defaultBackgroundColor;
+  String? _borderImagePath;
   PlayMode _selectedPlayMode = _defaultPlayMode;
   AudioMode _selectedAudioMode = _defaultAudioMode;
   ExportDurationMode _selectedDurationMode = _defaultDurationMode;

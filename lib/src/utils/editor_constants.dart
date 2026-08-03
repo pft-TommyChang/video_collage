@@ -35,6 +35,34 @@ const _colorChoices = <ColorChoice>[
   ColorChoice(label: 'Aqua', color: Color(0xFF4CC9C0), ffmpegHex: '0x4CC9C0'),
 ];
 
+const ColorChoice _transparentColor = ColorChoice(
+  label: 'Transparent',
+  color: Color(0x00000000),
+  ffmpegHex: 'black@0.0',
+);
+
+ColorChoice _colorChoiceFromColor(Color color) {
+  final argb = color.toARGB32();
+  for (final choice in _colorChoices) {
+    if (choice.color.toARGB32() == argb) {
+      return choice;
+    }
+  }
+  if (color.a == 0) {
+    return _transparentColor;
+  }
+  final rgb = argb & 0xFFFFFF;
+  final hex = rgb.toRadixString(16).padLeft(6, '0').toUpperCase();
+  final alpha = (argb >> 24) & 0xFF;
+  return ColorChoice(
+    label: '#$hex',
+    color: color,
+    ffmpegHex: alpha == 255
+        ? '0x$hex'
+        : '0x$hex@${(alpha / 255).toStringAsFixed(3)}',
+  );
+}
+
 const _supportedVideoExtensions = <String>{
   '.mp4',
   '.mov',

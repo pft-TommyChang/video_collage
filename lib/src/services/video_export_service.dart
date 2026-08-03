@@ -416,8 +416,13 @@ class VideoExportService {
             )
           : const <_ClipLabelOverlay>[];
 
+      final borderImageInputIndex = slotClips.length + labelOverlays.length;
       final filters = <String>[
-        'color=c=${options.borderColor.ffmpegHex}:s=${options.outputWidth}x${options.outputHeight}:d=$targetDurationSeconds[base]',
+        _borderBaseFilter(
+          options: options,
+          durationSeconds: targetDurationSeconds,
+          borderImageInputIndex: borderImageInputIndex,
+        ),
       ];
       final hasRoundedCornerMask = _addRoundedCornerMaskFilters(
         filters: filters,
@@ -532,6 +537,11 @@ class VideoExportService {
           '-i',
           overlay.filePath,
         ],
+        if (options.borderImagePath != null)
+          ..._borderImageInputArguments(
+            path: options.borderImagePath!,
+            durationSeconds: targetDurationSeconds,
+          ),
         '-filter_complex_threads',
         _complexFilterThreadCount,
         '-filter_complex',
@@ -639,8 +649,13 @@ class VideoExportService {
             )
           : const <_ClipLabelOverlay>[];
 
+      final borderImageInputIndex = slotClips.length + labelOverlays.length;
       final filters = <String>[
-        'color=c=${options.borderColor.ffmpegHex}:s=${options.outputWidth}x${options.outputHeight}:d=1[base]',
+        _borderBaseFilter(
+          options: options,
+          durationSeconds: '1',
+          borderImageInputIndex: borderImageInputIndex,
+        ),
       ];
       final hasRoundedCornerMask = _addRoundedCornerMaskFilters(
         filters: filters,
@@ -724,6 +739,11 @@ class VideoExportService {
           '-i',
           overlay.filePath,
         ],
+        if (options.borderImagePath != null)
+          ..._borderImageInputArguments(
+            path: options.borderImagePath!,
+            durationSeconds: '1',
+          ),
         '-filter_complex_threads',
         _complexFilterThreadCount,
         '-filter_complex',
@@ -838,8 +858,14 @@ class VideoExportService {
                 ),
               )
             : const <_ClipLabelOverlay>[];
+        final borderImageInputIndex =
+            slotClips.length + segmentLabelOverlays.length;
         final filters = <String>[
-          'color=c=${options.borderColor.ffmpegHex}:s=${options.outputWidth}x${options.outputHeight}:d=$segmentDurationSeconds[base]',
+          _borderBaseFilter(
+            options: options,
+            durationSeconds: segmentDurationSeconds,
+            borderImageInputIndex: borderImageInputIndex,
+          ),
         ];
         final hasRoundedCornerMask = _addRoundedCornerMaskFilters(
           filters: filters,
@@ -1005,6 +1031,11 @@ class VideoExportService {
             '-i',
             overlay.filePath,
           ],
+          if (options.borderImagePath != null)
+            ..._borderImageInputArguments(
+              path: options.borderImagePath!,
+              durationSeconds: segmentDurationSeconds,
+            ),
           '-filter_complex_threads',
           _complexFilterThreadCount,
           '-filter_complex',
@@ -1337,7 +1368,7 @@ class VideoExportService {
     final foregroundLabel = 'photo_fg_$inputIndex';
     return <String>[
       'color=c=${backgroundColor.ffmpegHex}:s=$cellWidth'
-          'x$cellHeight:d=$backgroundDurationSeconds[$backgroundLabel]',
+          'x$cellHeight:d=$backgroundDurationSeconds,format=rgba[$backgroundLabel]',
       '[$inputIndex:v]'
           'format=rgba,'
           '${_photoTileScaleFilterChain(fitMode: fitMode, viewport: viewport, cellWidth: cellWidth, cellHeight: cellHeight)}'
@@ -1436,11 +1467,45 @@ class VideoExportService {
         '${_cropViewportFilterChain(viewport: viewport, cellWidth: cellWidth, cellHeight: cellHeight)},'
             'setsar=1',
       ClipFitMode.centerInside =>
-        'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=decrease,'
+        'format=rgba,'
+            'scale=$cellWidth:$cellHeight:force_original_aspect_ratio=decrease,'
             'pad=$cellWidth:$cellHeight:(ow-iw)/2:(oh-ih)/2:color=${backgroundColor.ffmpegHex},'
             'setsar=1',
     };
   }
+
+  String _borderBaseFilter({
+    required ExportOptions options,
+    required String durationSeconds,
+    required int borderImageInputIndex,
+  }) {
+    if (options.borderImagePath == null) {
+      return 'color=c=${options.borderColor.ffmpegHex}:'
+          's=${options.outputWidth}x${options.outputHeight}:'
+          'd=$durationSeconds[base]';
+    }
+    return '[$borderImageInputIndex:v]'
+        'scale=${options.outputWidth}:${options.outputHeight}:'
+        'force_original_aspect_ratio=increase,'
+        'crop=${options.outputWidth}:${options.outputHeight},'
+        'setsar=1,trim=duration=$durationSeconds,setpts=PTS-STARTPTS[base]';
+  }
+
+  List<String> _borderImageInputArguments({
+    required String path,
+    required String durationSeconds,
+  }) => <String>[
+    '-loop',
+    '1',
+    '-framerate',
+    '30',
+    '-t',
+    durationSeconds,
+    '-threads',
+    _decoderThreadCount,
+    '-i',
+    path,
+  ];
 
   String _photoTileScaleFilterChain({
     required ClipFitMode fitMode,

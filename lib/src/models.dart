@@ -31,6 +31,8 @@ class ColorChoice {
   final String label;
   final Color color;
   final String ffmpegHex;
+
+  bool get isTransparent => color.a == 0;
 }
 
 enum MediaKind { video, photo }
@@ -239,6 +241,7 @@ class ExportOptions {
     required this.tileCornerRadius,
     required this.backgroundColor,
     required this.borderColor,
+    this.borderImagePath,
     required this.fitMode,
     required this.includeClipLabelsInOutput,
     required this.clipLabelDisplayMode,
@@ -259,6 +262,7 @@ class ExportOptions {
   final double tileCornerRadius;
   final ColorChoice backgroundColor;
   final ColorChoice borderColor;
+  final String? borderImagePath;
   final ClipFitMode fitMode;
   final bool includeClipLabelsInOutput;
   final ClipLabelDisplayMode clipLabelDisplayMode;

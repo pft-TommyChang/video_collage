@@ -226,6 +226,7 @@ extension _MediaController on _VideoCollageScreenState {
       _selectedResolution = _defaultResolutionPreset;
       _selectedBorderColor = _defaultBorderColor;
       _selectedBackgroundColor = _defaultBackgroundColor;
+      _borderImagePath = null;
       _selectedPlayMode = _defaultPlayMode;
       _selectedAudioMode = _defaultAudioMode;
       _selectedDurationMode = _defaultDurationMode;
@@ -286,6 +287,7 @@ extension _MediaController on _VideoCollageScreenState {
       _tileCornerRadius = _defaultTileCornerRadius;
       _selectedBorderColor = _defaultBorderColor;
       _selectedBackgroundColor = _defaultBackgroundColor;
+      _borderImagePath = null;
       _selectedFitMode = _defaultFitMode;
       _setAppliedResolution(width: size.$1, height: size.$2);
       _backfillVisibleSlotsFromOverflow();

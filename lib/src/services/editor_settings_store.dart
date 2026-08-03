@@ -61,6 +61,9 @@ class PersistedEditorSettings {
     required this.lastExportDirectory,
     required this.borderColorLabel,
     required this.backgroundColorLabel,
+    required this.borderColorValue,
+    required this.backgroundColorValue,
+    this.borderImagePath,
   });
 
   final int rows;
@@ -89,6 +92,9 @@ class PersistedEditorSettings {
   final String lastExportDirectory;
   final String borderColorLabel;
   final String backgroundColorLabel;
+  final int borderColorValue;
+  final int backgroundColorValue;
+  final String? borderImagePath;
 
   Map<String, Object> toJson() {
     return <String, Object>{
@@ -118,6 +124,9 @@ class PersistedEditorSettings {
       'lastExportDirectory': lastExportDirectory,
       'borderColorLabel': borderColorLabel,
       'backgroundColorLabel': backgroundColorLabel,
+      'borderColorValue': borderColorValue,
+      'backgroundColorValue': backgroundColorValue,
+      'borderImagePath': ?borderImagePath,
     };
   }
 
@@ -177,8 +186,28 @@ class PersistedEditorSettings {
       lastExportDirectory: json['lastExportDirectory'] as String? ?? '',
       borderColorLabel: json['borderColorLabel'] as String? ?? 'White',
       backgroundColorLabel: json['backgroundColorLabel'] as String? ?? 'Grey',
+      borderColorValue:
+          (json['borderColorValue'] as num?)?.toInt() ??
+          _legacyColorValue(json['borderColorLabel'] as String?, 0xFFFFFFFF),
+      backgroundColorValue:
+          (json['backgroundColorValue'] as num?)?.toInt() ??
+          _legacyColorValue(
+            json['backgroundColorLabel'] as String?,
+            0xFFD0D5DD,
+          ),
+      borderImagePath: json['borderImagePath'] as String?,
     );
   }
+
+  static int _legacyColorValue(String? label, int fallback) => switch (label) {
+    'White' => 0xFFFFFFFF,
+    'Grey' => 0xFFD0D5DD,
+    'Ink' => 0xFF101217,
+    'Coral' => 0xFFFF7A59,
+    'Aqua' => 0xFF4CC9C0,
+    'Transparent' => 0x00000000,
+    _ => fallback,
+  };
 }
 
 class EditorSettingsStore {
