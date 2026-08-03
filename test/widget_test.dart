@@ -419,4 +419,32 @@ void main() {
     expect(find.text('Crop'), findsWidgets);
     expect(find.text('Inside'), findsWidgets);
   });
+
+  testWidgets('palette selection updates the canvas color', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+
+    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpAndSettle();
+    await scrollSettingsIntoView(tester, find.text('Canvas'));
+
+    await tester.tap(find.byTooltip('Open color palette').first);
+    await tester.pumpAndSettle();
+
+    final palette = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(CustomPaint),
+    );
+    final paletteSize = tester.getSize(palette.first);
+    await tester.tapAt(
+      tester.getTopLeft(palette.first) +
+          Offset(paletteSize.width * 0.72, paletteSize.height * 0.28),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Use color'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining(RegExp(r'^#[0-9A-F]{6}$')), findsOneWidget);
+  });
 }

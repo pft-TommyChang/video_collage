@@ -251,92 +251,109 @@ class _ColorSelector extends StatelessWidget {
         Row(
           children: <Widget>[
             Expanded(
-              child: DropdownButtonFormField<ColorChoice>(
-                key: ValueKey(
-                  '$label-${selected.color.toARGB32()}-$hasOverride',
-                ),
-                initialValue: selectedChoice,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: hasOverride
-                      ? const Color(0xFFF1EEE9)
-                      : Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF171A21),
-                      width: 2,
+              child: Stack(
+                alignment: Alignment.centerRight,
+                children: <Widget>[
+                  DropdownButtonFormField<ColorChoice>(
+                    key: ValueKey(
+                      '$label-${selected.color.toARGB32()}-$hasOverride',
                     ),
-                  ),
-                ),
-                icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                items: choices.map((choice) {
-                  final isImageChoice = identical(choice, imageChoice);
-                  return DropdownMenuItem<ColorChoice>(
-                    value: choice,
-                    child: Row(
-                      children: <Widget>[
-                        if (isImageChoice)
-                          const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: Icon(Icons.image, size: 19),
-                          )
-                        else if (choice.isTransparent)
-                          const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: Icon(Icons.layers_clear_outlined, size: 19),
-                          )
-                        else
-                          Container(
-                            width: 16,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: choice.color,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: const Color(0xFFD7CEC2),
+                    initialValue: selectedChoice,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: hasOverride
+                          ? const Color(0xFFF1EEE9)
+                          : Colors.white,
+                      contentPadding: const EdgeInsets.fromLTRB(14, 12, 44, 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF171A21),
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                    items: choices.map((choice) {
+                      final isImageChoice = identical(choice, imageChoice);
+                      return DropdownMenuItem<ColorChoice>(
+                        value: choice,
+                        child: Row(
+                          children: <Widget>[
+                            if (isImageChoice)
+                              const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: Icon(Icons.image, size: 19),
+                              )
+                            else if (choice.isTransparent)
+                              const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: Icon(
+                                  Icons.layers_clear_outlined,
+                                  size: 19,
+                                ),
+                              )
+                            else
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: choice.color,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: const Color(0xFFD7CEC2),
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                choice.label,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ),
-                        const SizedBox(width: 10),
-                        Flexible(
-                          child: Text(
-                            choice.label,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          ],
                         ),
-                      ],
+                      );
+                    }).toList(),
+                    onChanged: hasOverride
+                        ? null
+                        : (choice) {
+                            if (choice != null) {
+                              onSelected(choice);
+                            }
+                          },
+                  ),
+                  Positioned(
+                    right: 40,
+                    child: IconButton(
+                      tooltip: 'Open color palette',
+                      onPressed: hasOverride
+                          ? null
+                          : () => _openPalette(context),
+                      iconSize: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 30,
+                        height: 30,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.palette_outlined),
                     ),
-                  );
-                }).toList(),
-                onChanged: hasOverride
-                    ? null
-                    : (choice) {
-                        if (choice != null) {
-                          onSelected(choice);
-                        }
-                      },
+                  ),
+                ],
               ),
-            ),
-            actionButton(
-              tooltip: 'Open color palette',
-              onPressed: hasOverride ? null : () => _openPalette(context),
-              icon: Icons.palette_outlined,
             ),
             if (onPickImage != null)
               actionButton(
