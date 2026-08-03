@@ -53,7 +53,9 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
           },
           child: Row(
             children: <Widget>[
-              SizedBox(
+              _AnimatedSidePanel(
+                key: const ValueKey<String>('side-panel'),
+                isCollapsed: _isSidePanelCollapsed,
                 width: 370,
                 child: DecoratedBox(
                   decoration: const BoxDecoration(
@@ -130,13 +132,15 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                     ),
                                     const SizedBox(width: 8),
                                     IconButton.outlined(
-                                      onPressed: _isImporting
-                                          ? null
-                                          : () => unawaited(_confirmResetAll()),
-                                      tooltip: 'Reset all',
+                                      key: const ValueKey<String>(
+                                        'collapse-side-panel',
+                                      ),
+                                      onPressed: _collapseSidePanel,
+                                      tooltip: 'Collapse panel',
                                       style: _sectionHeaderIconButtonStyle(),
                                       icon: const Icon(
-                                        Icons.restart_alt_rounded,
+                                        Icons
+                                            .keyboard_double_arrow_left_rounded,
                                         size: 18,
                                       ),
                                     ),
@@ -779,6 +783,9 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                 isPreviewMuted: _isPreviewMuted,
                                 previewPosition: previewPosition,
                                 previewDuration: exportDuration,
+                                onExpandPanel: _isSidePanelCollapsed
+                                    ? _expandSidePanel
+                                    : null,
                                 onAutoLayout: _autoLayout,
                                 onVerticalAutoLayout: () => _autoLayout(
                                   mode: _AutoLayoutMode.verticalStack,
@@ -786,6 +793,9 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                 onHorizontalAutoLayout: () => _autoLayout(
                                   mode: _AutoLayoutMode.horizontalStrip,
                                 ),
+                                onResetAll: _isImporting
+                                    ? null
+                                    : () => unawaited(_confirmResetAll()),
                                 onTogglePlayback: () => unawaited(
                                   _setPreviewPlayback(!_isPreviewPlaying),
                                 ),
@@ -1037,47 +1047,80 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              MouseRegion(
-                                cursor: SystemMouseCursors.click,
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(14),
-                                    onTap: () {
-                                      final message = _statusMessage ?? 'Ready';
-                                      Clipboard.setData(
-                                        ClipboardData(text: message),
-                                      );
-                                      _showToast('Copied to clipboard');
-                                    },
-                                    child: Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.64,
+                              SizedBox(
+                                height: 42,
+                                child: Row(
+                                  children: <Widget>[
+                                    if (_isSidePanelCollapsed) ...<Widget>[
+                                      _CompactExportButton(
+                                        onPressed: () => unawaited(
+                                          _handleExportButtonPressed(),
                                         ),
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: const Color(0xFFD8D0C4),
-                                        ),
+                                        isExporting: _isExporting,
+                                        showCompleted: _showExportComplete,
+                                        progress: _exportProgress,
                                       ),
-                                      child: Text(
-                                        _statusMessage ?? 'Ready',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: const Color(0xFF364152),
+                                      const SizedBox(width: 10),
+                                    ],
+                                    Expanded(
+                                      child: MouseRegion(
+                                        cursor: SystemMouseCursors.click,
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              14,
                                             ),
+                                            onTap: () {
+                                              final message =
+                                                  _statusMessage ?? 'Ready';
+                                              Clipboard.setData(
+                                                ClipboardData(text: message),
+                                              );
+                                              _showToast('Copied to clipboard');
+                                            },
+                                            child: Container(
+                                              key: const ValueKey<String>(
+                                                'status-message',
+                                              ),
+                                              width: double.infinity,
+                                              height: double.infinity,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 10,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.64,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFFD8D0C4,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                _statusMessage ?? 'Ready',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      color: const Color(
+                                                        0xFF364152,
+                                                      ),
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -1093,6 +1136,18 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
         ),
       ),
     );
+  }
+
+  void _collapseSidePanel() {
+    _updateState(() {
+      _isSidePanelCollapsed = true;
+    });
+  }
+
+  void _expandSidePanel() {
+    _updateState(() {
+      _isSidePanelCollapsed = false;
+    });
   }
 
   (int, int) _sizeFromPreset(

@@ -244,3 +244,40 @@ class _EmptyListState extends StatelessWidget {
     );
   }
 }
+
+class _AnimatedSidePanel extends StatelessWidget {
+  const _AnimatedSidePanel({
+    super.key,
+    required this.isCollapsed,
+    required this.width,
+    required this.child,
+  });
+
+  final bool isCollapsed;
+  final double width;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeInOutCubic,
+      width: isCollapsed ? 0 : width,
+      height: double.infinity,
+      clipBehavior: Clip.hardEdge,
+      decoration: const BoxDecoration(),
+      child: ExcludeFocus(
+        excluding: isCollapsed,
+        child: ExcludeSemantics(
+          excluding: isCollapsed,
+          child: OverflowBox(
+            alignment: Alignment.centerLeft,
+            minWidth: width,
+            maxWidth: width,
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}

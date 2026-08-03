@@ -1,5 +1,59 @@
 part of '../video_collage_app.dart';
 
+class _CompactExportButton extends StatelessWidget {
+  const _CompactExportButton({
+    required this.onPressed,
+    required this.isExporting,
+    required this.showCompleted,
+    required this.progress,
+  });
+
+  final VoidCallback onPressed;
+  final bool isExporting;
+  final bool showCompleted;
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final clampedProgress = progress.clamp(0.0, 1.0);
+    final icon = showCompleted
+        ? Icons.check_rounded
+        : Icons.file_download_outlined;
+    final tooltip = showCompleted
+        ? 'Export complete'
+        : isExporting
+        ? 'Exporting... ${(clampedProgress * 100).round()}%'
+        : 'Export';
+
+    return SizedBox.square(
+      key: const ValueKey<String>('collapsed-export-button'),
+      dimension: 42,
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          IconButton.filled(
+            onPressed: onPressed,
+            tooltip: tooltip,
+            icon: Icon(icon),
+          ),
+          if (isExporting)
+            IgnorePointer(
+              child: SizedBox.square(
+                dimension: 42,
+                child: CircularProgressIndicator(
+                  value: clampedProgress > 0 ? clampedProgress : null,
+                  strokeWidth: 3,
+                  color: Colors.white,
+                  backgroundColor: Colors.white.withValues(alpha: 0.28),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ExportButton extends StatelessWidget {
   const _ExportButton({
     required this.onPressed,

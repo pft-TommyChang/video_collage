@@ -123,6 +123,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   bool _isLayoutSectionCollapsed = false;
   bool _isLabelSectionCollapsed = false;
   bool _isOutputSectionCollapsed = false;
+  bool _isSidePanelCollapsed = false;
   double _borderThickness = _defaultBorderThickness;
   double _tileCornerRadius = _defaultTileCornerRadius;
   double _clipLabelFontSize = _defaultClipLabelFontSize;

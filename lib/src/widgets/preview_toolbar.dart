@@ -9,9 +9,11 @@ class _PreviewToolbar extends StatelessWidget {
     required this.isPreviewMuted,
     required this.previewPosition,
     required this.previewDuration,
+    required this.onExpandPanel,
     required this.onAutoLayout,
     required this.onVerticalAutoLayout,
     required this.onHorizontalAutoLayout,
+    required this.onResetAll,
     required this.onTogglePlayback,
     required this.onResetPreview,
     required this.onToggleMute,
@@ -26,9 +28,11 @@ class _PreviewToolbar extends StatelessWidget {
   final bool isPreviewMuted;
   final Duration previewPosition;
   final Duration previewDuration;
+  final VoidCallback? onExpandPanel;
   final VoidCallback onAutoLayout;
   final VoidCallback onVerticalAutoLayout;
   final VoidCallback onHorizontalAutoLayout;
+  final VoidCallback? onResetAll;
   final VoidCallback onTogglePlayback;
   final VoidCallback onResetPreview;
   final VoidCallback onToggleMute;
@@ -51,6 +55,17 @@ class _PreviewToolbar extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
+                        if (onExpandPanel != null) ...<Widget>[
+                          _PreviewLayoutButton(
+                            onPressed: onExpandPanel,
+                            tooltip: 'Expand panel',
+                            icon: const Icon(
+                              Icons.keyboard_double_arrow_right_rounded,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
                         _PreviewLayoutButton(
                           onPressed: hasClips ? onAutoLayout : null,
                           tooltip: 'Auto Layout',
@@ -73,6 +88,12 @@ class _PreviewToolbar extends StatelessWidget {
                             Icons.view_column_outlined,
                             size: 18,
                           ),
+                        ),
+                        const SizedBox(width: 6),
+                        _PreviewLayoutButton(
+                          onPressed: onResetAll,
+                          tooltip: 'Reset all',
+                          icon: const Icon(Icons.restart_alt_rounded, size: 18),
                         ),
                       ],
                     ),

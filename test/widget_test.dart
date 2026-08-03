@@ -85,6 +85,88 @@ void main() {
     expect(find.byTooltip('Auto Layout'), findsOneWidget);
   });
 
+  testWidgets('collapsed panel moves controls into the preview area', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+
+    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Collapse panel'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('collapsed-export-button')),
+      findsNothing,
+    );
+    expect(
+      tester.getCenter(find.byTooltip('Reset all')).dx,
+      greaterThan(tester.getCenter(find.byTooltip('Horizontal Auto')).dx),
+    );
+
+    await tester.tap(find.byTooltip('Collapse panel'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final collapsingWidth = tester
+        .getSize(find.byKey(const ValueKey<String>('side-panel')))
+        .width;
+    expect(collapsingWidth, greaterThan(0));
+    expect(collapsingWidth, lessThan(370));
+
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('side-panel'))).width,
+      0,
+    );
+    expect(find.byTooltip('Expand panel'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('collapsed-export-button')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getCenter(find.byTooltip('Expand panel')).dx,
+      lessThan(tester.getCenter(find.byTooltip('Auto Layout')).dx),
+    );
+    expect(
+      tester
+          .getCenter(
+            find.byKey(const ValueKey<String>('collapsed-export-button')),
+          )
+          .dx,
+      lessThan(
+        tester
+            .getCenter(find.byKey(const ValueKey<String>('status-message')))
+            .dx,
+      ),
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(const ValueKey<String>('collapsed-export-button')),
+          )
+          .height,
+      tester
+          .getSize(find.byKey(const ValueKey<String>('status-message')))
+          .height,
+    );
+
+    await tester.tap(find.byTooltip('Expand panel'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final expandingWidth = tester
+        .getSize(find.byKey(const ValueKey<String>('side-panel')))
+        .width;
+    expect(expandingWidth, greaterThan(0));
+    expect(expandingWidth, lessThan(370));
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Media'), findsOneWidget);
+    expect(find.byTooltip('Collapse panel'), findsOneWidget);
+  });
+
   testWidgets('last export is disabled at the start of each app session', (
     WidgetTester tester,
   ) async {
