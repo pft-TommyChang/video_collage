@@ -576,18 +576,20 @@ class _AnimatedSidePanel extends StatelessWidget {
   const _AnimatedSidePanel({
     super.key,
     required this.isCollapsed,
+    required this.animate,
     required this.width,
     required this.child,
   });
 
   final bool isCollapsed;
+  final bool animate;
   final double width;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 240),
+      duration: animate ? const Duration(milliseconds: 240) : Duration.zero,
       curve: Curves.easeInOutCubic,
       width: isCollapsed ? 0 : width,
       height: double.infinity,

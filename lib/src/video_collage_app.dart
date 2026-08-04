@@ -35,7 +35,12 @@ part 'widgets/preview_toolbar.dart';
 part 'widgets/selection_widgets.dart';
 
 class VideoCollageApp extends StatelessWidget {
-  const VideoCollageApp({super.key});
+  const VideoCollageApp({
+    super.key,
+    this.deferFirstFrameUntilSettingsRestored = false,
+  });
+
+  final bool deferFirstFrameUntilSettingsRestored;
 
   @override
   Widget build(BuildContext context) {
@@ -55,13 +60,21 @@ class VideoCollageApp extends StatelessWidget {
           displayColor: const Color(0xFF171A21),
         ),
       ),
-      home: const VideoCollageScreen(),
+      home: VideoCollageScreen(
+        deferFirstFrameUntilSettingsRestored:
+            deferFirstFrameUntilSettingsRestored,
+      ),
     );
   }
 }
 
 class VideoCollageScreen extends StatefulWidget {
-  const VideoCollageScreen({super.key});
+  const VideoCollageScreen({
+    super.key,
+    this.deferFirstFrameUntilSettingsRestored = false,
+  });
+
+  final bool deferFirstFrameUntilSettingsRestored;
 
   @override
   State<VideoCollageScreen> createState() => _VideoCollageScreenState();

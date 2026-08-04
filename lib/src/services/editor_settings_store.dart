@@ -41,6 +41,7 @@ class PersistedEditorSettings {
     required this.isLayoutSectionCollapsed,
     required this.isLabelSectionCollapsed,
     required this.isOutputSectionCollapsed,
+    required this.isSidePanelCollapsed,
     required this.borderThickness,
     required this.tileCornerRadius,
     required this.clipLabelFontSize,
@@ -71,6 +72,7 @@ class PersistedEditorSettings {
   final bool isLayoutSectionCollapsed;
   final bool isLabelSectionCollapsed;
   final bool isOutputSectionCollapsed;
+  final bool isSidePanelCollapsed;
   final double borderThickness;
   final double tileCornerRadius;
   final double clipLabelFontSize;
@@ -101,6 +103,7 @@ class PersistedEditorSettings {
       'isLayoutSectionCollapsed': isLayoutSectionCollapsed,
       'isLabelSectionCollapsed': isLabelSectionCollapsed,
       'isOutputSectionCollapsed': isOutputSectionCollapsed,
+      'isSidePanelCollapsed': isSidePanelCollapsed,
       'borderThickness': borderThickness,
       'tileCornerRadius': tileCornerRadius,
       'clipLabelFontSize': clipLabelFontSize,
@@ -162,6 +165,7 @@ class PersistedEditorSettings {
           json['isLabelSectionCollapsed'] as bool? ?? false,
       isOutputSectionCollapsed:
           json['isOutputSectionCollapsed'] as bool? ?? false,
+      isSidePanelCollapsed: json['isSidePanelCollapsed'] as bool? ?? false,
       borderThickness: (json['borderThickness'] as num?)?.toDouble() ?? 12,
       tileCornerRadius: (json['tileCornerRadius'] as num?)?.toDouble() ?? 12,
       clipLabelFontSize: (json['clipLabelFontSize'] as num?)?.toDouble() ?? 12,

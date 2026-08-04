@@ -3,7 +3,7 @@
 ## Versioning
 
 - App version is defined in `pubspec.yaml`.
-- The current release version is `1.4.1+141`.
+- The current release version is `1.5.0+150`.
 - The format is `build-name+build-number`.
   - `1.4.0` is the user-facing version.
   - `+140` is the internal build number.

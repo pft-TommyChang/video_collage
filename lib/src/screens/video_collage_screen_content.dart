@@ -56,6 +56,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
               _AnimatedSidePanel(
                 key: const ValueKey<String>('side-panel'),
                 isCollapsed: _isSidePanelCollapsed,
+                animate: !_isRestoringSettings,
                 width: 370,
                 child: DecoratedBox(
                   decoration: const BoxDecoration(
@@ -1163,13 +1164,13 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
   }
 
   void _collapseSidePanel() {
-    _updateState(() {
+    _setStateAndSave(() {
       _isSidePanelCollapsed = true;
     });
   }
 
   void _expandSidePanel() {
-    _updateState(() {
+    _setStateAndSave(() {
       _isSidePanelCollapsed = false;
     });
   }

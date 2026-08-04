@@ -5,10 +5,11 @@ import 'package:video_player_media_kit/video_player_media_kit.dart';
 import 'src/video_collage_app.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  binding.deferFirstFrame();
   VideoPlayerMediaKit.ensureInitialized(macOS: true, windows: true);
   _installKnownFlutterDesktopWorkarounds();
-  runApp(const VideoCollageApp());
+  runApp(const VideoCollageApp(deferFirstFrameUntilSettingsRestored: true));
 }
 
 void _installKnownFlutterDesktopWorkarounds() {

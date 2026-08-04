@@ -9,6 +9,16 @@ void main() {
     final settings = PersistedEditorSettings.fromJson(<String, dynamic>{});
 
     expect(settings.clipLabelPadding, 10);
+    expect(settings.isSidePanelCollapsed, isFalse);
+  });
+
+  test('persisted settings restore the side panel state', () {
+    final settings = PersistedEditorSettings.fromJson(<String, dynamic>{
+      'isSidePanelCollapsed': true,
+    });
+
+    expect(settings.isSidePanelCollapsed, isTrue);
+    expect(settings.toJson()['isSidePanelCollapsed'], isTrue);
   });
 
   test('persisted settings restore custom colors', () {

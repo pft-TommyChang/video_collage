@@ -48,8 +48,21 @@ extension _SettingsController on _VideoCollageScreenState {
   }
 
   Future<void> _restoreSettings() async {
+    try {
+      await _loadAndApplySettings();
+    } finally {
+      if (widget.deferFirstFrameUntilSettingsRestored) {
+        WidgetsBinding.instance.allowFirstFrame();
+      }
+    }
+  }
+
+  Future<void> _loadAndApplySettings() async {
     final savedSettings = await _settingsStore.load();
-    if (!mounted || savedSettings == null) {
+    if (!mounted) {
+      return;
+    }
+    if (savedSettings == null) {
       return;
     }
 
@@ -61,6 +74,7 @@ extension _SettingsController on _VideoCollageScreenState {
       _isLayoutSectionCollapsed = savedSettings.isLayoutSectionCollapsed;
       _isLabelSectionCollapsed = savedSettings.isLabelSectionCollapsed;
       _isOutputSectionCollapsed = savedSettings.isOutputSectionCollapsed;
+      _isSidePanelCollapsed = savedSettings.isSidePanelCollapsed;
       _borderThickness = savedSettings.borderThickness
           .clamp(0, _maxBorderThickness)
           .toDouble();
@@ -116,6 +130,7 @@ extension _SettingsController on _VideoCollageScreenState {
       _outputHeight = _ensureEven(savedSettings.outputHeight);
       _syncResolutionDraft(_outputWidth, _outputHeight);
     });
+    await WidgetsBinding.instance.endOfFrame;
     _isRestoringSettings = false;
     unawaited(_syncPreviewPlaybackMode());
   }
@@ -150,6 +165,7 @@ extension _SettingsController on _VideoCollageScreenState {
         isLayoutSectionCollapsed: _isLayoutSectionCollapsed,
         isLabelSectionCollapsed: _isLabelSectionCollapsed,
         isOutputSectionCollapsed: _isOutputSectionCollapsed,
+        isSidePanelCollapsed: _isSidePanelCollapsed,
         borderThickness: _borderThickness,
         tileCornerRadius: _tileCornerRadius,
         clipLabelFontSize: _clipLabelFontSize,
