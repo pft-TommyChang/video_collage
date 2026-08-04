@@ -121,34 +121,8 @@ extension _ExportController on _VideoCollageScreenState {
       return;
     }
 
-    final shouldCancel = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Cancel export?'),
-          content: const Text(
-            'The export is still running. Do you want to cancel it?',
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Keep exporting'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Cancel export'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldCancel != true || !mounted) {
-      return;
-    }
-
     _updateState(() {
-      _statusMessage = 'Cancelling export...';
+      _statusMessage = 'Stopping export...';
     });
     await _exportService.cancelActiveExport();
   }

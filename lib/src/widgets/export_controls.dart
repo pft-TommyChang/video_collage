@@ -20,11 +20,13 @@ class _CompactExportButton extends StatelessWidget {
     final clampedProgress = progress.clamp(0.0, 1.0);
     final icon = showCompleted
         ? Icons.check_rounded
+        : isExporting
+        ? Icons.stop_rounded
         : Icons.file_download_outlined;
     final tooltip = showCompleted
         ? 'Export complete'
         : isExporting
-        ? 'Exporting... ${(clampedProgress * 100).round()}%'
+        ? 'Stop export'
         : 'Export';
 
     return GestureDetector(
@@ -47,7 +49,7 @@ class _CompactExportButton extends StatelessWidget {
                   dimension: 42,
                   child: CircularProgressIndicator(
                     value: clampedProgress > 0 ? clampedProgress : null,
-                    strokeWidth: 3,
+                    strokeWidth: 7,
                     color: Colors.white,
                     backgroundColor: Colors.white.withValues(alpha: 0.28),
                   ),
@@ -88,22 +90,20 @@ class _ExportButton extends StatelessWidget {
     final label = showCompleted
         ? 'Complete'
         : isExporting
-        ? 'Exporting... $percent%'
+        ? 'Stop export • $percent%'
         : exportFormat == null
         ? 'Export'
         : 'Export ${exportFormat!.label}';
     final icon = showCompleted
         ? Icons.check_rounded
         : isExporting
-        ? Icons.autorenew_rounded
+        ? Icons.stop_rounded
         : Icons.file_download_outlined;
     final backgroundColor = showCompleted
         ? sharedButtonColor
         : isExporting
         ? exportingBackground
         : sharedButtonColor;
-    final showIcon = !isExporting || showCompleted;
-
     return SizedBox(
       height: 56,
       child: ClipRRect(
@@ -152,7 +152,7 @@ class _ExportButton extends StatelessWidget {
                       ),
                       Center(
                         child: _ExportButtonContent(
-                          icon: showIcon ? icon : null,
+                          icon: icon,
                           label: label,
                           color: Colors.white,
                         ),
@@ -164,7 +164,7 @@ class _ExportButton extends StatelessWidget {
                             widthFactor: displayProgress,
                             child: Center(
                               child: _ExportButtonContent(
-                                icon: showIcon ? icon : null,
+                                icon: icon,
                                 label: label,
                                 color: Colors.white,
                               ),
