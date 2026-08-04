@@ -73,11 +73,11 @@ extension _HistoryController on _VideoCollageScreenState {
       items: const <PopupMenuEntry<_LastExportAction>>[
         PopupMenuItem<_LastExportAction>(
           value: _LastExportAction.openFile,
-          child: Text('Open File'),
+          child: Text('Open Last Export'),
         ),
         PopupMenuItem<_LastExportAction>(
-          value: _LastExportAction.openFolder,
-          child: Text('Open Folder'),
+          value: _LastExportAction.showInFolder,
+          child: Text('Open Last Export Location'),
         ),
       ],
     );
@@ -85,14 +85,14 @@ extension _HistoryController on _VideoCollageScreenState {
     switch (action) {
       case _LastExportAction.openFile:
         await _openExportHistoryEntry(lastExportEntry);
-      case _LastExportAction.openFolder:
-        await _openExportHistoryFolder(lastExportEntry);
+      case _LastExportAction.showInFolder:
+        await _showExportHistoryEntryInFolder(lastExportEntry);
       case null:
         return;
     }
   }
 
-  Future<void> _openExportHistoryFolder(ExportHistoryEntry entry) async {
+  Future<void> _showExportHistoryEntryInFolder(ExportHistoryEntry entry) async {
     final resolvedPath = _resolveHistoryPath(entry.path);
     final file = File(resolvedPath);
     if (!await file.exists()) {
@@ -173,7 +173,7 @@ extension _HistoryController on _VideoCollageScreenState {
                                   : () {
                                       Navigator.of(dialogContext).pop();
                                       unawaited(
-                                        _openExportHistoryFolder(entry),
+                                        _showExportHistoryEntryInFolder(entry),
                                       );
                                     },
                               icon: const Icon(Icons.folder_open_outlined),

@@ -1074,6 +1074,15 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                         isExporting: _isExporting,
                                         showCompleted: _showExportComplete,
                                         progress: _exportProgress,
+                                        onSecondaryTapDown:
+                                            _isExporting || !hasLastExport
+                                            ? null
+                                            : (details) => unawaited(
+                                                _showLastExportMenu(
+                                                  context,
+                                                  details,
+                                                ),
+                                              ),
                                       ),
                                       const SizedBox(width: 10),
                                     ],

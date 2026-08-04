@@ -116,7 +116,7 @@ const bool _defaultAppendDateTimeToExportName = true;
 const PlayMode _defaultPlayMode = PlayMode.parallel;
 const AudioMode _defaultAudioMode = AudioMode.firstClip;
 
-enum _LastExportAction { openFile, openFolder }
+enum _LastExportAction { openFile, showInFolder }
 
 enum _AutoLayoutMode { automatic, verticalStack, horizontalStrip }
 

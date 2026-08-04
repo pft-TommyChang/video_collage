@@ -11,16 +11,27 @@ void main() {
     expect(settings.clipLabelPadding, 10);
   });
 
-  test('persisted settings restore custom colors and border image', () {
+  test('persisted settings restore custom colors', () {
     final settings = PersistedEditorSettings.fromJson(<String, dynamic>{
       'borderColorValue': 0xFF123456,
       'backgroundColorValue': 0x00000000,
-      'borderImagePath': '/tmp/border.png',
     });
 
     expect(settings.borderColorValue, 0xFF123456);
     expect(settings.backgroundColorValue, 0x00000000);
-    expect(settings.borderImagePath, '/tmp/border.png');
+    expect(settings.toJson(), isNot(contains('borderImagePath')));
+  });
+
+  test('legacy canvas image settings reset the canvas to white', () {
+    final settings = PersistedEditorSettings.fromJson(<String, dynamic>{
+      'borderColorLabel': 'Ink',
+      'borderColorValue': 0xFF101217,
+      'borderImagePath': '/tmp/border.png',
+    });
+
+    expect(settings.borderColorLabel, 'White');
+    expect(settings.borderColorValue, 0xFFFFFFFF);
+    expect(settings.toJson(), isNot(contains('borderImagePath')));
   });
 
   test('transparent color choice is identified by its alpha channel', () {

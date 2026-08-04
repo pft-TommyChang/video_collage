@@ -63,7 +63,6 @@ class PersistedEditorSettings {
     required this.backgroundColorLabel,
     required this.borderColorValue,
     required this.backgroundColorValue,
-    this.borderImagePath,
   });
 
   final int rows;
@@ -94,8 +93,6 @@ class PersistedEditorSettings {
   final String backgroundColorLabel;
   final int borderColorValue;
   final int backgroundColorValue;
-  final String? borderImagePath;
-
   Map<String, Object> toJson() {
     return <String, Object>{
       'rows': rows,
@@ -126,11 +123,12 @@ class PersistedEditorSettings {
       'backgroundColorLabel': backgroundColorLabel,
       'borderColorValue': borderColorValue,
       'backgroundColorValue': backgroundColorValue,
-      'borderImagePath': ?borderImagePath,
     };
   }
 
   factory PersistedEditorSettings.fromJson(Map<String, dynamic> json) {
+    final hadPersistedCanvasImage =
+        (json['borderImagePath'] as String?)?.isNotEmpty ?? false;
     final clipLabelDisplayModeName = json['clipLabelDisplayMode'] as String?;
     final clipLabelDisplayMode = ClipLabelDisplayMode.values.firstWhere(
       (mode) => mode.name == clipLabelDisplayModeName,
@@ -184,18 +182,23 @@ class PersistedEditorSettings {
       appendDateTimeToExportName:
           json['appendDateTimeToExportName'] as bool? ?? true,
       lastExportDirectory: json['lastExportDirectory'] as String? ?? '',
-      borderColorLabel: json['borderColorLabel'] as String? ?? 'White',
+      borderColorLabel: hadPersistedCanvasImage
+          ? 'White'
+          : json['borderColorLabel'] as String? ?? 'White',
       backgroundColorLabel: json['backgroundColorLabel'] as String? ?? 'Grey',
-      borderColorValue:
-          (json['borderColorValue'] as num?)?.toInt() ??
-          _legacyColorValue(json['borderColorLabel'] as String?, 0xFFFFFFFF),
+      borderColorValue: hadPersistedCanvasImage
+          ? 0xFFFFFFFF
+          : (json['borderColorValue'] as num?)?.toInt() ??
+                _legacyColorValue(
+                  json['borderColorLabel'] as String?,
+                  0xFFFFFFFF,
+                ),
       backgroundColorValue:
           (json['backgroundColorValue'] as num?)?.toInt() ??
           _legacyColorValue(
             json['backgroundColorLabel'] as String?,
             0xFFD0D5DD,
           ),
-      borderImagePath: json['borderImagePath'] as String?,
     );
   }
 

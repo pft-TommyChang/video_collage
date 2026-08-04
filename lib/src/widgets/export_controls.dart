@@ -6,12 +6,14 @@ class _CompactExportButton extends StatelessWidget {
     required this.isExporting,
     required this.showCompleted,
     required this.progress,
+    this.onSecondaryTapDown,
   });
 
   final VoidCallback onPressed;
   final bool isExporting;
   final bool showCompleted;
   final double progress;
+  final GestureTapDownCallback? onSecondaryTapDown;
 
   @override
   Widget build(BuildContext context) {
@@ -25,30 +27,34 @@ class _CompactExportButton extends StatelessWidget {
         ? 'Exporting... ${(clampedProgress * 100).round()}%'
         : 'Export';
 
-    return SizedBox.square(
+    return GestureDetector(
       key: const ValueKey<String>('collapsed-export-button'),
-      dimension: 42,
-      child: Stack(
-        alignment: Alignment.center,
-        children: <Widget>[
-          IconButton.filled(
-            onPressed: onPressed,
-            tooltip: tooltip,
-            icon: Icon(icon),
-          ),
-          if (isExporting)
-            IgnorePointer(
-              child: SizedBox.square(
-                dimension: 42,
-                child: CircularProgressIndicator(
-                  value: clampedProgress > 0 ? clampedProgress : null,
-                  strokeWidth: 3,
-                  color: Colors.white,
-                  backgroundColor: Colors.white.withValues(alpha: 0.28),
+      behavior: HitTestBehavior.opaque,
+      onSecondaryTapDown: onSecondaryTapDown,
+      child: SizedBox.square(
+        dimension: 42,
+        child: Stack(
+          alignment: Alignment.center,
+          children: <Widget>[
+            IconButton.filled(
+              onPressed: onPressed,
+              tooltip: tooltip,
+              icon: Icon(icon),
+            ),
+            if (isExporting)
+              IgnorePointer(
+                child: SizedBox.square(
+                  dimension: 42,
+                  child: CircularProgressIndicator(
+                    value: clampedProgress > 0 ? clampedProgress : null,
+                    strokeWidth: 3,
+                    color: Colors.white,
+                    backgroundColor: Colors.white.withValues(alpha: 0.28),
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -109,11 +109,9 @@ extension _SettingsController on _VideoCollageScreenState {
       _selectedBackgroundColor = _colorChoiceFromColor(
         Color(savedSettings.backgroundColorValue),
       );
-      _borderImagePath =
-          savedSettings.borderImagePath != null &&
-              File(savedSettings.borderImagePath!).existsSync()
-          ? savedSettings.borderImagePath
-          : null;
+      // Canvas images are session-only because sandbox access to user-selected
+      // files does not survive an app restart.
+      _borderImagePath = null;
       _outputWidth = _ensureEven(savedSettings.outputWidth);
       _outputHeight = _ensureEven(savedSettings.outputHeight);
       _syncResolutionDraft(_outputWidth, _outputHeight);
@@ -174,7 +172,6 @@ extension _SettingsController on _VideoCollageScreenState {
         backgroundColorLabel: _selectedBackgroundColor.label,
         borderColorValue: _selectedBorderColor.color.toARGB32(),
         backgroundColorValue: _selectedBackgroundColor.color.toARGB32(),
-        borderImagePath: _borderImagePath,
       ),
     );
   }
@@ -190,6 +187,7 @@ extension _SettingsController on _VideoCollageScreenState {
       return;
     }
     _setStateAndSave(() {
+      _selectedBorderColor = _defaultBorderColor;
       _borderImagePath = path;
       _statusMessage = 'Border image selected. It will be center-cropped.';
     });

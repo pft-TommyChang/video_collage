@@ -124,6 +124,10 @@ void main() {
       find.byKey(const ValueKey<String>('collapsed-export-button')),
       findsOneWidget,
     );
+    final collapsedExportGesture = tester.widget<GestureDetector>(
+      find.byKey(const ValueKey<String>('collapsed-export-button')),
+    );
+    expect(collapsedExportGesture.onSecondaryTapDown, isNull);
     expect(
       tester.getCenter(find.byTooltip('Expand panel')).dx,
       lessThan(tester.getCenter(find.byTooltip('Auto Layout')).dx),
