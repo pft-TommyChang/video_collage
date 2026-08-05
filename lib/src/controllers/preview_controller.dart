@@ -64,62 +64,125 @@ extension _PreviewController on _VideoCollageScreenState {
     await controller.seekTo(target);
   }
 
-  Future<void> _syncParallelPreviewControllers() async {
-    _sequentialPreviewTimer?.cancel();
-    _sequentialPreviewTimer = null;
-    _sequentialPreviewStartedAt = null;
-    _sequentialPreviewElapsed = Duration.zero;
-    if (_activeSequentialClipPath != null && mounted) {
-      _updateState(() {
-        _activeSequentialClipPath = null;
-      });
-    }
-
-    final visibleSlotClips = _slotClipsForExport();
-    final audibleClipPaths = _previewAudibleClipPaths(visibleSlotClips);
-    final parallelClips = visibleSlotClips
-        .where(
-          (entry) => entry.clip.isVideo && entry.clip.duration > Duration.zero,
-        )
-        .toList(growable: false);
-    final visibleVideoPaths = parallelClips
-        .map((entry) => entry.clip.path)
-        .toSet();
-
-    if (parallelClips.isEmpty) {
-      _parallelPreviewTimer?.cancel();
-      _parallelPreviewTimer = null;
-      _parallelPreviewStartedAt = null;
-      _parallelPreviewElapsed = Duration.zero;
-      if (_isPreviewPlaying && mounted) {
-        _updateState(() {
-          _isPreviewPlaying = false;
-        });
-      }
-      await _pauseInactivePreviewControllers(const <String>{});
+  Future<void> _setControllerLooping(
+    VideoPlayerController controller,
+    bool looping,
+  ) async {
+    if (controller.value.isLooping == looping) {
       return;
     }
+    await controller.setLooping(looping);
+  }
 
-    await _pauseInactivePreviewControllers(visibleVideoPaths);
+  Future<void> _setControllerVolume(
+    VideoPlayerController controller,
+    double volume,
+  ) async {
+    if ((controller.value.volume - volume).abs() < 0.001) {
+      return;
+    }
+    await controller.setVolume(volume);
+  }
 
-    final totalDuration = exportDurationForClips(
-      parallelClips,
-      _selectedDurationMode,
-      PlayMode.parallel,
-    );
-    final elapsed = _currentParallelPreviewElapsed();
-    _refreshPreviewProgress(elapsed);
-    if (elapsed >= totalDuration) {
-      _parallelPreviewTimer?.cancel();
-      _parallelPreviewTimer = null;
-      _parallelPreviewStartedAt = null;
-      _parallelPreviewElapsed = totalDuration;
-      _lastPreviewProgressSecond = null;
-      if (mounted) {
+  Future<void> _pauseController(VideoPlayerController controller) async {
+    if (!controller.value.isPlaying) {
+      return;
+    }
+    await controller.pause();
+  }
+
+  Future<void> _playControllerAt(
+    VideoPlayerController controller,
+    Duration target,
+  ) async {
+    // Let the native player decode continuously once playback has started.
+    // Repeated seekTo calls flush its decoder and are especially expensive when
+    // several preview tiles are visible at the same time.
+    if (controller.value.isPlaying || controller.value.isBuffering) {
+      return;
+    }
+    await _seekControllerIfNeeded(controller, target);
+    await controller.play();
+  }
+
+  Future<void> _syncParallelPreviewControllers() async {
+    if (_isSyncingParallelPreview || !mounted) {
+      return;
+    }
+    _isSyncingParallelPreview = true;
+    try {
+      _sequentialPreviewTimer?.cancel();
+      _sequentialPreviewTimer = null;
+      _sequentialPreviewStartedAt = null;
+      _sequentialPreviewElapsed = Duration.zero;
+      if (_activeSequentialClipPath != null && mounted) {
         _updateState(() {
-          _isPreviewPlaying = false;
-          _statusMessage = 'Preview playback finished.';
+          _activeSequentialClipPath = null;
         });
+      }
+
+      final visibleSlotClips = _slotClipsForExport();
+      final audibleClipPaths = _previewAudibleClipPaths(visibleSlotClips);
+      final parallelClips = visibleSlotClips
+          .where(
+            (entry) =>
+                entry.clip.isVideo && entry.clip.duration > Duration.zero,
+          )
+          .toList(growable: false);
+      final visibleVideoPaths = parallelClips
+          .map((entry) => entry.clip.path)
+          .toSet();
+
+      if (parallelClips.isEmpty) {
+        _parallelPreviewTimer?.cancel();
+        _parallelPreviewTimer = null;
+        _parallelPreviewStartedAt = null;
+        _parallelPreviewElapsed = Duration.zero;
+        if (_isPreviewPlaying && mounted) {
+          _updateState(() {
+            _isPreviewPlaying = false;
+          });
+        }
+        await _pauseInactivePreviewControllers(const <String>{});
+        return;
+      }
+
+      await _pauseInactivePreviewControllers(visibleVideoPaths);
+
+      final totalDuration = exportDurationForClips(
+        parallelClips,
+        _selectedDurationMode,
+        PlayMode.parallel,
+      );
+      final elapsed = _currentParallelPreviewElapsed();
+      _refreshPreviewProgress(elapsed);
+      if (elapsed >= totalDuration) {
+        _parallelPreviewTimer?.cancel();
+        _parallelPreviewTimer = null;
+        _parallelPreviewStartedAt = null;
+        _parallelPreviewElapsed = totalDuration;
+        _lastPreviewProgressSecond = null;
+        if (mounted) {
+          _updateState(() {
+            _isPreviewPlaying = false;
+            _statusMessage = 'Preview playback finished.';
+          });
+        }
+
+        for (final entry in parallelClips) {
+          final controller = _controllers[entry.clip.path];
+          if (controller == null || !controller.value.isInitialized) {
+            continue;
+          }
+          await _setControllerLooping(controller, false);
+          await _setControllerVolume(controller, 0);
+          await _pauseController(controller);
+          final target = totalDuration >= entry.clip.duration
+              ? _lastFramePosition(entry.clip)
+              : entry.clip.trimStart + totalDuration;
+          await _seekControllerIfNeeded(controller, target);
+        }
+        return;
       }
 
       for (final entry in parallelClips) {
@@ -127,41 +190,29 @@ extension _PreviewController on _VideoCollageScreenState {
         if (controller == null || !controller.value.isInitialized) {
           continue;
         }
-        await controller.setLooping(false);
-        await controller.setVolume(0);
-        await controller.pause();
-        final target = totalDuration >= entry.clip.duration
-            ? _lastFramePosition(entry.clip)
-            : entry.clip.trimStart + totalDuration;
-        await _seekControllerIfNeeded(controller, target);
-      }
-      return;
-    }
+        final clip = entry.clip;
+        final isClipFinished = elapsed >= clip.duration;
+        final target = isClipFinished
+            ? _lastFramePosition(clip)
+            : clip.trimStart + elapsed;
 
-    for (final entry in parallelClips) {
-      final controller = _controllers[entry.clip.path];
-      if (controller == null || !controller.value.isInitialized) {
-        continue;
+        await _setControllerLooping(controller, false);
+        await _setControllerVolume(
+          controller,
+          _previewVolumeForClip(
+            clipPath: clip.path,
+            audibleClipPaths: audibleClipPaths,
+          ),
+        );
+        if (_isPreviewPlaying && !isClipFinished) {
+          await _playControllerAt(controller, target);
+        } else {
+          await _pauseController(controller);
+          await _seekControllerIfNeeded(controller, target);
+        }
       }
-      final clip = entry.clip;
-      final isClipFinished = elapsed >= clip.duration;
-      final target = isClipFinished
-          ? _lastFramePosition(clip)
-          : clip.trimStart + elapsed;
-
-      await controller.setLooping(false);
-      await controller.setVolume(
-        _previewVolumeForClip(
-          clipPath: clip.path,
-          audibleClipPaths: audibleClipPaths,
-        ),
-      );
-      await _seekControllerIfNeeded(controller, target);
-      if (_isPreviewPlaying && !isClipFinished) {
-        await controller.play();
-      } else {
-        await controller.pause();
-      }
+    } finally {
+      _isSyncingParallelPreview = false;
     }
   }
 
@@ -172,8 +223,6 @@ extension _PreviewController on _VideoCollageScreenState {
     _isSyncingSequentialPreview = true;
     try {
       final segments = _sequentialVideoSlotClips();
-      final visibleSlotClips = _slotClipsForExport();
-      final audibleClipPaths = _previewAudibleClipPaths(visibleSlotClips);
       final visibleVideoPaths = segments
           .map((entry) => entry.clip.path)
           .toSet();
@@ -192,8 +241,8 @@ extension _PreviewController on _VideoCollageScreenState {
           if (!controller.value.isInitialized) {
             continue;
           }
-          await controller.setVolume(0);
-          await controller.pause();
+          await _setControllerVolume(controller, 0);
+          await _pauseController(controller);
         }
         return;
       }
@@ -224,8 +273,8 @@ extension _PreviewController on _VideoCollageScreenState {
           if (controller == null || !controller.value.isInitialized) {
             continue;
           }
-          await controller.setLooping(false);
-          await controller.pause();
+          await _setControllerLooping(controller, false);
+          await _pauseController(controller);
           await _seekControllerIfNeeded(
             controller,
             _lastFramePosition(entry.clip),
@@ -245,12 +294,16 @@ extension _PreviewController on _VideoCollageScreenState {
       final activeEntry = segments[activeSegmentIndex];
       final activeClipPath = activeEntry.clip.path;
       final activeOffset = remaining;
+      final audibleClipPaths = _sequentialPreviewAudibleClipPaths(
+        activeEntry.clip,
+      );
       final sequentialOrder = <String, int>{
         for (var index = 0; index < segments.length; index += 1)
           segments[index].clip.path: index,
       };
 
-      if (_activeSequentialClipPath != activeClipPath && mounted) {
+      final activeClipChanged = _activeSequentialClipPath != activeClipPath;
+      if (activeClipChanged && mounted) {
         _updateState(() {
           _activeSequentialClipPath = activeClipPath;
         });
@@ -265,8 +318,9 @@ extension _PreviewController on _VideoCollageScreenState {
           continue;
         }
 
-        await controller.setLooping(false);
-        await controller.setVolume(
+        await _setControllerLooping(controller, false);
+        await _setControllerVolume(
+          controller,
           _previewVolumeForClip(
             clipPath: clip.clip.path,
             audibleClipPaths: audibleClipPaths,
@@ -275,19 +329,20 @@ extension _PreviewController on _VideoCollageScreenState {
 
         final clipOrder = sequentialOrder[clip.clip.path];
         if (clip.clip.path == activeClipPath) {
-          await _seekControllerIfNeeded(
-            controller,
-            clip.clip.trimStart + activeOffset,
-          );
+          final target = clip.clip.trimStart + activeOffset;
           if (_isPreviewPlaying) {
-            await controller.play();
+            if (activeClipChanged) {
+              await _pauseController(controller);
+            }
+            await _playControllerAt(controller, target);
           } else {
-            await controller.pause();
+            await _pauseController(controller);
+            await _seekControllerIfNeeded(controller, target);
           }
           continue;
         }
 
-        await controller.pause();
+        await _pauseController(controller);
         if (clipOrder != null && clipOrder < activeSegmentIndex) {
           await _seekControllerIfNeeded(
             controller,
@@ -341,6 +396,17 @@ extension _PreviewController on _VideoCollageScreenState {
     }
   }
 
+  Set<String> _sequentialPreviewAudibleClipPaths(VideoClipInfo activeClip) {
+    if (_isPreviewMuted ||
+        _selectedAudioMode == AudioMode.mute ||
+        !activeClip.hasAudio) {
+      return const <String>{};
+    }
+    // Sequential export carries the audio of each active segment. Mirror that
+    // behavior in preview instead of keeping only the first tile audible.
+    return <String>{activeClip.path};
+  }
+
   double _previewVolumeForClip({
     required String clipPath,
     required Set<String> audibleClipPaths,
@@ -363,8 +429,8 @@ extension _PreviewController on _VideoCollageScreenState {
           activeVisibleVideoPaths.contains(entry.key)) {
         continue;
       }
-      await controller.setVolume(0);
-      await controller.pause();
+      await _setControllerVolume(controller, 0);
+      await _pauseController(controller);
     }
   }
 

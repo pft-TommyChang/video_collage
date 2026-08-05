@@ -822,8 +822,7 @@ extension _MediaController on _VideoCollageScreenState {
       }
       _isPreviewPlaying = shouldPlay;
       _statusMessage = shouldPlay
-          ? 'Preview started. For reference only; playback may be choppy. '
-                'Export for final results.'
+          ? 'Preview playback started.'
           : 'Preview playback paused.';
     });
     if (!shouldPlay) {

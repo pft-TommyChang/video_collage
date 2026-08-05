@@ -109,6 +109,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   Timer? _exportCompletionTimer;
   OverlayEntry? _toastOverlayEntry;
   bool _isRestoringSettings = false;
+  bool _isSyncingParallelPreview = false;
   bool _isSyncingSequentialPreview = false;
   bool _isConsumingOpenedMedia = false;
   bool _shouldConsumeOpenedMediaAgain = false;
