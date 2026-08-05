@@ -231,6 +231,8 @@ extension _MediaController on _VideoCollageScreenState {
       _selectedAudioMode = _defaultAudioMode;
       _selectedDurationMode = _defaultDurationMode;
       _selectedFitMode = _defaultFitMode;
+      _mergeFitMode = ClipFitMode.cropCenter;
+      _mergeFrameRateMode = VideoMergeFrameRateMode.firstVideo;
       _rows = _defaultRows;
       _columns = _defaultColumns;
       _isMediaSectionCollapsed = false;

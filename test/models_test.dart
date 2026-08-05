@@ -21,6 +21,18 @@ void main() {
     expect(settings.toJson()['isSidePanelCollapsed'], isTrue);
   });
 
+  test('persisted settings restore merge options', () {
+    final settings = PersistedEditorSettings.fromJson(<String, dynamic>{
+      'mergeFitMode': 'centerInside',
+      'mergeFrameRateMode': 'highest',
+    });
+
+    expect(settings.mergeFitMode, 'centerInside');
+    expect(settings.mergeFrameRateMode, 'highest');
+    expect(settings.toJson()['mergeFitMode'], 'centerInside');
+    expect(settings.toJson()['mergeFrameRateMode'], 'highest');
+  });
+
   test('persisted settings restore custom colors', () {
     final settings = PersistedEditorSettings.fromJson(<String, dynamic>{
       'borderColorValue': 0xFF123456,

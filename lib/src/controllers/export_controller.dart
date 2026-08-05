@@ -1,6 +1,47 @@
 part of '../video_collage_app.dart';
 
 extension _ExportController on _VideoCollageScreenState {
+  Future<void> _showVideoMergeTool() async {
+    _updateState(() => _isVideoMergeDialogOpen = true);
+    String? outputPath;
+    try {
+      outputPath = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => VideoMergeDialog(
+          exportService: _exportService,
+          dialogService: _dialogService,
+          initialVideos: _clips
+              .where((clip) => clip.isVideo)
+              .toList(growable: false),
+          initialDirectory: _lastExportDirectory.isEmpty
+              ? null
+              : _lastExportDirectory,
+          initialFitMode: _mergeFitMode,
+          initialFrameRateMode: _mergeFrameRateMode,
+          onSettingsChanged: (fitMode, frameRateMode) {
+            _mergeFitMode = fitMode;
+            _mergeFrameRateMode = frameRateMode;
+            _scheduleSettingsSave();
+          },
+        ),
+      );
+    } finally {
+      if (mounted) {
+        _updateState(() => _isVideoMergeDialogOpen = false);
+      }
+    }
+    if (!mounted || outputPath == null) {
+      return;
+    }
+    final completedPath = outputPath;
+    _updateState(() {
+      _lastExportDirectory = p.dirname(completedPath);
+      _statusMessage = 'Video merge complete: $completedPath';
+    });
+    await _persistSettings();
+  }
+
   Future<void> _export() async {
     if (_clips.isEmpty) {
       _updateState(() {

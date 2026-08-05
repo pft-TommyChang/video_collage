@@ -57,6 +57,14 @@ class SystemDialogService {
         .toList(growable: false);
   }
 
+  Future<List<String>> pickVideos() async {
+    final files = await openFiles(
+      acceptedTypeGroups: const <XTypeGroup>[_videoTypeGroup],
+      confirmButtonText: 'Add Videos',
+    );
+    return files.map((file) => file.path).toList(growable: false);
+  }
+
   Future<String?> pickSingleMedia() async {
     final file = await openFile(
       acceptedTypeGroups: <XTypeGroup>[_videoTypeGroup, _photoTypeGroup],

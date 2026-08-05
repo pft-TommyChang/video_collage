@@ -43,6 +43,9 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
             }
           },
           onDragDone: (details) {
+            if (_isVideoMergeDialogOpen) {
+              return;
+            }
             unawaited(
               _handleExternalDrop(
                 details.files,
@@ -154,16 +157,34 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                       '${_clips.length} loaded • capacity $_gridCapacity',
                                   isCollapsed: _isMediaSectionCollapsed,
                                   onToggle: _toggleMediaSection,
-                                  action: IconButton.outlined(
-                                    onPressed: _clips.isEmpty
-                                        ? null
-                                        : () => unawaited(_confirmClearClips()),
-                                    tooltip: 'Reset media',
-                                    style: _sectionHeaderIconButtonStyle(),
-                                    icon: const Icon(
-                                      Icons.cleaning_services_outlined,
-                                      size: 18,
-                                    ),
+                                  action: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      IconButton.outlined(
+                                        onPressed: _isExporting || _isImporting
+                                            ? null
+                                            : () => unawaited(
+                                                _showVideoMergeTool(),
+                                              ),
+                                        tooltip: 'Merge videos',
+                                        style: _sectionHeaderIconButtonStyle(),
+                                        icon: const Icon(Icons.merge, size: 18),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton.outlined(
+                                        onPressed: _clips.isEmpty
+                                            ? null
+                                            : () => unawaited(
+                                                _confirmClearClips(),
+                                              ),
+                                        tooltip: 'Reset media',
+                                        style: _sectionHeaderIconButtonStyle(),
+                                        icon: const Icon(
+                                          Icons.cleaning_services_outlined,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   child: Column(
                                     crossAxisAlignment:

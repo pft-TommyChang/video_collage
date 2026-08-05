@@ -95,6 +95,14 @@ extension _SettingsController on _VideoCollageScreenState {
         (mode) => mode.name == savedSettings.fitMode,
         orElse: () => _selectedFitMode,
       );
+      _mergeFitMode = ClipFitMode.values.firstWhere(
+        (mode) => mode.name == savedSettings.mergeFitMode,
+        orElse: () => ClipFitMode.cropCenter,
+      );
+      _mergeFrameRateMode = VideoMergeFrameRateMode.values.firstWhere(
+        (mode) => mode.name == savedSettings.mergeFrameRateMode,
+        orElse: () => VideoMergeFrameRateMode.firstVideo,
+      );
       _appendDateTimeToExportName = savedSettings.appendDateTimeToExportName;
       _selectedAspect = _aspectPresets.firstWhere(
         (preset) => preset.label == savedSettings.aspectLabel,
@@ -188,6 +196,8 @@ extension _SettingsController on _VideoCollageScreenState {
         backgroundColorLabel: _selectedBackgroundColor.label,
         borderColorValue: _selectedBorderColor.color.toARGB32(),
         backgroundColorValue: _selectedBackgroundColor.color.toARGB32(),
+        mergeFitMode: _mergeFitMode.name,
+        mergeFrameRateMode: _mergeFrameRateMode.name,
       ),
     );
   }

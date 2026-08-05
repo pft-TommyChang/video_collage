@@ -40,6 +40,22 @@ class VideoThumbnailStrip {
   }
 }
 
+enum VideoMergeFrameRateMode { firstVideo, highest }
+
+class _VideoMergeProfile {
+  const _VideoMergeProfile({
+    required this.width,
+    required this.height,
+    required this.frameRate,
+    required this.sampleRate,
+  });
+
+  final int width;
+  final int height;
+  final String frameRate;
+  final int sampleRate;
+}
+
 class VideoExportService {
   VideoExportService();
 
@@ -212,6 +228,249 @@ class VideoExportService {
       return _probePhoto(filePath);
     }
     return _probeVideo(filePath);
+  }
+
+  Future<double> probeVideoFrameRate(String path) async {
+    return _frameRateValue(await _probeMergeFrameRate(path));
+  }
+
+  Future<void> mergeVideos({
+    required List<VideoClipInfo> videos,
+    required String outputPath,
+    ClipFitMode fitMode = ClipFitMode.cropCenter,
+    VideoMergeFrameRateMode frameRateMode = VideoMergeFrameRateMode.firstVideo,
+    void Function(VideoExportProgress progress)? onProgress,
+  }) async {
+    if (videos.length < 2) {
+      throw const VideoExportException('Choose at least two videos to merge.');
+    }
+    if (videos.any((video) => !video.isVideo)) {
+      throw const VideoExportException('Only video files can be merged.');
+    }
+
+    final profile = await _probeMergeProfile(videos.first);
+    final outputFrameRate = frameRateMode == VideoMergeFrameRateMode.firstVideo
+        ? profile.frameRate
+        : await _highestMergeFrameRate(videos, profile.frameRate);
+    final outputWidth = profile.width.isEven
+        ? profile.width
+        : profile.width - 1;
+    final outputHeight = profile.height.isEven
+        ? profile.height
+        : profile.height - 1;
+    if (outputWidth < 2 || outputHeight < 2) {
+      throw const VideoExportException(
+        'The first video has an invalid resolution.',
+      );
+    }
+
+    final total = videos.fold<Duration>(
+      Duration.zero,
+      (duration, video) => duration + video.duration,
+    );
+    final totalMilliseconds = math.max(1, total.inMilliseconds);
+    final hasAudio = videos.any((video) => video.hasAudio);
+    final filters = <String>[];
+    final videoFitFilter = switch (fitMode) {
+      ClipFitMode.cropCenter =>
+        'scale=$outputWidth:$outputHeight:force_original_aspect_ratio=increase:flags=lanczos,'
+            'crop=$outputWidth:$outputHeight:(iw-ow)/2:(ih-oh)/2',
+      ClipFitMode.centerInside =>
+        'scale=$outputWidth:$outputHeight:force_original_aspect_ratio=decrease:flags=lanczos,'
+            'pad=$outputWidth:$outputHeight:(ow-iw)/2:(oh-ih)/2:color=black',
+    };
+
+    for (var index = 0; index < videos.length; index += 1) {
+      final video = videos[index];
+      final durationSeconds = _durationSeconds(video.duration);
+      filters.add(
+        '[$index:v]'
+        'trim=duration=$durationSeconds,setpts=PTS-STARTPTS,'
+        '$videoFitFilter,'
+        'setsar=1,fps=$outputFrameRate,format=yuv420p'
+        '[mergev$index]',
+      );
+      if (hasAudio) {
+        if (video.hasAudio) {
+          filters.add(
+            '[$index:a]'
+            'asetpts=PTS-STARTPTS,'
+            'aresample=${profile.sampleRate}:async=1:first_pts=0,'
+            'aformat=sample_rates=${profile.sampleRate}:channel_layouts=stereo,'
+            'apad,atrim=duration=$durationSeconds'
+            '[mergea$index]',
+          );
+        } else {
+          filters.add(
+            'anullsrc=r=${profile.sampleRate}:cl=stereo,'
+            'atrim=duration=$durationSeconds,asetpts=PTS-STARTPTS'
+            '[mergea$index]',
+          );
+        }
+      }
+    }
+
+    final concatInputs = <String>[
+      for (var index = 0; index < videos.length; index += 1) ...<String>[
+        '[mergev$index]',
+        if (hasAudio) '[mergea$index]',
+      ],
+    ].join();
+    filters.add(
+      '$concatInputs'
+      'concat=n=${videos.length}:v=1:a=${hasAudio ? 1 : 0}'
+      '[mergedv]${hasAudio ? '[mergeda]' : ''}',
+    );
+
+    final arguments = <String>[
+      '-y',
+      for (final video in videos) ..._videoInputArguments(video),
+      '-filter_complex_threads',
+      _complexFilterThreadCount,
+      '-filter_complex',
+      filters.join(';'),
+      '-map',
+      '[mergedv]',
+      if (hasAudio) ...<String>['-map', '[mergeda]'],
+      '-map_metadata',
+      '0',
+      '-metadata:s:v:0',
+      'rotate=0',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'medium',
+      '-crf',
+      '18',
+      '-threads',
+      _encoderThreadCount,
+      '-pix_fmt',
+      'yuv420p',
+      '-r',
+      outputFrameRate,
+      if (hasAudio) ..._aacAudioEncodingArguments(),
+      '-movflags',
+      '+faststart',
+      outputPath,
+    ];
+
+    onProgress?.call(
+      VideoExportProgress(progress: 0, processed: Duration.zero, total: total),
+    );
+    await _runFfmpegCommand(
+      arguments: arguments,
+      onStatistics: (statistics) {
+        final processedMilliseconds = statistics.getTime().round().clamp(
+          0,
+          totalMilliseconds,
+        );
+        onProgress?.call(
+          VideoExportProgress(
+            progress: processedMilliseconds / totalMilliseconds,
+            processed: Duration(milliseconds: processedMilliseconds),
+            total: total,
+            speed: statistics.getSpeed(),
+          ),
+        );
+      },
+    );
+    onProgress?.call(
+      VideoExportProgress(progress: 1, processed: total, total: total),
+    );
+  }
+
+  Future<_VideoMergeProfile> _probeMergeProfile(
+    VideoClipInfo firstVideo,
+  ) async {
+    final session = await FFprobeKit.getMediaInformation(firstVideo.path);
+    final returnCode = await session.getReturnCode();
+    final information = session.getMediaInformation();
+    if (!ReturnCode.isSuccess(returnCode) || information == null) {
+      throw const VideoExportException(
+        'Could not read the first video format.',
+      );
+    }
+    final videoStream = _findPrimaryVideoStream(information);
+    if (videoStream == null) {
+      throw const VideoExportException(
+        'The first file does not contain a video stream.',
+      );
+    }
+    final averageFrameRate = videoStream.getAverageFrameRate();
+    final frameRate = _isValidFrameRate(averageFrameRate)
+        ? averageFrameRate!
+        : _validFrameRate(videoStream.getRealFrameRate());
+    var sampleRate = 48000;
+    for (final stream in information.getStreams()) {
+      if (stream.getType() == 'audio') {
+        sampleRate = int.tryParse(stream.getSampleRate() ?? '') ?? sampleRate;
+        break;
+      }
+    }
+    return _VideoMergeProfile(
+      width: firstVideo.width,
+      height: firstVideo.height,
+      frameRate: frameRate,
+      sampleRate: sampleRate,
+    );
+  }
+
+  Future<String> _highestMergeFrameRate(
+    List<VideoClipInfo> videos,
+    String firstFrameRate,
+  ) async {
+    var highest = firstFrameRate;
+    var highestValue = _frameRateValue(firstFrameRate);
+    for (final video in videos.skip(1)) {
+      final candidate = await _probeMergeFrameRate(video.path);
+      final candidateValue = _frameRateValue(candidate);
+      if (candidateValue > highestValue) {
+        highest = candidate;
+        highestValue = candidateValue;
+      }
+    }
+    return highest;
+  }
+
+  Future<String> _probeMergeFrameRate(String path) async {
+    final session = await FFprobeKit.getMediaInformation(path);
+    final returnCode = await session.getReturnCode();
+    final information = session.getMediaInformation();
+    if (!ReturnCode.isSuccess(returnCode) || information == null) {
+      throw VideoExportException('Could not read video frame rate: $path');
+    }
+    final videoStream = _findPrimaryVideoStream(information);
+    if (videoStream == null) {
+      throw VideoExportException('No video stream found: $path');
+    }
+    final averageFrameRate = videoStream.getAverageFrameRate();
+    return _isValidFrameRate(averageFrameRate)
+        ? averageFrameRate!
+        : _validFrameRate(videoStream.getRealFrameRate());
+  }
+
+  double _frameRateValue(String value) {
+    final parts = value.split('/');
+    final numerator = double.tryParse(parts.first) ?? 0;
+    final denominator = parts.length > 1 ? (double.tryParse(parts[1]) ?? 0) : 1;
+    return denominator <= 0 ? 0 : numerator / denominator;
+  }
+
+  String _validFrameRate(String? value) {
+    return _isValidFrameRate(value) ? value! : '30';
+  }
+
+  bool _isValidFrameRate(String? value) {
+    if (value == null || value.isEmpty || value == '0/0') {
+      return false;
+    }
+    final parts = value.split('/');
+    final numerator = double.tryParse(parts.first) ?? 0;
+    final denominator = parts.length > 1 ? (double.tryParse(parts[1]) ?? 0) : 1;
+    if (numerator <= 0 || denominator <= 0) {
+      return false;
+    }
+    return true;
   }
 
   Future<VideoClipInfo> _probeVideo(String filePath) async {

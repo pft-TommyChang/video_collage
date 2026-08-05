@@ -7,7 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:video_collage_mac/src/models.dart';
+import 'package:video_collage_mac/src/services/system_dialog_service.dart';
 import 'package:video_collage_mac/src/services/video_export_service.dart';
+import 'package:video_collage_mac/src/video_merge_dialog.dart';
 import 'package:video_collage_mac/src/video_collage_app.dart';
 import 'package:video_collage_mac/src/video_trimmer_dialog.dart';
 
@@ -83,6 +85,307 @@ void main() {
 
     expect(find.text('Perfect Collage'), findsWidgets);
     expect(find.byTooltip('Auto Layout'), findsOneWidget);
+    expect(find.byTooltip('Merge videos'), findsOneWidget);
+    expect(
+      tester.getCenter(find.byTooltip('Merge videos')).dx,
+      lessThan(tester.getCenter(find.byTooltip('Reset media')).dx),
+    );
+  });
+
+  testWidgets('opens the video merge tool', (WidgetTester tester) async {
+    useTestWindow(tester, const Size(1600, 1000));
+
+    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Merge videos'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Merge Videos'), findsOneWidget);
+    expect(find.text('Add video'), findsNothing);
+    expect(find.byTooltip('Add video'), findsOneWidget);
+    expect(find.text('No videos selected'), findsOneWidget);
+    expect(find.text('Center inside'), findsOneWidget);
+    expect(find.text('Highest FPS'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('merge-preview-play-button')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('merge-save-button'))),
+      const Size(160, 40),
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('merge-list-container')),
+        matching: find.byKey(const ValueKey<String>('merge-add-video-tile')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester.getCenter(find.text('Merge & Save')).dx,
+      lessThan(tester.getCenter(find.text('Cancel')).dx),
+    );
+  });
+
+  testWidgets('merge tool starts with supplied media and thumbnails', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1200, 800));
+    const videos = <VideoClipInfo>[
+      VideoClipInfo(
+        path: '/missing-first.mp4',
+        name: 'First',
+        duration: Duration(seconds: 3),
+        width: 1920,
+        height: 1080,
+        hasAudio: true,
+        mediaKind: MediaKind.video,
+      ),
+      VideoClipInfo(
+        path: '/missing-second.mp4',
+        name: 'Second',
+        duration: Duration(seconds: 4),
+        width: 1280,
+        height: 720,
+        hasAudio: false,
+        mediaKind: MediaKind.video,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VideoMergeDialog(
+          exportService: _FakeMergeExportService(),
+          dialogService: const SystemDialogService(),
+          initialVideos: videos,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byTooltip('missing-first.mp4\n1920×1080 • 29.97 FPS • 0:03'),
+      findsOneWidget,
+    );
+    expect(
+      find.byTooltip('missing-second.mp4\n1280×720 • 60 FPS • 0:04'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Export: 1920×1080'), findsOneWidget);
+    expect(find.textContaining('29.97 FPS'), findsOneWidget);
+    final mergeSubtitle = find.textContaining('Export: 1920×1080');
+    expect(
+      tester.getTopLeft(mergeSubtitle).dy -
+          tester.getBottomLeft(find.text('Merge Videos')).dy,
+      lessThan(24),
+    );
+    expect(find.textContaining('1920×1080'), findsWidgets);
+    expect(find.textContaining('0:07 total'), findsOneWidget);
+    expect(
+      tester
+          .widget<Checkbox>(
+            find.byKey(const ValueKey<String>('merge-center-inside-checkbox')),
+          )
+          .value,
+      isFalse,
+    );
+    expect(
+      tester
+          .widget<Checkbox>(
+            find.byKey(const ValueKey<String>('merge-highest-fps-checkbox')),
+          )
+          .value,
+      isFalse,
+    );
+    final mergeListContainer = tester.widget<Container>(
+      find.byKey(const ValueKey<String>('merge-list-container')),
+    );
+    final mergeListDecoration = mergeListContainer.decoration! as BoxDecoration;
+    expect(mergeListDecoration.color, const Color(0xFFF3EFE7));
+    final mergeListBorder = mergeListDecoration.border! as Border;
+    expect(mergeListBorder.top.width, 1);
+    expect(mergeListBorder.top.color, const Color(0xFFD8D0C4));
+    final firstThumbnailSize = tester.getSize(
+      find.byKey(const ValueKey<String>('merge-thumbnail-/missing-first.mp4')),
+    );
+    expect(firstThumbnailSize, const Size.square(90));
+    expect(find.text('0:03'), findsOneWidget);
+    expect(find.text('0:04'), findsOneWidget);
+    final selectedThumbnail = tester.widget<AnimatedContainer>(
+      find.byKey(const ValueKey<String>('merge-thumbnail-/missing-first.mp4')),
+    );
+    final selectedDecoration =
+        selectedThumbnail.foregroundDecoration! as BoxDecoration;
+    final selectedBorder = selectedDecoration.border! as Border;
+    expect(selectedBorder.top.width, 3);
+    expect(selectedBorder.top.color, const Color(0xFFFF7A59));
+    expect(selectedBorder.top, selectedBorder.right);
+    expect(selectedBorder.top, selectedBorder.bottom);
+    expect(selectedBorder.top, selectedBorder.left);
+    final outputPreviewSize = tester.getSize(
+      find.byKey(const ValueKey<String>('merge-output-frame')),
+    );
+    expect(
+      outputPreviewSize.width / outputPreviewSize.height,
+      closeTo(1920 / 1080, 0.01),
+    );
+    expect(outputPreviewSize.width, greaterThan(firstThumbnailSize.width));
+
+    final thumbnailListener = tester.widget<Listener>(
+      find.byKey(
+        const ValueKey<String>('merge-thumbnail-tap-/missing-second.mp4'),
+      ),
+    );
+    thumbnailListener.onPointerDown!(const PointerDownEvent());
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('merge-preview-/missing-second.mp4')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('1920×1080'), findsOneWidget);
+    expect(
+      find.byTooltip('Preview missing-second.mp4 • 1280×720 • 60 FPS'),
+      findsOneWidget,
+    );
+    final secondVideoPreviewSize = tester.getSize(
+      find.byKey(const ValueKey<String>('merge-output-frame')),
+    );
+    expect(
+      secondVideoPreviewSize.width / secondVideoPreviewSize.height,
+      closeTo(1920 / 1080, 0.01),
+    );
+
+    final firstThumbnail = find.byKey(
+      const ValueKey<String>('merge-thumbnail-/missing-first.mp4'),
+    );
+    final drag = await tester.startGesture(tester.getCenter(firstThumbnail));
+    await tester.pump();
+    await drag.moveBy(const Offset(350, 0));
+    await tester.pump(const Duration(milliseconds: 300));
+    await drag.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .getCenter(
+            find.byKey(
+              const ValueKey<String>('merge-thumbnail-/missing-second.mp4'),
+            ),
+          )
+          .dx,
+      lessThan(tester.getCenter(firstThumbnail).dx),
+    );
+  });
+
+  testWidgets('completed merge keeps the dialog open', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1200, 800));
+    const videos = <VideoClipInfo>[
+      VideoClipInfo(
+        path: '/missing-first.mp4',
+        name: 'First',
+        duration: Duration(seconds: 3),
+        width: 1920,
+        height: 1080,
+        hasAudio: true,
+        mediaKind: MediaKind.video,
+      ),
+      VideoClipInfo(
+        path: '/missing-second.mp4',
+        name: 'Second',
+        duration: Duration(seconds: 4),
+        width: 1280,
+        height: 720,
+        hasAudio: false,
+        mediaKind: MediaKind.video,
+      ),
+    ];
+    final exportService = _FakeMergeExportService();
+    final dialogService = _FakeMergeDialogService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VideoMergeDialog(
+          exportService: exportService,
+          dialogService: dialogService,
+          initialVideos: videos,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Center inside'));
+    await tester.pump();
+    await tester.tap(find.text('Highest FPS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Merge & Save'));
+    await tester.pumpAndSettle();
+
+    expect(exportService.mergeCalls, 1);
+    expect(dialogService.suggestedName, 'missing-first_merged.mp4');
+    expect(exportService.fitMode, ClipFitMode.centerInside);
+    expect(exportService.frameRateMode, VideoMergeFrameRateMode.highest);
+    expect(find.text('Merge Videos'), findsOneWidget);
+    expect(find.text('Saved'), findsWidgets);
+    expect(find.byTooltip('Open File'), findsOneWidget);
+    expect(
+      tester.getSize(
+        find.byKey(const ValueKey<String>('merge-open-result-button')),
+      ),
+      const Size.square(40),
+    );
+    final openResultButton = tester.widget<IconButton>(
+      find.byKey(const ValueKey<String>('merge-open-result-button')),
+    );
+    expect(
+      openResultButton.style?.shape?.resolve(const <WidgetState>{}),
+      isA<CircleBorder>(),
+    );
+    expect(find.text('Close'), findsOneWidget);
+  });
+
+  testWidgets('cancelled merge does not add an error message row', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1200, 800));
+    const videos = <VideoClipInfo>[
+      VideoClipInfo(
+        path: '/missing-first.mp4',
+        name: 'First',
+        duration: Duration(seconds: 3),
+        width: 1920,
+        height: 1080,
+        hasAudio: true,
+        mediaKind: MediaKind.video,
+      ),
+      VideoClipInfo(
+        path: '/missing-second.mp4',
+        name: 'Second',
+        duration: Duration(seconds: 4),
+        width: 1280,
+        height: 720,
+        hasAudio: false,
+        mediaKind: MediaKind.video,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VideoMergeDialog(
+          exportService: _FakeMergeExportService(cancelMerge: true),
+          dialogService: _FakeMergeDialogService(),
+          initialVideos: videos,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Merge & Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Export cancelled'), findsNothing);
+    expect(find.textContaining('Merge failed'), findsNothing);
+    expect(find.text('Merge & Save'), findsOneWidget);
   });
 
   testWidgets('collapsed panel moves controls into the preview area', (
@@ -451,4 +754,62 @@ void main() {
 
     expect(find.textContaining(RegExp(r'^#[0-9A-F]{6}$')), findsOneWidget);
   });
+}
+
+class _FakeMergeDialogService extends SystemDialogService {
+  String? suggestedName;
+
+  @override
+  Future<String?> pickSavePath({
+    required ExportFormat format,
+    required String suggestedName,
+    String? initialDirectory,
+  }) async {
+    this.suggestedName = suggestedName;
+    return '/tmp/merged-video-test.mp4';
+  }
+}
+
+class _FakeMergeExportService extends VideoExportService {
+  _FakeMergeExportService({this.cancelMerge = false});
+
+  final bool cancelMerge;
+  int mergeCalls = 0;
+  ClipFitMode? fitMode;
+  VideoMergeFrameRateMode? frameRateMode;
+
+  @override
+  Future<double> probeVideoFrameRate(String path) async {
+    return path.contains('second') ? 60 : 29.97;
+  }
+
+  @override
+  Future<void> mergeVideos({
+    required List<VideoClipInfo> videos,
+    required String outputPath,
+    ClipFitMode fitMode = ClipFitMode.cropCenter,
+    VideoMergeFrameRateMode frameRateMode = VideoMergeFrameRateMode.firstVideo,
+    void Function(VideoExportProgress progress)? onProgress,
+  }) async {
+    mergeCalls += 1;
+    if (cancelMerge) {
+      throw const VideoExportException('Export cancelled.');
+    }
+    this.fitMode = fitMode;
+    this.frameRateMode = frameRateMode;
+    onProgress?.call(
+      const VideoExportProgress(
+        progress: 0.5,
+        processed: Duration(milliseconds: 3500),
+        total: Duration(seconds: 7),
+      ),
+    );
+    onProgress?.call(
+      const VideoExportProgress(
+        progress: 1,
+        processed: Duration(seconds: 7),
+        total: Duration(seconds: 7),
+      ),
+    );
+  }
 }

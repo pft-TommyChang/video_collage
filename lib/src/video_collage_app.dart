@@ -15,6 +15,7 @@ import 'services/editor_settings_store.dart';
 import 'services/desktop_file_service.dart';
 import 'services/system_dialog_service.dart';
 import 'services/video_export_service.dart';
+import 'video_merge_dialog.dart';
 import 'video_trimmer_dialog.dart';
 
 part 'controllers/app_controller.dart';
@@ -112,6 +113,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   bool _isSyncingParallelPreview = false;
   bool _isSyncingSequentialPreview = false;
   bool _isConsumingOpenedMedia = false;
+  bool _isVideoMergeDialogOpen = false;
   bool _shouldConsumeOpenedMediaAgain = false;
   int? _externalDropHoverSlotIndex;
   int? _lastPreviewProgressSecond;
@@ -131,6 +133,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   AudioMode _selectedAudioMode = _defaultAudioMode;
   ExportDurationMode _selectedDurationMode = _defaultDurationMode;
   ClipFitMode _selectedFitMode = _defaultFitMode;
+  ClipFitMode _mergeFitMode = ClipFitMode.cropCenter;
+  VideoMergeFrameRateMode _mergeFrameRateMode =
+      VideoMergeFrameRateMode.firstVideo;
 
   int _rows = _defaultRows;
   int _columns = _defaultColumns;

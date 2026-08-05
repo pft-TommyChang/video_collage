@@ -64,6 +64,8 @@ class PersistedEditorSettings {
     required this.backgroundColorLabel,
     required this.borderColorValue,
     required this.backgroundColorValue,
+    this.mergeFitMode = 'cropCenter',
+    this.mergeFrameRateMode = 'firstVideo',
   });
 
   final int rows;
@@ -95,6 +97,8 @@ class PersistedEditorSettings {
   final String backgroundColorLabel;
   final int borderColorValue;
   final int backgroundColorValue;
+  final String mergeFitMode;
+  final String mergeFrameRateMode;
   Map<String, Object> toJson() {
     return <String, Object>{
       'rows': rows,
@@ -126,6 +130,8 @@ class PersistedEditorSettings {
       'backgroundColorLabel': backgroundColorLabel,
       'borderColorValue': borderColorValue,
       'backgroundColorValue': backgroundColorValue,
+      'mergeFitMode': mergeFitMode,
+      'mergeFrameRateMode': mergeFrameRateMode,
     };
   }
 
@@ -203,6 +209,8 @@ class PersistedEditorSettings {
             json['backgroundColorLabel'] as String?,
             0xFFD0D5DD,
           ),
+      mergeFitMode: json['mergeFitMode'] as String? ?? 'cropCenter',
+      mergeFrameRateMode: json['mergeFrameRateMode'] as String? ?? 'firstVideo',
     );
   }
 
