@@ -244,10 +244,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('1920×1080'), findsOneWidget);
-    expect(
-      find.byTooltip('Preview missing-second.mp4 • 1280×720 • 60 FPS'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Preview missing-second.mp4'), findsNothing);
     final secondVideoPreviewSize = tester.getSize(
       find.byKey(const ValueKey<String>('merge-output-frame')),
     );

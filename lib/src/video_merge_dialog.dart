@@ -201,7 +201,6 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                               video: selectedVideo,
                               outputVideo: firstVideo!,
                               controller: selectedController,
-                              frameRate: _videoFrameRates[selectedVideo.path],
                               fitMode: _mergeFitMode,
                               onTap: _isMerging
                                   ? null
@@ -885,7 +884,6 @@ class _MergeOutputPreview extends StatelessWidget {
     required this.video,
     required this.outputVideo,
     required this.controller,
-    required this.frameRate,
     required this.fitMode,
     required this.onTap,
   });
@@ -893,7 +891,6 @@ class _MergeOutputPreview extends StatelessWidget {
   final VideoClipInfo video;
   final VideoClipInfo outputVideo;
   final VideoPlayerController? controller;
-  final double? frameRate;
   final ClipFitMode fitMode;
   final VoidCallback? onTap;
 
@@ -904,44 +901,38 @@ class _MergeOutputPreview extends StatelessWidget {
         : 16 / 9;
     final isReady = controller?.value.isInitialized == true;
 
-    return Tooltip(
-      key: ValueKey<String>('merge-preview-${video.path}'),
-      message:
-          'Preview ${p.basename(video.path)} • '
-          '${video.width}×${video.height} • '
-          '${_formatMergeFrameRate(frameRate)}',
-      child: AspectRatio(
-        key: const ValueKey<String>('merge-output-preview'),
-        aspectRatio: outputAspect,
-        child: MouseRegion(
-          cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
-          child: GestureDetector(
-            onTap: onTap,
-            child: Container(
-              key: const ValueKey<String>('merge-output-frame'),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: isReady
-                  ? FittedBox(
-                      fit: fitMode.previewFit,
-                      alignment: Alignment.center,
-                      child: SizedBox(
-                        width: controller!.value.size.width,
-                        height: controller!.value.size.height,
-                        child: VideoPlayer(controller!),
-                      ),
-                    )
-                  : const Center(
-                      child: Icon(
-                        Icons.movie_outlined,
-                        size: 44,
-                        color: Color(0xFFB8C0CC),
-                      ),
-                    ),
+    return AspectRatio(
+      key: const ValueKey<String>('merge-output-preview'),
+      aspectRatio: outputAspect,
+      child: MouseRegion(
+        key: ValueKey<String>('merge-preview-${video.path}'),
+        cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            key: const ValueKey<String>('merge-output-frame'),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(14),
             ),
+            clipBehavior: Clip.antiAlias,
+            child: isReady
+                ? FittedBox(
+                    fit: fitMode.previewFit,
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: controller!.value.size.width,
+                      height: controller!.value.size.height,
+                      child: VideoPlayer(controller!),
+                    ),
+                  )
+                : const Center(
+                    child: Icon(
+                      Icons.movie_outlined,
+                      size: 44,
+                      color: Color(0xFFB8C0CC),
+                    ),
+                  ),
           ),
         ),
       ),
