@@ -10,6 +10,7 @@ import 'models.dart';
 import 'services/desktop_file_service.dart';
 import 'services/system_dialog_service.dart';
 import 'services/video_export_service.dart';
+import 'video_trimmer_dialog.dart';
 
 const double _mergeDialogWidth = 760;
 const double _mergeMaximumPreviewHeight = 400;
@@ -178,15 +179,35 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                                     : null,
                               ),
                         )
-                      : Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Export: ${firstVideo.width}×${firstVideo.height}  •  '
-                            '${_formatMergeFrameRate(_outputFrameRate, unavailable: 'FPS loading…')}  •  '
-                            '${_formatMergeDuration(_totalDuration)} total',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: const Color(0xFF747B88)),
-                          ),
+                      : Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                'Export: ${firstVideo.width}×${firstVideo.height}  •  '
+                                '${_formatMergeFrameRate(_outputFrameRate, unavailable: 'FPS loading…')}  •  '
+                                '${_formatMergeDuration(_totalDuration)} total',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: const Color(0xFF747B88)),
+                              ),
+                            ),
+                            if (selectedVideo != null) ...<Widget>[
+                              const SizedBox(width: 16),
+                              Text(
+                                'Media: ${selectedVideo.width}×${selectedVideo.height}  •  '
+                                '${_formatMergeFrameRate(_videoFrameRates[selectedVideo.id])}  •  '
+                                '${_formatMergeDuration(selectedVideo.duration)}',
+                                key: const ValueKey<String>(
+                                  'merge-selected-media-info',
+                                ),
+                                maxLines: 1,
+                                textAlign: TextAlign.right,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: const Color(0xFF747B88)),
+                              ),
+                            ],
+                          ],
                         ),
                 ),
                 const SizedBox(height: 6),
@@ -232,6 +253,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                       Expanded(
                         child: _MergeSeekBar(
                           controller: selectedController,
+                          video: selectedVideo,
                           elapsedBeforeVideo: _durationBeforeVideo(
                             selectedVideo,
                           ),
@@ -293,11 +315,13 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                                   index: index,
                                   video: video,
                                   controller: _thumbnailControllers[video.id],
-                                  frameRate: _videoFrameRates[video.id],
                                   isSelected: video.id == _selectedVideoId,
                                   onTap: _isMerging
                                       ? null
                                       : () => unawaited(_selectVideo(video)),
+                                  onTrim: _isMerging
+                                      ? null
+                                      : () => unawaited(_trimVideo(video)),
                                   onRemove: _isMerging
                                       ? null
                                       : () => _removeVideo(index),
@@ -496,7 +520,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       await controller.setLooping(false);
       await controller.setVolume(1);
       await controller.pause();
-      await controller.seekTo(Duration.zero);
+      await controller.seekTo(video.trimStart);
       controller.addListener(
         () => _handlePreviewControllerChanged(video.id, controller),
       );
@@ -564,6 +588,43 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
     });
   }
 
+  Future<void> _trimVideo(VideoClipInfo video) async {
+    await _stopPreviewPlayback();
+    final controller = _thumbnailControllers[video.id];
+    await controller?.pause();
+    if (!mounted) {
+      return;
+    }
+
+    final result = await showDialog<VideoTrimResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) =>
+          VideoTrimmerDialog(clip: video, exportService: widget.exportService),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+
+    final index = _videos.indexWhere((candidate) => candidate.id == video.id);
+    if (index < 0) {
+      return;
+    }
+    final trimmedDuration = result.end - result.start;
+    setState(() {
+      final current = _videos[index];
+      _videos[index] = current.copyWith(
+        duration: trimmedDuration,
+        sourceDuration: current.fullDuration,
+        trimStart: result.start,
+      );
+      _selectedVideoId = current.id;
+      _showMergeComplete = false;
+      _message = null;
+    });
+    await controller?.seekTo(result.start);
+  }
+
   VideoClipInfo? _videoForId(String? id) {
     if (id == null) {
       return null;
@@ -607,7 +668,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       final videoEnd = elapsed + video.duration;
       if (targetPosition < videoEnd || video.id == _videos.last.id) {
         targetVideo = video;
-        positionInVideo = targetPosition - elapsed;
+        positionInVideo = video.trimStart + (targetPosition - elapsed);
         break;
       }
       elapsed = videoEnd;
@@ -631,7 +692,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       return;
     }
     await target.seekTo(positionInVideo);
-    if (wasPlaying && positionInVideo < target.value.duration) {
+    if (wasPlaying && positionInVideo < targetVideo.trimEnd) {
       await target.setVolume(1);
       await target.play();
     }
@@ -654,7 +715,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
     });
     final next = _thumbnailControllers[video.id];
     if (next?.value.isInitialized == true) {
-      await next?.seekTo(Duration.zero);
+      await next?.seekTo(video.trimStart);
     }
   }
 
@@ -670,9 +731,14 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       }
       return;
     }
+    final selectedVideo = _videoForId(_selectedVideoId);
+    if (selectedVideo == null) {
+      return;
+    }
     if (controller.value.isCompleted ||
-        controller.value.position >= controller.value.duration) {
-      await controller.seekTo(Duration.zero);
+        controller.value.position < selectedVideo.trimStart ||
+        controller.value.position >= selectedVideo.trimEnd) {
+      await controller.seekTo(selectedVideo.trimStart);
     }
     await controller.setVolume(1);
     if (mounted) {
@@ -694,7 +760,8 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
     }
     final value = controller.value;
     if (!value.isInitialized ||
-        (!value.isCompleted && value.position < value.duration)) {
+        (!value.isCompleted &&
+            value.position < (_videoForId(id)?.trimEnd ?? value.duration))) {
       return;
     }
     _isAdvancingPreview = true;
@@ -727,7 +794,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       setState(() => _selectedVideoId = nextVideo.id);
       await next.setLooping(false);
       await next.setVolume(1);
-      await next.seekTo(Duration.zero);
+      await next.seekTo(nextVideo.trimStart);
       await next.play();
     } catch (_) {
       if (mounted) {
@@ -828,138 +895,153 @@ class _MergeVideoThumbnail extends StatelessWidget {
     required this.index,
     required this.video,
     required this.controller,
-    required this.frameRate,
     required this.isSelected,
     required this.onTap,
+    required this.onTrim,
     required this.onRemove,
   });
 
   final int index;
   final VideoClipInfo video;
   final VideoPlayerController? controller;
-  final double? frameRate;
   final bool isSelected;
   final VoidCallback? onTap;
+  final VoidCallback? onTrim;
   final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
     final isReady = controller?.value.isInitialized == true;
-    return Tooltip(
-      message:
-          '${p.basename(video.path)}\n'
-          '${video.width}×${video.height} • '
-          '${_formatMergeFrameRate(frameRate)} • '
-          '${_formatMergeDuration(video.duration)}',
-      child: MouseRegion(
-        cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.grab,
-        child: Listener(
-          key: ValueKey<String>('merge-thumbnail-tap-${video.id}'),
-          behavior: HitTestBehavior.opaque,
-          onPointerDown: onTap == null ? null : (_) => onTap!(),
-          child: AnimatedContainer(
-            key: ValueKey<String>('merge-thumbnail-${video.id}'),
-            duration: const Duration(milliseconds: 140),
-            width: _mergeThumbnailSize,
-            height: _mergeThumbnailSize,
-            decoration: BoxDecoration(
-              color: const Color(0xFF20242C),
-              borderRadius: BorderRadius.circular(9),
+    return MouseRegion(
+      cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.grab,
+      child: Listener(
+        key: ValueKey<String>('merge-thumbnail-tap-${video.id}'),
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: onTap == null ? null : (_) => onTap!(),
+        child: AnimatedContainer(
+          key: ValueKey<String>('merge-thumbnail-${video.id}'),
+          duration: const Duration(milliseconds: 140),
+          width: _mergeThumbnailSize,
+          height: _mergeThumbnailSize,
+          decoration: BoxDecoration(
+            color: const Color(0xFF20242C),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          foregroundDecoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFFFF7A59)
+                  : const Color(0xFFE7DED1),
+              width: isSelected ? 3 : 1,
             ),
-            foregroundDecoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(
-                color: isSelected
-                    ? const Color(0xFFFF7A59)
-                    : const Color(0xFFE7DED1),
-                width: isSelected ? 3 : 1,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              isReady
+                  ? FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
+                        width: controller!.value.size.width,
+                        height: controller!.value.size.height,
+                        child: VideoPlayer(controller!),
+                      ),
+                    )
+                  : const Center(
+                      child: Icon(
+                        Icons.movie_outlined,
+                        color: Color(0xFFB8C0CC),
+                      ),
+                    ),
+              Positioned(
+                left: 5,
+                top: 5,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xCC000000),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    child: Text(
+                      '${index + 1}',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                isReady
-                    ? FittedBox(
-                        fit: BoxFit.cover,
-                        child: SizedBox(
-                          width: controller!.value.size.width,
-                          height: controller!.value.size.height,
-                          child: VideoPlayer(controller!),
-                        ),
-                      )
-                    : const Center(
-                        child: Icon(
-                          Icons.movie_outlined,
-                          color: Color(0xFFB8C0CC),
-                        ),
-                      ),
-                Positioned(
-                  left: 5,
-                  top: 5,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: const Color(0xCC000000),
-                      borderRadius: BorderRadius.circular(10),
+              Positioned(
+                right: 3,
+                top: 3,
+                child: IconButton(
+                  onPressed: onRemove,
+                  tooltip: 'Remove ${p.basename(video.path)}',
+                  icon: const Icon(Icons.close_rounded),
+                  iconSize: 16,
+                  color: Colors.white,
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xBB000000),
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size.square(24),
+                    maximumSize: const Size.square(24),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 3,
+                bottom: 3,
+                child: IconButton(
+                  key: ValueKey<String>('merge-trim-${video.id}'),
+                  onPressed: onTrim,
+                  tooltip: 'Trim ${p.basename(video.path)}',
+                  icon: Icon(
+                    Icons.content_cut_rounded,
+                    size: 15,
+                    color: video.isTrimmed
+                        ? const Color(0xFFFFC107)
+                        : Colors.white,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xBB000000),
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size.square(24),
+                    maximumSize: const Size.square(24),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 5,
+                bottom: 5,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xCC000000),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      child: Text(
-                        '${index + 1}',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    child: Text(
+                      _formatMergeDuration(video.duration),
+                      maxLines: 1,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                 ),
-                Positioned(
-                  right: 3,
-                  top: 3,
-                  child: IconButton(
-                    onPressed: onRemove,
-                    tooltip: 'Remove ${p.basename(video.path)}',
-                    icon: const Icon(Icons.close_rounded),
-                    iconSize: 16,
-                    color: Colors.white,
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xBB000000),
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size.square(24),
-                      maximumSize: const Size.square(24),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: 5,
-                  bottom: 5,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: const Color(0xCC000000),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 2,
-                      ),
-                      child: Text(
-                        _formatMergeDuration(video.duration),
-                        maxLines: 1,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1062,6 +1144,7 @@ class _EmptyMergePreview extends StatelessWidget {
 class _MergeSeekBar extends StatelessWidget {
   const _MergeSeekBar({
     required this.controller,
+    required this.video,
     required this.elapsedBeforeVideo,
     required this.totalDuration,
     required this.enabled,
@@ -1069,6 +1152,7 @@ class _MergeSeekBar extends StatelessWidget {
   });
 
   final VideoPlayerController? controller;
+  final VideoClipInfo? video;
   final Duration elapsedBeforeVideo;
   final Duration totalDuration;
   final bool enabled;
@@ -1091,7 +1175,9 @@ class _MergeSeekBar extends StatelessWidget {
     final totalMilliseconds = totalDuration.inMilliseconds;
     final rawPosition =
         elapsedBeforeVideo +
-        (value.isInitialized ? value.position : Duration.zero);
+        (value.isInitialized && video != null
+            ? value.position - video!.trimStart
+            : Duration.zero);
     final currentPosition = rawPosition > totalDuration
         ? totalDuration
         : rawPosition;

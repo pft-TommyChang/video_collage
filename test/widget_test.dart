@@ -195,14 +195,14 @@ void main() {
 
     expect(
       find.byTooltip('missing-first.mp4\n1920×1080 • 29.97 FPS • 0:03'),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
-      find.byTooltip('missing-second.mp4\n1280×720 • 60 FPS • 0:04'),
+      find.text('Media: 1920×1080  •  29.97 FPS  •  0:03'),
       findsOneWidget,
     );
     expect(find.textContaining('Export: 1920×1080'), findsOneWidget);
-    expect(find.textContaining('29.97 FPS'), findsOneWidget);
+    expect(find.textContaining('29.97 FPS'), findsWidgets);
     final mergeSubtitle = find.textContaining('Export: 1920×1080');
     expect(
       tester.getTopLeft(mergeSubtitle).dy -
@@ -309,6 +309,7 @@ void main() {
       find.byKey(const ValueKey<String>('merge-preview-merge-video-2')),
       findsOneWidget,
     );
+    expect(find.text('Media: 1280×720  •  60 FPS  •  0:04'), findsOneWidget);
     expect(find.textContaining('1920×1080'), findsOneWidget);
     expect(find.textContaining('Preview missing-second.mp4'), findsNothing);
     final secondVideoPreviewSize = tester.getSize(
@@ -394,6 +395,67 @@ void main() {
     expect(firstThumbnail, findsNothing);
     expect(secondThumbnail, findsOneWidget);
     expect(find.textContaining('0:03 total'), findsOneWidget);
+  });
+
+  testWidgets('merge media thumbnail opens the shared trim dialog', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1200, 800));
+    const video = VideoClipInfo(
+      path: '/missing-trimmable.mp4',
+      name: 'Trimmable',
+      duration: Duration(seconds: 8),
+      sourceDuration: Duration(seconds: 10),
+      trimStart: Duration(seconds: 1),
+      width: 1920,
+      height: 1080,
+      hasAudio: true,
+      mediaKind: MediaKind.video,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VideoMergeDialog(
+          exportService: _FakeMergeExportService(),
+          dialogService: const SystemDialogService(),
+          initialVideos: const <VideoClipInfo>[video],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final thumbnail = find.byKey(
+      const ValueKey<String>('merge-thumbnail-merge-video-1'),
+    );
+    final trimButton = find.byKey(
+      const ValueKey<String>('merge-trim-merge-video-1'),
+    );
+    expect(trimButton, findsOneWidget);
+    expect(find.byTooltip('Trim missing-trimmable.mp4'), findsOneWidget);
+    expect(
+      tester.getCenter(trimButton).dx,
+      lessThan(tester.getCenter(thumbnail).dx),
+    );
+    expect(
+      tester.getCenter(trimButton).dy,
+      greaterThan(tester.getCenter(thumbnail).dy),
+    );
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(
+              of: trimButton,
+              matching: find.byIcon(Icons.content_cut_rounded),
+            ),
+          )
+          .color,
+      const Color(0xFFFFC107),
+    );
+
+    await tester.tap(trimButton);
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Trim video'), findsOneWidget);
   });
 
   testWidgets('completed merge keeps the dialog open', (
