@@ -1077,9 +1077,9 @@ class VideoExportService {
                 (slotClip.slotIndex ~/ options.columns) * (cellHeight + border),
           ),
       ];
-      final videoOrderByPath = <String, int>{
+      final videoOrderById = <String, int>{
         for (var index = 0; index < sequentialEntries.length; index += 1)
-          sequentialEntries[index].clip.path: index,
+          sequentialEntries[index].clip.id: index,
       };
       final segmentPaths = <String>[];
       var processedMsBeforeSegment = 0;
@@ -1140,7 +1140,7 @@ class VideoExportService {
           inputIndex += 1
         ) {
           final slotClip = slotClips[inputIndex];
-          final videoOrder = videoOrderByPath[slotClip.clip.path];
+          final videoOrder = videoOrderById[slotClip.clip.id];
           final tileLabel = 'tile$inputIndex';
           final preparedTileLabel = 'prepared_$tileLabel';
           switch (slotClip.clip.mediaKind) {

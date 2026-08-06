@@ -206,6 +206,33 @@ void main() {
     expect(clip.isTrimmed, isTrue);
   });
 
+  test('clip instances can share a source path but keep separate identity', () {
+    const first = VideoClipInfo(
+      instanceId: 'clip-1',
+      path: '/tmp/example.mp4',
+      name: 'First use',
+      duration: Duration(seconds: 4),
+      width: 1920,
+      height: 1080,
+      hasAudio: true,
+      mediaKind: MediaKind.video,
+    );
+    final second = first.copyWith(
+      instanceId: 'clip-2',
+      name: 'Second use',
+      trimStart: const Duration(seconds: 1),
+      duration: const Duration(seconds: 2),
+      sourceDuration: const Duration(seconds: 4),
+    );
+
+    expect(first.path, second.path);
+    expect(first.id, isNot(second.id));
+    expect(first.name, 'First use');
+    expect(second.name, 'Second use');
+    expect(first.trimStart, Duration.zero);
+    expect(second.trimStart, const Duration(seconds: 1));
+  });
+
   test('trimmed duration participates in export duration calculation', () {
     const clip = VideoClipInfo(
       path: '/tmp/example.mp4',

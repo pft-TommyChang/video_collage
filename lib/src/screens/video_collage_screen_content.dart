@@ -224,15 +224,14 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                             ),
                                             child: _ClipListTile(
                                               clip: clip,
-                                              controller:
-                                                  _controllers[clip.path],
+                                              controller: _controllers[clip.id],
                                               isUsed: _isClipVisibleInGrid(
-                                                clip.path,
+                                                clip.id,
                                               ),
-                                              isLoading: _loadingClipPaths
-                                                  .contains(clip.path),
+                                              isLoading: _loadingClipIds
+                                                  .contains(clip.id),
                                               errorMessage:
-                                                  _clipErrors[clip.path],
+                                                  _clipErrors[clip.id],
                                               visibleAreaFraction:
                                                   visibleAreaFractionForFit(
                                                     fitMode: _selectedFitMode,
@@ -401,7 +400,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                             _selectedFitMode = mode;
                                             if (mode !=
                                                 ClipFitMode.cropCenter) {
-                                              _editingViewportClipPath = null;
+                                              _editingViewportClipId = null;
                                             }
                                           });
                                         },
@@ -958,20 +957,20 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                                                           clip ==
                                                                               null
                                                                           ? null
-                                                                          : _controllers[clip.path],
+                                                                          : _controllers[clip.id],
                                                                       cornerRadius:
                                                                           scaledTileCornerRadius,
                                                                       isLoading:
                                                                           clip !=
                                                                               null &&
-                                                                          _loadingClipPaths.contains(
-                                                                            clip.path,
+                                                                          _loadingClipIds.contains(
+                                                                            clip.id,
                                                                           ),
                                                                       errorMessage:
                                                                           clip ==
                                                                               null
                                                                           ? null
-                                                                          : _clipErrors[clip.path],
+                                                                          : _clipErrors[clip.id],
                                                                       onPickMedia:
                                                                           clip ==
                                                                               null
@@ -1005,8 +1004,8 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                                                       isActiveLabel:
                                                                           _isSequentialPlayMode &&
                                                                           _isPreviewPlaying &&
-                                                                          _activeSequentialClipPath ==
-                                                                              clip?.path,
+                                                                          _activeSequentialClipId ==
+                                                                              clip?.id,
                                                                       clipLabelFontSize:
                                                                           _clipLabelFontSize,
                                                                       clipLabelAlignment:
@@ -1021,18 +1020,18 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                                                           clip ==
                                                                               null
                                                                           ? const ClipViewport()
-                                                                          : _clipViewports[clip.path] ??
+                                                                          : _clipViewports[clip.id] ??
                                                                                 const ClipViewport(),
                                                                       isEditingViewport:
                                                                           clip !=
                                                                               null &&
-                                                                          _editingViewportClipPath ==
-                                                                              clip.path,
+                                                                          _editingViewportClipId ==
+                                                                              clip.id,
                                                                       isVeiled:
-                                                                          _editingViewportClipPath !=
+                                                                          _editingViewportClipId !=
                                                                               null &&
-                                                                          clip?.path !=
-                                                                              _editingViewportClipPath,
+                                                                          clip?.id !=
+                                                                              _editingViewportClipId,
                                                                       onVeilTap:
                                                                           _finishViewportEditing,
                                                                       onEditViewport:
@@ -1065,7 +1064,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                                                           : (
                                                                               viewport,
                                                                             ) => _updateClipViewport(
-                                                                              clip.path,
+                                                                              clip.id,
                                                                               viewport,
                                                                             ),
                                                                       onResetViewport:
@@ -1073,7 +1072,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                                                               null
                                                                           ? null
                                                                           : () => _resetClipViewport(
-                                                                              clip.path,
+                                                                              clip.id,
                                                                             ),
                                                                       onFinishViewport:
                                                                           clip ==

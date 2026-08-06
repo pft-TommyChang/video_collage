@@ -176,6 +176,7 @@ enum ClipLabelVisualStyle {
 
 class VideoClipInfo {
   const VideoClipInfo({
+    this.instanceId = '',
     required this.path,
     required this.name,
     required this.duration,
@@ -187,6 +188,10 @@ class VideoClipInfo {
     this.trimStart = Duration.zero,
   });
 
+  /// Identifies one use of a source file inside an editor session.
+  ///
+  /// Probe-only and legacy values may omit this and fall back to [path].
+  final String instanceId;
   final String path;
   final String name;
   final Duration duration;
@@ -197,6 +202,8 @@ class VideoClipInfo {
   final Duration? sourceDuration;
   final Duration trimStart;
 
+  String get id => instanceId.isEmpty ? path : instanceId;
+
   bool get isVideo => mediaKind == MediaKind.video;
   bool get isPhoto => mediaKind == MediaKind.photo;
   Duration get fullDuration => sourceDuration ?? duration;
@@ -205,6 +212,7 @@ class VideoClipInfo {
       isVideo && (trimStart > Duration.zero || duration < fullDuration);
 
   VideoClipInfo copyWith({
+    String? instanceId,
     String? path,
     String? name,
     Duration? duration,
@@ -216,6 +224,7 @@ class VideoClipInfo {
     Duration? trimStart,
   }) {
     return VideoClipInfo(
+      instanceId: instanceId ?? this.instanceId,
       path: path ?? this.path,
       name: name ?? this.name,
       duration: duration ?? this.duration,

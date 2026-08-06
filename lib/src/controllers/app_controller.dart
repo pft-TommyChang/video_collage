@@ -49,10 +49,7 @@ extension _AppController on _VideoCollageScreenState {
           continue;
         }
 
-        final importedCount = await _importExternalMedia(
-          supportedPaths,
-          alreadyAddedMessage: 'Opened media was already added.',
-        );
+        final importedCount = await _importExternalMedia(supportedPaths);
         if (importedCount > 0 && mounted) {
           _autoLayout();
         }

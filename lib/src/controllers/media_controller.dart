@@ -9,40 +9,40 @@ extension _MediaController on _VideoCollageScreenState {
 
     try {
       final selections = await _dialogService.pickMedia();
-      final paths = selections
-          .map((selection) => selection.path)
-          .toList(growable: false);
-      final selectionByPath = <String, PickedMediaFile>{
-        for (final selection in selections) selection.path: selection,
-      };
-      final existingPaths = paths
-          .where((path) => _clips.any((clip) => clip.path == path))
-          .toList(growable: false);
-      final newPaths = paths
-          .where((path) => !_clips.any((clip) => clip.path == path))
-          .toList();
+      final pendingClips = <({String id, PickedMediaFile selection})>[
+        for (final selection in selections)
+          (id: _newClipInstanceId(), selection: selection),
+      ];
 
-      if (newPaths.isNotEmpty && mounted) {
+      if (pendingClips.isNotEmpty && mounted) {
         _updateState(() {
-          for (final path in newPaths) {
-            final initialClip = selectionByPath[path]?.clipInfo;
-            _clips.add(initialClip ?? _placeholderClip(path));
-            _loadingClipPaths.add(path);
-            _clipErrors.remove(path);
-            _slotAssignments[_nextAvailableSlot()] = path;
+          for (final pending in pendingClips) {
+            final initialClip = pending.selection.clipInfo;
+            _clips.add(
+              (initialClip ??
+                      _placeholderClip(
+                        pending.selection.path,
+                        instanceId: pending.id,
+                      ))
+                  .copyWith(instanceId: pending.id),
+            );
+            _loadingClipIds.add(pending.id);
+            _clipErrors.remove(pending.id);
+            _slotAssignments[_nextAvailableSlot()] = pending.id;
           }
           _statusMessage =
-              'Queued ${newPaths.length} media item(s) for import.';
+              'Queued ${pendingClips.length} media item(s) for import.';
         });
       }
 
-      for (final path in newPaths) {
+      for (final pending in pendingClips) {
         unawaited(
-          _loadClip(path, initialClip: selectionByPath[path]?.clipInfo),
+          _loadClip(
+            pending.selection.path,
+            instanceId: pending.id,
+            initialClip: pending.selection.clipInfo,
+          ),
         );
-      }
-      for (final path in existingPaths) {
-        unawaited(_refreshClipMetadata(path));
       }
 
       if (!mounted) {
@@ -50,11 +50,9 @@ extension _MediaController on _VideoCollageScreenState {
       }
 
       _updateState(() {
-        _statusMessage = paths.isEmpty
+        _statusMessage = pendingClips.isEmpty
             ? 'No media was selected.'
-            : newPaths.isEmpty
-            ? 'Refreshing selected media metadata...'
-            : 'Added ${newPaths.length} media item(s). Initializing previews...';
+            : 'Added ${pendingClips.length} media item(s). Initializing previews...';
       });
     } on PlatformException catch (error) {
       if (!mounted) {
@@ -87,16 +85,16 @@ extension _MediaController on _VideoCollageScreenState {
   }
 
   void _removeClip(VideoClipInfo clip) {
-    _controllers.remove(clip.path)?.dispose();
+    _controllers.remove(clip.id)?.dispose();
     _updateState(() {
-      _clips.removeWhere((candidate) => candidate.path == clip.path);
-      _slotAssignments.removeWhere((_, path) => path == clip.path);
-      _clipViewports.remove(clip.path);
-      if (_editingViewportClipPath == clip.path) {
-        _editingViewportClipPath = null;
+      _clips.removeWhere((candidate) => candidate.id == clip.id);
+      _slotAssignments.removeWhere((_, id) => id == clip.id);
+      _clipViewports.remove(clip.id);
+      if (_editingViewportClipId == clip.id) {
+        _editingViewportClipId = null;
       }
-      _loadingClipPaths.remove(clip.path);
-      _clipErrors.remove(clip.path);
+      _loadingClipIds.remove(clip.id);
+      _clipErrors.remove(clip.id);
       if (_controllers.isEmpty) {
         _isPreviewPlaying = false;
       }
@@ -122,11 +120,11 @@ extension _MediaController on _VideoCollageScreenState {
       _clips.clear();
       _slotAssignments.clear();
       _clipViewports.clear();
-      _loadingClipPaths.clear();
+      _loadingClipIds.clear();
       _clipErrors.clear();
       _isPreviewPlaying = false;
-      _activeSequentialClipPath = null;
-      _editingViewportClipPath = null;
+      _activeSequentialClipId = null;
+      _editingViewportClipId = null;
       _statusMessage = 'Cleared all media.';
     });
   }
@@ -217,11 +215,11 @@ extension _MediaController on _VideoCollageScreenState {
       if (removeMedia) {
         _clips.clear();
         _slotAssignments.clear();
-        _loadingClipPaths.clear();
+        _loadingClipIds.clear();
         _clipErrors.clear();
       }
       _clipViewports.clear();
-      _editingViewportClipPath = null;
+      _editingViewportClipId = null;
       _selectedAspect = _defaultAspectPreset;
       _selectedResolution = _defaultResolutionPreset;
       _selectedBorderColor = _defaultBorderColor;
@@ -263,7 +261,7 @@ extension _MediaController on _VideoCollageScreenState {
       _parallelPreviewStartedAt = null;
       _sequentialPreviewElapsed = Duration.zero;
       _sequentialPreviewStartedAt = null;
-      _activeSequentialClipPath = null;
+      _activeSequentialClipId = null;
       _externalDropHoverSlotIndex = null;
       if (!removeMedia) {
         _backfillVisibleSlotsFromOverflow();
@@ -321,7 +319,7 @@ extension _MediaController on _VideoCollageScreenState {
         height: size.$2,
         preset: _defaultResolutionPreset,
       );
-      _activeSequentialClipPath = null;
+      _activeSequentialClipId = null;
       _statusMessage = 'Output reset to defaults.';
     });
 
@@ -374,7 +372,7 @@ extension _MediaController on _VideoCollageScreenState {
     _setStateAndSave(() {
       _selectedPlayMode = mode;
       if (mode != PlayMode.sequential) {
-        _activeSequentialClipPath = null;
+        _activeSequentialClipId = null;
       }
     });
 
@@ -501,8 +499,8 @@ extension _MediaController on _VideoCollageScreenState {
 
   Future<void> _openVideoTrimmer(VideoClipInfo clip) async {
     if (!clip.isVideo ||
-        _loadingClipPaths.contains(clip.path) ||
-        _clipErrors.containsKey(clip.path) ||
+        _loadingClipIds.contains(clip.id) ||
+        _clipErrors.containsKey(clip.id) ||
         clip.fullDuration <= Duration.zero) {
       return;
     }
@@ -510,7 +508,7 @@ extension _MediaController on _VideoCollageScreenState {
     if (_isPreviewPlaying) {
       await _setPreviewPlayback(false);
     }
-    final controller = _controllers[clip.path];
+    final controller = _controllers[clip.id];
     await controller?.pause();
     if (!mounted) {
       return;
@@ -527,7 +525,7 @@ extension _MediaController on _VideoCollageScreenState {
       return;
     }
 
-    final index = _clips.indexWhere((candidate) => candidate.path == clip.path);
+    final index = _clips.indexWhere((candidate) => candidate.id == clip.id);
     if (index < 0) {
       return;
     }
@@ -543,7 +541,7 @@ extension _MediaController on _VideoCollageScreenState {
       _parallelPreviewStartedAt = null;
       _sequentialPreviewElapsed = Duration.zero;
       _sequentialPreviewStartedAt = null;
-      _activeSequentialClipPath = null;
+      _activeSequentialClipId = null;
       _statusMessage = _clips[index].isTrimmed
           ? 'Trimmed ${current.name} to ${formatDuration(trimmedDuration)}.'
           : 'Reset trim for ${current.name}.';
@@ -553,10 +551,10 @@ extension _MediaController on _VideoCollageScreenState {
   }
 
   Future<void> _toggleClipActive(VideoClipInfo clip) async {
-    if (_isClipVisibleInGrid(clip.path)) {
+    if (_isClipVisibleInGrid(clip.id)) {
       _updateState(() {
-        _slotAssignments.removeWhere((_, path) => path == clip.path);
-        _slotAssignments[_nextOverflowSlot()] = clip.path;
+        _slotAssignments.removeWhere((_, id) => id == clip.id);
+        _slotAssignments[_nextOverflowSlot()] = clip.id;
         _statusMessage = 'Marked ${clip.name} as non-active.';
       });
       await _syncPreviewPlaybackMode();
@@ -575,7 +573,7 @@ extension _MediaController on _VideoCollageScreenState {
     }
 
     _updateState(() {
-      _assignPathToSlot(clip.path, emptySlot);
+      _assignClipToSlot(clip.id, emptySlot);
       _statusMessage = 'Added ${clip.name} to slot ${emptySlot + 1}.';
     });
     await _syncPreviewPlaybackMode();
@@ -586,24 +584,24 @@ extension _MediaController on _VideoCollageScreenState {
       return;
     }
 
-    final sourcePath = _slotAssignments[fromSlotIndex];
-    if (sourcePath == null) {
+    final sourceId = _slotAssignments[fromSlotIndex];
+    if (sourceId == null) {
       return;
     }
 
     _updateState(() {
-      final targetPath = _slotAssignments[toSlotIndex];
+      final targetId = _slotAssignments[toSlotIndex];
       _slotAssignments.remove(fromSlotIndex);
 
-      if (targetPath == null) {
-        _slotAssignments[toSlotIndex] = sourcePath;
+      if (targetId == null) {
+        _slotAssignments[toSlotIndex] = sourceId;
         _backfillVisibleSlotsFromOverflow();
         _statusMessage = 'Moved clip to slot ${toSlotIndex + 1}.';
         return;
       }
 
-      _slotAssignments[toSlotIndex] = sourcePath;
-      _slotAssignments[fromSlotIndex] = targetPath;
+      _slotAssignments[toSlotIndex] = sourceId;
+      _slotAssignments[fromSlotIndex] = targetId;
       _statusMessage =
           'Swapped slot ${fromSlotIndex + 1} with slot ${toSlotIndex + 1}.';
     });
@@ -625,40 +623,22 @@ extension _MediaController on _VideoCollageScreenState {
     }
 
     final path = supportedPaths.first;
-    VideoClipInfo? existingClip;
-    for (final clip in _clips) {
-      if (clip.path == path) {
-        existingClip = clip;
-        break;
-      }
-    }
-    if (existingClip != null) {
-      if (!mounted) {
-        return;
-      }
-      _updateState(() {
-        _replacePathInSlot(path, slotIndex);
-        _statusMessage =
-            'Replaced slot ${slotIndex + 1} with ${existingClip!.name}.';
-      });
-      unawaited(_syncPreviewPlaybackMode());
-      return;
-    }
+    final instanceId = _newClipInstanceId();
 
     if (!mounted) {
       return;
     }
 
     _updateState(() {
-      _clips.add(_placeholderClip(path));
-      _replacePathInSlot(path, slotIndex);
-      _loadingClipPaths.add(path);
-      _clipErrors.remove(path);
+      _clips.add(_placeholderClip(path, instanceId: instanceId));
+      _replaceClipInSlot(instanceId, slotIndex);
+      _loadingClipIds.add(instanceId);
+      _clipErrors.remove(instanceId);
       _statusMessage =
           'Replacing slot ${slotIndex + 1} with ${p.basename(path)}.';
     });
 
-    await _loadClip(path);
+    await _loadClip(path, instanceId: instanceId);
   }
 
   Future<void> _handleExternalDrop(
@@ -688,21 +668,11 @@ extension _MediaController on _VideoCollageScreenState {
     await _importExternalMedia(supportedPaths);
   }
 
-  Future<int> _importExternalMedia(
-    List<String> paths, {
-    String alreadyAddedMessage = 'Dropped media was already added.',
-  }) async {
-    final uniquePaths = <String>[];
-    final seenPaths = <String>{};
-    for (final path in paths) {
-      if (path.isEmpty || !seenPaths.add(path)) {
-        continue;
-      }
-      if (_clips.any((clip) => clip.path == path)) {
-        continue;
-      }
-      uniquePaths.add(path);
-    }
+  Future<int> _importExternalMedia(List<String> paths) async {
+    final pendingClips = <({String id, String path})>[
+      for (final path in paths)
+        if (path.isNotEmpty) (id: _newClipInstanceId(), path: path),
+    ];
 
     final emptyVisibleSlotCount = Iterable<int>.generate(
       _gridCapacity,
@@ -712,35 +682,35 @@ extension _MediaController on _VideoCollageScreenState {
       return 0;
     }
 
-    if (uniquePaths.isEmpty) {
+    if (pendingClips.isEmpty) {
       _updateState(() {
-        _statusMessage = alreadyAddedMessage;
+        _statusMessage = 'No media was added.';
       });
       return 0;
     }
 
     _updateState(() {
-      for (final path in uniquePaths) {
-        _clips.add(_placeholderClip(path));
-        _slotAssignments[_nextAvailableSlot()] = path;
-        _loadingClipPaths.add(path);
-        _clipErrors.remove(path);
+      for (final pending in pendingClips) {
+        _clips.add(_placeholderClip(pending.path, instanceId: pending.id));
+        _slotAssignments[_nextAvailableSlot()] = pending.id;
+        _loadingClipIds.add(pending.id);
+        _clipErrors.remove(pending.id);
       }
       final assignedVisibleCount = math.min(
-        uniquePaths.length,
+        pendingClips.length,
         emptyVisibleSlotCount,
       );
-      _statusMessage = assignedVisibleCount == uniquePaths.length
-          ? 'Queued ${uniquePaths.length} media item(s) into empty slots.'
-          : 'Queued ${uniquePaths.length} media item(s). '
+      _statusMessage = assignedVisibleCount == pendingClips.length
+          ? 'Queued ${pendingClips.length} media item(s) into empty slots.'
+          : 'Queued ${pendingClips.length} media item(s). '
                 '$assignedVisibleCount assigned to empty slot(s), '
-                '${uniquePaths.length - assignedVisibleCount} kept in Media.';
+                '${pendingClips.length - assignedVisibleCount} kept in Media.';
     });
 
-    for (final path in uniquePaths) {
-      await _loadClip(path);
+    for (final pending in pendingClips) {
+      await _loadClip(pending.path, instanceId: pending.id);
     }
-    return uniquePaths.length;
+    return pendingClips.length;
   }
 
   List<String> _supportedMediaDropPaths(List<DropItem> items) {
@@ -780,29 +750,20 @@ extension _MediaController on _VideoCollageScreenState {
       return;
     }
 
-    if (_clips.any((clip) => clip.path == path)) {
-      if (!mounted) {
-        return;
-      }
-      _updateState(() {
-        _statusMessage = 'Selected media was already added.';
-      });
-      return;
-    }
-
     if (!mounted) {
       return;
     }
 
+    final instanceId = _newClipInstanceId();
     _updateState(() {
-      _clips.add(_placeholderClip(path));
-      _assignPathToSlot(path, slotIndex);
-      _loadingClipPaths.add(path);
-      _clipErrors.remove(path);
+      _clips.add(_placeholderClip(path, instanceId: instanceId));
+      _assignClipToSlot(instanceId, slotIndex);
+      _loadingClipIds.add(instanceId);
+      _clipErrors.remove(instanceId);
       _statusMessage = 'Queued 1 media item for slot ${slotIndex + 1}.';
     });
 
-    unawaited(_loadClip(path));
+    unawaited(_loadClip(path, instanceId: instanceId));
   }
 
   Future<void> _setPreviewPlayback(bool shouldPlay) async {
@@ -890,7 +851,7 @@ extension _MediaController on _VideoCollageScreenState {
     _sequentialPreviewTimer = null;
     _sequentialPreviewStartedAt = null;
     _sequentialPreviewElapsed = Duration.zero;
-    _activeSequentialClipPath = null;
+    _activeSequentialClipId = null;
 
     await _syncPreviewPlaybackMode();
   }
@@ -918,8 +879,11 @@ extension _MediaController on _VideoCollageScreenState {
     return value.isEven ? value : value + 1;
   }
 
-  VideoClipInfo _placeholderClip(String path) {
+  String _newClipInstanceId() => 'clip-${_nextClipInstanceNumber++}';
+
+  VideoClipInfo _placeholderClip(String path, {String? instanceId}) {
     return VideoClipInfo(
+      instanceId: instanceId ?? _newClipInstanceId(),
       path: path,
       name: _defaultClipNameForPath(path),
       duration: Duration.zero,
@@ -932,7 +896,11 @@ extension _MediaController on _VideoCollageScreenState {
     );
   }
 
-  Future<void> _loadClip(String path, {VideoClipInfo? initialClip}) async {
+  Future<void> _loadClip(
+    String path, {
+    required String instanceId,
+    VideoClipInfo? initialClip,
+  }) async {
     if (_isSupportedPhotoPath(path)) {
       try {
         final clip = await _exportService.probeMedia(path);
@@ -940,17 +908,17 @@ extension _MediaController on _VideoCollageScreenState {
           return;
         }
 
-        _controllers.remove(path)?.dispose();
+        _controllers.remove(instanceId)?.dispose();
         _updateState(() {
-          _loadingClipPaths.remove(path);
-          _clipErrors.remove(path);
-          final index = _clips.indexWhere((clip) => clip.path == path);
+          _loadingClipIds.remove(instanceId);
+          _clipErrors.remove(instanceId);
+          final index = _clips.indexWhere((clip) => clip.id == instanceId);
           if (index >= 0) {
-            _clips[index] = clip.copyWith(name: _clips[index].name);
+            _clips[index] = clip.copyWith(
+              instanceId: instanceId,
+              name: _clips[index].name,
+            );
             _statusMessage = 'Loaded ${_clips[index].name}.';
-          } else {
-            _clips.add(clip);
-            _statusMessage = 'Loaded ${clip.name}.';
           }
         });
         unawaited(_syncPreviewPlaybackMode());
@@ -959,8 +927,8 @@ extension _MediaController on _VideoCollageScreenState {
           return;
         }
         _updateState(() {
-          _loadingClipPaths.remove(path);
-          _clipErrors[path] = _previewErrorSummary(error);
+          _loadingClipIds.remove(instanceId);
+          _clipErrors[instanceId] = _previewErrorSummary(error);
           _statusMessage =
               'Preview failed for ${path.split(Platform.pathSeparator).last}.';
         });
@@ -976,9 +944,12 @@ extension _MediaController on _VideoCollageScreenState {
           probedClip = await _exportService.probeMedia(path);
           if (mounted) {
             _updateState(() {
-              final index = _clips.indexWhere((clip) => clip.path == path);
+              final index = _clips.indexWhere((clip) => clip.id == instanceId);
               if (index >= 0) {
-                _clips[index] = probedClip!.copyWith(name: _clips[index].name);
+                _clips[index] = probedClip!.copyWith(
+                  instanceId: instanceId,
+                  name: _clips[index].name,
+                );
               }
             });
           }
@@ -1011,19 +982,23 @@ extension _MediaController on _VideoCollageScreenState {
         controller.dispose();
         return;
       }
+      if (!_clips.any((clip) => clip.id == instanceId)) {
+        controller.dispose();
+        return;
+      }
 
-      final previousController = _controllers[path];
+      final previousController = _controllers[instanceId];
       _updateState(() {
-        _controllers[path] = initializedController;
-        _loadingClipPaths.remove(path);
-        _clipErrors.remove(path);
-        final index = _clips.indexWhere((clip) => clip.path == path);
+        _controllers[instanceId] = initializedController;
+        _loadingClipIds.remove(instanceId);
+        _clipErrors.remove(instanceId);
+        final index = _clips.indexWhere((clip) => clip.id == instanceId);
         if (index >= 0) {
-          _clips[index] = clip.copyWith(name: _clips[index].name);
+          _clips[index] = clip.copyWith(
+            instanceId: instanceId,
+            name: _clips[index].name,
+          );
           _statusMessage = 'Loaded ${_clips[index].name}.';
-        } else {
-          _clips.add(clip);
-          _statusMessage = 'Loaded ${clip.name}.';
         }
       });
       if (!identical(previousController, controller)) {
@@ -1038,29 +1013,30 @@ extension _MediaController on _VideoCollageScreenState {
       }
 
       _updateState(() {
-        _loadingClipPaths.remove(path);
+        _loadingClipIds.remove(instanceId);
         if (probedClip == null) {
-          _clipErrors[path] = _previewErrorSummary(error);
+          _clipErrors[instanceId] = _previewErrorSummary(error);
           _statusMessage =
               'Preview failed for ${path.split(Platform.pathSeparator).last}.';
           return;
         }
-        _clipErrors.remove(path);
+        _clipErrors.remove(instanceId);
         _statusMessage =
             'Loaded metadata for ${probedClip.name}, but preview failed.';
       });
     }
   }
 
-  Future<void> _refreshClipMetadata(String path) async {
-    if (_loadingClipPaths.contains(path)) {
+  Future<void> _refreshClipMetadata(String instanceId) async {
+    if (_loadingClipIds.contains(instanceId)) {
       return;
     }
 
-    final existingIndex = _clips.indexWhere((clip) => clip.path == path);
+    final existingIndex = _clips.indexWhere((clip) => clip.id == instanceId);
     if (existingIndex < 0) {
       return;
     }
+    final path = _clips[existingIndex].path;
 
     try {
       final refreshed = await _exportService.probeMedia(path);
@@ -1069,13 +1045,16 @@ extension _MediaController on _VideoCollageScreenState {
       }
 
       _updateState(() {
-        final currentIndex = _clips.indexWhere((clip) => clip.path == path);
+        final currentIndex = _clips.indexWhere((clip) => clip.id == instanceId);
         if (currentIndex < 0) {
           return;
         }
         final current = _clips[currentIndex];
         if (!current.isTrimmed) {
-          _clips[currentIndex] = refreshed.copyWith(name: current.name);
+          _clips[currentIndex] = refreshed.copyWith(
+            instanceId: instanceId,
+            name: current.name,
+          );
           return;
         }
         final sourceDuration = refreshed.duration;
@@ -1089,6 +1068,7 @@ extension _MediaController on _VideoCollageScreenState {
             ? requestedEnd - trimStart
             : sourceDuration;
         _clips[currentIndex] = refreshed.copyWith(
+          instanceId: instanceId,
           name: current.name,
           duration: trimmedDuration,
           sourceDuration: sourceDuration,
@@ -1104,7 +1084,7 @@ extension _MediaController on _VideoCollageScreenState {
     final visibleSlotClips = _slotClipsForExport();
     final showTwoClipPresets =
         visibleSlotClips.length == 2 &&
-        visibleSlotClips.any((entry) => entry.clip.path == clip.path);
+        visibleSlotClips.any((entry) => entry.clip.id == clip.id);
 
     final result = await showDialog<_ClipLabelEditResult>(
       context: context,
@@ -1143,10 +1123,8 @@ extension _MediaController on _VideoCollageScreenState {
           selectedPreset.secondLabel,
         ];
         for (var index = 0; index < latestVisibleSlotClips.length; index += 1) {
-          final clipPath = latestVisibleSlotClips[index].clip.path;
-          final clipIndex = _clips.indexWhere(
-            (entry) => entry.path == clipPath,
-          );
+          final clipId = latestVisibleSlotClips[index].clip.id;
+          final clipIndex = _clips.indexWhere((entry) => entry.id == clipId);
           if (clipIndex >= 0) {
             _clips[clipIndex] = _clips[clipIndex].copyWith(
               name: presetLabels[index],
@@ -1173,7 +1151,7 @@ extension _MediaController on _VideoCollageScreenState {
 
     _setStateAndSave(() {
       _clipLabelDisplayMode = result.displayMode;
-      final index = _clips.indexWhere((entry) => entry.path == clip.path);
+      final index = _clips.indexWhere((entry) => entry.id == clip.id);
       final updateMessage = updatedName == clip.name
           ? null
           : 'Updated clip label to $updatedName.';

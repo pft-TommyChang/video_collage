@@ -206,13 +206,13 @@ void main() {
     expect(mergeListBorder.top.width, 1);
     expect(mergeListBorder.top.color, const Color(0xFFD8D0C4));
     final firstThumbnailSize = tester.getSize(
-      find.byKey(const ValueKey<String>('merge-thumbnail-/missing-first.mp4')),
+      find.byKey(const ValueKey<String>('merge-thumbnail-merge-video-1')),
     );
     expect(firstThumbnailSize, const Size.square(90));
     expect(find.text('0:03'), findsOneWidget);
     expect(find.text('0:04'), findsOneWidget);
     final selectedThumbnail = tester.widget<AnimatedContainer>(
-      find.byKey(const ValueKey<String>('merge-thumbnail-/missing-first.mp4')),
+      find.byKey(const ValueKey<String>('merge-thumbnail-merge-video-1')),
     );
     final selectedDecoration =
         selectedThumbnail.foregroundDecoration! as BoxDecoration;
@@ -232,15 +232,13 @@ void main() {
     expect(outputPreviewSize.width, greaterThan(firstThumbnailSize.width));
 
     final thumbnailListener = tester.widget<Listener>(
-      find.byKey(
-        const ValueKey<String>('merge-thumbnail-tap-/missing-second.mp4'),
-      ),
+      find.byKey(const ValueKey<String>('merge-thumbnail-tap-merge-video-2')),
     );
     thumbnailListener.onPointerDown!(const PointerDownEvent());
     await tester.pump();
 
     expect(
-      find.byKey(const ValueKey<String>('merge-preview-/missing-second.mp4')),
+      find.byKey(const ValueKey<String>('merge-preview-merge-video-2')),
       findsOneWidget,
     );
     expect(find.textContaining('1920×1080'), findsOneWidget);
@@ -254,7 +252,7 @@ void main() {
     );
 
     final firstThumbnail = find.byKey(
-      const ValueKey<String>('merge-thumbnail-/missing-first.mp4'),
+      const ValueKey<String>('merge-thumbnail-merge-video-1'),
     );
     final drag = await tester.startGesture(tester.getCenter(firstThumbnail));
     await tester.pump();
@@ -266,13 +264,68 @@ void main() {
     expect(
       tester
           .getCenter(
-            find.byKey(
-              const ValueKey<String>('merge-thumbnail-/missing-second.mp4'),
-            ),
+            find.byKey(const ValueKey<String>('merge-thumbnail-merge-video-2')),
           )
           .dx,
       lessThan(tester.getCenter(firstThumbnail).dx),
     );
+  });
+
+  testWidgets('merge tool supports duplicate source video instances', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1200, 800));
+    final exportService = _FakeMergeExportService();
+    const repeatedVideo = VideoClipInfo(
+      path: '/missing-repeated.mp4',
+      name: 'Repeated',
+      duration: Duration(seconds: 3),
+      width: 1920,
+      height: 1080,
+      hasAudio: true,
+      mediaKind: MediaKind.video,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VideoMergeDialog(
+          exportService: exportService,
+          dialogService: _FakeMergeDialogService(),
+          initialVideos: const <VideoClipInfo>[repeatedVideo, repeatedVideo],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final firstThumbnail = find.byKey(
+      const ValueKey<String>('merge-thumbnail-merge-video-1'),
+    );
+    final secondThumbnail = find.byKey(
+      const ValueKey<String>('merge-thumbnail-merge-video-2'),
+    );
+    expect(firstThumbnail, findsOneWidget);
+    expect(secondThumbnail, findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Merge & Save'));
+    await tester.pumpAndSettle();
+
+    expect(exportService.mergeCalls, 1);
+    expect(exportService.videos, hasLength(2));
+    expect(exportService.videos![0].path, exportService.videos![1].path);
+    expect(exportService.videos![0].id, isNot(exportService.videos![1].id));
+
+    await tester.tap(
+      find.descendant(
+        of: firstThumbnail,
+        matching: find.byTooltip('Remove missing-repeated.mp4'),
+      ),
+    );
+    await tester.pump();
+
+    expect(firstThumbnail, findsNothing);
+    expect(secondThumbnail, findsOneWidget);
+    expect(find.textContaining('0:03 total'), findsOneWidget);
   });
 
   testWidgets('completed merge keeps the dialog open', (
@@ -568,6 +621,46 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('the same source file can be added as independent instances', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    final repeatedPath = appIconPath(64);
+    mockPendingMediaFiles(tester, <String>[repeatedPath, repeatedPath]);
+
+    await tester.pumpWidget(const VideoCollageApp());
+    await pumpUntilFound(tester, find.text('2 loaded • capacity 2'));
+
+    final firstSlot = find.byKey(const ValueKey<String>('preview-slot-0'));
+    final secondSlot = find.byKey(const ValueKey<String>('preview-slot-1'));
+    expect(
+      find.descendant(of: firstSlot, matching: find.byType(Image)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: secondSlot, matching: find.byType(Image)),
+      findsOneWidget,
+    );
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: tester.getCenter(firstSlot));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(
+      find.descendant(of: firstSlot, matching: find.byTooltip('Remove')),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('1 loaded • capacity 2'), findsOneWidget);
+    expect(
+      find.descendant(of: secondSlot, matching: find.byType(Image)),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets('removing a preview clip leaves its slot empty', (
     WidgetTester tester,
   ) async {
@@ -774,6 +867,7 @@ class _FakeMergeExportService extends VideoExportService {
   int mergeCalls = 0;
   ClipFitMode? fitMode;
   VideoMergeFrameRateMode? frameRateMode;
+  List<VideoClipInfo>? videos;
 
   @override
   Future<double> probeVideoFrameRate(String path) async {
@@ -789,6 +883,7 @@ class _FakeMergeExportService extends VideoExportService {
     void Function(VideoExportProgress progress)? onProgress,
   }) async {
     mergeCalls += 1;
+    this.videos = List<VideoClipInfo>.of(videos);
     if (cancelMerge) {
       throw const VideoExportException('Export cancelled.');
     }

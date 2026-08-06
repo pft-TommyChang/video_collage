@@ -115,22 +115,22 @@ extension _PreviewController on _VideoCollageScreenState {
       _sequentialPreviewTimer = null;
       _sequentialPreviewStartedAt = null;
       _sequentialPreviewElapsed = Duration.zero;
-      if (_activeSequentialClipPath != null && mounted) {
+      if (_activeSequentialClipId != null && mounted) {
         _updateState(() {
-          _activeSequentialClipPath = null;
+          _activeSequentialClipId = null;
         });
       }
 
       final visibleSlotClips = _slotClipsForExport();
-      final audibleClipPaths = _previewAudibleClipPaths(visibleSlotClips);
+      final audibleClipIds = _previewAudibleClipIds(visibleSlotClips);
       final parallelClips = visibleSlotClips
           .where(
             (entry) =>
                 entry.clip.isVideo && entry.clip.duration > Duration.zero,
           )
           .toList(growable: false);
-      final visibleVideoPaths = parallelClips
-          .map((entry) => entry.clip.path)
+      final visibleVideoIds = parallelClips
+          .map((entry) => entry.clip.id)
           .toSet();
 
       if (parallelClips.isEmpty) {
@@ -147,7 +147,7 @@ extension _PreviewController on _VideoCollageScreenState {
         return;
       }
 
-      await _pauseInactivePreviewControllers(visibleVideoPaths);
+      await _pauseInactivePreviewControllers(visibleVideoIds);
 
       final totalDuration = exportDurationForClips(
         parallelClips,
@@ -170,7 +170,7 @@ extension _PreviewController on _VideoCollageScreenState {
         }
 
         for (final entry in parallelClips) {
-          final controller = _controllers[entry.clip.path];
+          final controller = _controllers[entry.clip.id];
           if (controller == null || !controller.value.isInitialized) {
             continue;
           }
@@ -186,7 +186,7 @@ extension _PreviewController on _VideoCollageScreenState {
       }
 
       for (final entry in parallelClips) {
-        final controller = _controllers[entry.clip.path];
+        final controller = _controllers[entry.clip.id];
         if (controller == null || !controller.value.isInitialized) {
           continue;
         }
@@ -200,8 +200,8 @@ extension _PreviewController on _VideoCollageScreenState {
         await _setControllerVolume(
           controller,
           _previewVolumeForClip(
-            clipPath: clip.path,
-            audibleClipPaths: audibleClipPaths,
+            clipId: clip.id,
+            audibleClipIds: audibleClipIds,
           ),
         );
         if (_isPreviewPlaying && !isClipFinished) {
@@ -223,17 +223,15 @@ extension _PreviewController on _VideoCollageScreenState {
     _isSyncingSequentialPreview = true;
     try {
       final segments = _sequentialVideoSlotClips();
-      final visibleVideoPaths = segments
-          .map((entry) => entry.clip.path)
-          .toSet();
+      final visibleVideoIds = segments.map((entry) => entry.clip.id).toSet();
       if (segments.isEmpty) {
         _sequentialPreviewTimer?.cancel();
         _sequentialPreviewTimer = null;
         _sequentialPreviewStartedAt = null;
         _sequentialPreviewElapsed = Duration.zero;
-        if (_activeSequentialClipPath != null || _isPreviewPlaying) {
+        if (_activeSequentialClipId != null || _isPreviewPlaying) {
           _updateState(() {
-            _activeSequentialClipPath = null;
+            _activeSequentialClipId = null;
             _isPreviewPlaying = false;
           });
         }
@@ -247,7 +245,7 @@ extension _PreviewController on _VideoCollageScreenState {
         return;
       }
 
-      await _pauseInactivePreviewControllers(visibleVideoPaths);
+      await _pauseInactivePreviewControllers(visibleVideoIds);
 
       final totalDuration = segments.fold(
         Duration.zero,
@@ -263,13 +261,13 @@ extension _PreviewController on _VideoCollageScreenState {
         _lastPreviewProgressSecond = null;
         if (mounted) {
           _updateState(() {
-            _activeSequentialClipPath = null;
+            _activeSequentialClipId = null;
             _isPreviewPlaying = false;
             _statusMessage = 'Preview playback finished.';
           });
         }
         for (final entry in segments) {
-          final controller = _controllers[entry.clip.path];
+          final controller = _controllers[entry.clip.id];
           if (controller == null || !controller.value.isInitialized) {
             continue;
           }
@@ -292,20 +290,18 @@ extension _PreviewController on _VideoCollageScreenState {
       }
 
       final activeEntry = segments[activeSegmentIndex];
-      final activeClipPath = activeEntry.clip.path;
+      final activeClipId = activeEntry.clip.id;
       final activeOffset = remaining;
-      final audibleClipPaths = _sequentialPreviewAudibleClipPaths(
-        activeEntry.clip,
-      );
+      final audibleClipIds = _sequentialPreviewAudibleClipIds(activeEntry.clip);
       final sequentialOrder = <String, int>{
         for (var index = 0; index < segments.length; index += 1)
-          segments[index].clip.path: index,
+          segments[index].clip.id: index,
       };
 
-      final activeClipChanged = _activeSequentialClipPath != activeClipPath;
+      final activeClipChanged = _activeSequentialClipId != activeClipId;
       if (activeClipChanged && mounted) {
         _updateState(() {
-          _activeSequentialClipPath = activeClipPath;
+          _activeSequentialClipId = activeClipId;
         });
       }
 
@@ -313,7 +309,7 @@ extension _PreviewController on _VideoCollageScreenState {
         if (!clip.clip.isVideo) {
           continue;
         }
-        final controller = _controllers[clip.clip.path];
+        final controller = _controllers[clip.clip.id];
         if (controller == null || !controller.value.isInitialized) {
           continue;
         }
@@ -322,13 +318,13 @@ extension _PreviewController on _VideoCollageScreenState {
         await _setControllerVolume(
           controller,
           _previewVolumeForClip(
-            clipPath: clip.clip.path,
-            audibleClipPaths: audibleClipPaths,
+            clipId: clip.clip.id,
+            audibleClipIds: audibleClipIds,
           ),
         );
 
-        final clipOrder = sequentialOrder[clip.clip.path];
-        if (clip.clip.path == activeClipPath) {
+        final clipOrder = sequentialOrder[clip.clip.id];
+        if (clip.clip.id == activeClipId) {
           final target = clip.clip.trimStart + activeOffset;
           if (_isPreviewPlaying) {
             if (activeClipChanged) {
@@ -367,7 +363,7 @@ extension _PreviewController on _VideoCollageScreenState {
     );
   }
 
-  Set<String> _previewAudibleClipPaths(List<CollageSlotClip> slotClips) {
+  Set<String> _previewAudibleClipIds(List<CollageSlotClip> slotClips) {
     if (_isPreviewMuted || slotClips.isEmpty) {
       return const <String>{};
     }
@@ -375,11 +371,11 @@ extension _PreviewController on _VideoCollageScreenState {
     switch (_selectedAudioMode) {
       case AudioMode.firstClip:
         final clip = slotClips.first.clip;
-        return clip.hasAudio ? <String>{clip.path} : const <String>{};
+        return clip.hasAudio ? <String>{clip.id} : const <String>{};
       case AudioMode.mixAll:
         return slotClips
             .where((entry) => entry.clip.hasAudio)
-            .map((entry) => entry.clip.path)
+            .map((entry) => entry.clip.id)
             .toSet();
       case AudioMode.longestClip:
         var longestEntry = slotClips.first;
@@ -389,14 +385,14 @@ extension _PreviewController on _VideoCollageScreenState {
           }
         }
         return longestEntry.clip.hasAudio
-            ? <String>{longestEntry.clip.path}
+            ? <String>{longestEntry.clip.id}
             : const <String>{};
       case AudioMode.mute:
         return const <String>{};
     }
   }
 
-  Set<String> _sequentialPreviewAudibleClipPaths(VideoClipInfo activeClip) {
+  Set<String> _sequentialPreviewAudibleClipIds(VideoClipInfo activeClip) {
     if (_isPreviewMuted ||
         _selectedAudioMode == AudioMode.mute ||
         !activeClip.hasAudio) {
@@ -404,29 +400,29 @@ extension _PreviewController on _VideoCollageScreenState {
     }
     // Sequential export carries the audio of each active segment. Mirror that
     // behavior in preview instead of keeping only the first tile audible.
-    return <String>{activeClip.path};
+    return <String>{activeClip.id};
   }
 
   double _previewVolumeForClip({
-    required String clipPath,
-    required Set<String> audibleClipPaths,
+    required String clipId,
+    required Set<String> audibleClipIds,
   }) {
-    if (!_isPreviewPlaying || !audibleClipPaths.contains(clipPath)) {
+    if (!_isPreviewPlaying || !audibleClipIds.contains(clipId)) {
       return 0;
     }
-    if (_selectedAudioMode == AudioMode.mixAll && audibleClipPaths.isNotEmpty) {
-      return 1 / audibleClipPaths.length;
+    if (_selectedAudioMode == AudioMode.mixAll && audibleClipIds.isNotEmpty) {
+      return 1 / audibleClipIds.length;
     }
     return 1;
   }
 
   Future<void> _pauseInactivePreviewControllers(
-    Set<String> activeVisibleVideoPaths,
+    Set<String> activeVisibleVideoIds,
   ) async {
     for (final entry in _controllers.entries) {
       final controller = entry.value;
       if (!controller.value.isInitialized ||
-          activeVisibleVideoPaths.contains(entry.key)) {
+          activeVisibleVideoIds.contains(entry.key)) {
         continue;
       }
       await _setControllerVolume(controller, 0);
@@ -494,9 +490,9 @@ extension _PreviewController on _VideoCollageScreenState {
     return (row * _columns) + column;
   }
 
-  bool _isClipVisibleInGrid(String path) {
+  bool _isClipVisibleInGrid(String instanceId) {
     for (final entry in _slotAssignments.entries) {
-      if (entry.value == path && entry.key < _gridCapacity) {
+      if (entry.value == instanceId && entry.key < _gridCapacity) {
         return true;
       }
     }

@@ -55,8 +55,9 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
   bool _showMergeComplete = false;
   double _progress = 0;
   String? _message;
-  String? _selectedVideoPath;
+  String? _selectedVideoId;
   String? _lastMergedOutputPath;
+  int _nextMergeInstanceNumber = 1;
   ClipFitMode _mergeFitMode = ClipFitMode.cropCenter;
   VideoMergeFrameRateMode _frameRateMode = VideoMergeFrameRateMode.firstVideo;
 
@@ -68,10 +69,10 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       return null;
     }
     if (_frameRateMode == VideoMergeFrameRateMode.firstVideo) {
-      return _videoFrameRates[_videos.first.path];
+      return _videoFrameRates[_videos.first.id];
     }
     final rates = _videos
-        .map((video) => _videoFrameRates[video.path])
+        .map((video) => _videoFrameRates[video.id])
         .whereType<double>();
     return rates.isEmpty ? null : rates.reduce((a, b) => a > b ? a : b);
   }
@@ -79,10 +80,10 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
   @override
   void initState() {
     super.initState();
-    _videos.addAll(widget.initialVideos);
+    _videos.addAll(widget.initialVideos.map(_newMergeVideoInstance));
     _mergeFitMode = widget.initialFitMode;
     _frameRateMode = widget.initialFrameRateMode;
-    _selectedVideoPath = _videos.isEmpty ? null : _videos.first.path;
+    _selectedVideoId = _videos.isEmpty ? null : _videos.first.id;
     for (final video in _videos) {
       unawaited(_initializeThumbnail(video));
       unawaited(_initializeFrameRate(video));
@@ -100,10 +101,10 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
   @override
   Widget build(BuildContext context) {
     final firstVideo = _videos.isEmpty ? null : _videos.first;
-    final selectedVideo = _videoForPath(_selectedVideoPath);
+    final selectedVideo = _videoForId(_selectedVideoId);
     final selectedController = selectedVideo == null
         ? null
-        : _thumbnailControllers[selectedVideo.path];
+        : _thumbnailControllers[selectedVideo.id];
     final availableContentHeight = (MediaQuery.sizeOf(context).height - 220)
         .clamp(430.0, 520.0);
     return PopScope(
@@ -280,7 +281,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                             }
                             final video = _videos[index];
                             return ReorderableDragStartListener(
-                              key: ValueKey<String>(video.path),
+                              key: ValueKey<String>(video.id),
                               index: index,
                               enabled: !_isMerging,
                               child: Padding(
@@ -288,9 +289,9 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                                 child: _MergeVideoThumbnail(
                                   index: index,
                                   video: video,
-                                  controller: _thumbnailControllers[video.path],
-                                  frameRate: _videoFrameRates[video.path],
-                                  isSelected: video.path == _selectedVideoPath,
+                                  controller: _thumbnailControllers[video.id],
+                                  frameRate: _videoFrameRates[video.id],
+                                  isSelected: video.id == _selectedVideoId,
                                   onTap: _isMerging
                                       ? null
                                       : () => unawaited(_selectVideo(video)),
@@ -380,6 +381,12 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
     await _addVideoPaths(paths);
   }
 
+  VideoClipInfo _newMergeVideoInstance(VideoClipInfo video) {
+    return video.copyWith(
+      instanceId: 'merge-video-${_nextMergeInstanceNumber++}',
+    );
+  }
+
   void _setCenterInside(bool isCenterInside) {
     _updateMergeSettings(
       fitMode: isCenterInside
@@ -430,14 +437,13 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
     });
     try {
       for (final path in paths) {
-        if (_videos.any((video) => video.path == path)) {
-          continue;
-        }
-        final video = await widget.exportService.probeMedia(path);
+        final video = _newMergeVideoInstance(
+          await widget.exportService.probeMedia(path),
+        );
         if (video.isVideo && mounted) {
           setState(() {
             _videos.add(video);
-            _selectedVideoPath ??= video.path;
+            _selectedVideoId ??= video.id;
           });
           unawaited(_initializeThumbnail(video));
           unawaited(_initializeFrameRate(video));
@@ -459,11 +465,11 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
   }
 
   Future<void> _initializeThumbnail(VideoClipInfo video) async {
-    if (_thumbnailControllers.containsKey(video.path)) {
+    if (_thumbnailControllers.containsKey(video.id)) {
       return;
     }
     final controller = VideoPlayerController.file(File(video.path));
-    _thumbnailControllers[video.path] = controller;
+    _thumbnailControllers[video.id] = controller;
     try {
       await controller.initialize();
       await controller.setLooping(false);
@@ -471,21 +477,21 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       await controller.pause();
       await controller.seekTo(Duration.zero);
       controller.addListener(
-        () => _handlePreviewControllerChanged(video.path, controller),
+        () => _handlePreviewControllerChanged(video.id, controller),
       );
       if (mounted) {
         setState(() {});
       }
     } catch (_) {
       await controller.dispose();
-      if (identical(_thumbnailControllers[video.path], controller)) {
-        _thumbnailControllers.remove(video.path);
+      if (identical(_thumbnailControllers[video.id], controller)) {
+        _thumbnailControllers.remove(video.id);
       }
     }
   }
 
   Future<void> _initializeFrameRate(VideoClipInfo video) async {
-    if (_videoFrameRates.containsKey(video.path)) {
+    if (_videoFrameRates.containsKey(video.id)) {
       return;
     }
     try {
@@ -493,7 +499,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
         video.path,
       );
       if (mounted && frameRate > 0) {
-        setState(() => _videoFrameRates[video.path] = frameRate);
+        setState(() => _videoFrameRates[video.id] = frameRate);
       }
     } catch (_) {
       // Frame rate is supplemental display metadata; media remains usable.
@@ -502,19 +508,19 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
 
   void _removeVideo(int index) {
     final video = _videos.removeAt(index);
-    final controller = _thumbnailControllers.remove(video.path);
-    _videoFrameRates.remove(video.path);
-    if (_selectedVideoPath == video.path) {
+    final controller = _thumbnailControllers.remove(video.id);
+    _videoFrameRates.remove(video.id);
+    if (_selectedVideoId == video.id) {
       _isSequencePlaying = false;
     }
     unawaited(controller?.dispose());
     setState(() {
       _showMergeComplete = false;
-      if (_selectedVideoPath == video.path) {
+      if (_selectedVideoId == video.id) {
         if (_videos.isEmpty) {
-          _selectedVideoPath = null;
+          _selectedVideoId = null;
         } else {
-          _selectedVideoPath = _videos[index.clamp(0, _videos.length - 1)].path;
+          _selectedVideoId = _videos[index.clamp(0, _videos.length - 1)].id;
         }
       }
     });
@@ -537,12 +543,12 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
     });
   }
 
-  VideoClipInfo? _videoForPath(String? path) {
-    if (path == null) {
+  VideoClipInfo? _videoForId(String? id) {
+    if (id == null) {
       return null;
     }
     for (final video in _videos) {
-      if (video.path == path) {
+      if (video.id == id) {
         return video;
       }
     }
@@ -550,10 +556,10 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
   }
 
   Future<void> _selectVideo(VideoClipInfo video) async {
-    if (_selectedVideoPath == video.path) {
+    if (_selectedVideoId == video.id) {
       return;
     }
-    final current = _thumbnailControllers[_selectedVideoPath];
+    final current = _thumbnailControllers[_selectedVideoId];
     if (current?.value.isPlaying == true) {
       await current?.pause();
     }
@@ -561,17 +567,17 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       return;
     }
     setState(() {
-      _selectedVideoPath = video.path;
+      _selectedVideoId = video.id;
       _isSequencePlaying = false;
     });
-    final next = _thumbnailControllers[video.path];
+    final next = _thumbnailControllers[video.id];
     if (next?.value.isInitialized == true) {
       await next?.seekTo(Duration.zero);
     }
   }
 
   Future<void> _togglePlayback() async {
-    final controller = _thumbnailControllers[_selectedVideoPath];
+    final controller = _thumbnailControllers[_selectedVideoId];
     if (controller == null || !controller.value.isInitialized) {
       return;
     }
@@ -594,14 +600,14 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
   }
 
   void _handlePreviewControllerChanged(
-    String path,
+    String id,
     VideoPlayerController controller,
   ) {
     if (!mounted ||
         !_isSequencePlaying ||
         _isAdvancingPreview ||
-        _selectedVideoPath != path ||
-        !identical(_thumbnailControllers[path], controller)) {
+        _selectedVideoId != id ||
+        !identical(_thumbnailControllers[id], controller)) {
       return;
     }
     final value = controller.value;
@@ -610,12 +616,12 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       return;
     }
     _isAdvancingPreview = true;
-    unawaited(_advancePreviewFrom(path));
+    unawaited(_advancePreviewFrom(id));
   }
 
-  Future<void> _advancePreviewFrom(String path) async {
+  Future<void> _advancePreviewFrom(String id) async {
     try {
-      final currentIndex = _videos.indexWhere((video) => video.path == path);
+      final currentIndex = _videos.indexWhere((video) => video.id == id);
       if (currentIndex < 0 || currentIndex >= _videos.length - 1) {
         if (mounted) {
           setState(() => _isSequencePlaying = false);
@@ -623,12 +629,12 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
         return;
       }
 
-      final current = _thumbnailControllers[path];
+      final current = _thumbnailControllers[id];
       if (current?.value.isPlaying == true) {
         await current?.pause();
       }
       final nextVideo = _videos[currentIndex + 1];
-      final next = _thumbnailControllers[nextVideo.path];
+      final next = _thumbnailControllers[nextVideo.id];
       if (next == null || !next.value.isInitialized || !mounted) {
         if (mounted) {
           setState(() => _isSequencePlaying = false);
@@ -636,7 +642,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
         return;
       }
 
-      setState(() => _selectedVideoPath = nextVideo.path);
+      setState(() => _selectedVideoId = nextVideo.id);
       await next.setLooping(false);
       await next.setVolume(1);
       await next.seekTo(Duration.zero);
@@ -766,11 +772,11 @@ class _MergeVideoThumbnail extends StatelessWidget {
       child: MouseRegion(
         cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.grab,
         child: Listener(
-          key: ValueKey<String>('merge-thumbnail-tap-${video.path}'),
+          key: ValueKey<String>('merge-thumbnail-tap-${video.id}'),
           behavior: HitTestBehavior.opaque,
           onPointerDown: onTap == null ? null : (_) => onTap!(),
           child: AnimatedContainer(
-            key: ValueKey<String>('merge-thumbnail-${video.path}'),
+            key: ValueKey<String>('merge-thumbnail-${video.id}'),
             duration: const Duration(milliseconds: 140),
             width: _mergeThumbnailSize,
             height: _mergeThumbnailSize,
@@ -905,7 +911,7 @@ class _MergeOutputPreview extends StatelessWidget {
       key: const ValueKey<String>('merge-output-preview'),
       aspectRatio: outputAspect,
       child: MouseRegion(
-        key: ValueKey<String>('merge-preview-${video.path}'),
+        key: ValueKey<String>('merge-preview-${video.id}'),
         cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
         child: GestureDetector(
           onTap: onTap,

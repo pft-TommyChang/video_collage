@@ -91,13 +91,15 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   final VideoExportService _exportService = VideoExportService();
 
   final List<VideoClipInfo> _clips = <VideoClipInfo>[];
+  // Editor state is keyed by clip instance ID, never by source path.
   final Map<int, String> _slotAssignments = <int, String>{};
   final Map<String, ClipViewport> _clipViewports = <String, ClipViewport>{};
   final Map<String, VideoPlayerController> _controllers =
       <String, VideoPlayerController>{};
-  final Set<String> _loadingClipPaths = <String>{};
+  final Set<String> _loadingClipIds = <String>{};
   final Map<String, String> _clipErrors = <String, String>{};
   final GlobalKey _previewGridKey = GlobalKey();
+  int _nextClipInstanceNumber = 1;
 
   late final TextEditingController _widthController;
   late final TextEditingController _heightController;
@@ -121,8 +123,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   DateTime? _parallelPreviewStartedAt;
   Duration _sequentialPreviewElapsed = Duration.zero;
   DateTime? _sequentialPreviewStartedAt;
-  String? _activeSequentialClipPath;
-  String? _editingViewportClipPath;
+  String? _activeSequentialClipId;
+  String? _editingViewportClipId;
 
   AspectRatioPreset _selectedAspect = _defaultAspectPreset;
   ResolutionPreset _selectedResolution = _defaultResolutionPreset;
@@ -205,7 +207,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   void reassemble() {
     super.reassemble();
     for (final clip in _clips) {
-      unawaited(_refreshClipMetadata(clip.path));
+      unawaited(_refreshClipMetadata(clip.id));
     }
   }
 
