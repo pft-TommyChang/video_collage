@@ -751,6 +751,82 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('pan and zoom supports modified wheel and ten percent buttons', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    mockPendingMediaFiles(tester, <String>[appIconPath(64)]);
+
+    await tester.pumpWidget(const VideoCollageApp());
+    await pumpUntilFound(tester, find.textContaining('Auto layout picked'));
+
+    final viewportControls = find.byWidgetPredicate(
+      (widget) =>
+          widget is MouseRegion &&
+          widget.key is ValueKey<String> &&
+          (widget.key! as ValueKey<String>).value.startsWith(
+            'viewport-controls-',
+          ),
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    await tester.pump();
+    await mouse.moveTo(tester.getCenter(viewportControls));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Crop Area'));
+    await tester.pump();
+
+    final editingControls = find.byKey(
+      const ValueKey<String>('viewport-editing-controls-full'),
+    );
+    final zoomSlider = find.descendant(
+      of: editingControls,
+      matching: find.byType(Slider),
+    );
+    final zoomOutButton = find.descendant(
+      of: editingControls,
+      matching: find.byIcon(Icons.remove_circle_outline),
+    );
+    final zoomInButton = find.descendant(
+      of: editingControls,
+      matching: find.byIcon(Icons.add_circle_outline),
+    );
+    expect(find.byTooltip('Zoom out 10%'), findsNothing);
+    expect(find.byTooltip('Zoom in 10%'), findsNothing);
+    expect(tester.widget<Slider>(zoomSlider).value, 1);
+
+    await tester.tap(zoomInButton);
+    await tester.pump();
+    expect(tester.widget<Slider>(zoomSlider).value, closeTo(1.1, 0.0001));
+
+    await tester.tap(zoomOutButton);
+    await tester.pump();
+    expect(tester.widget<Slider>(zoomSlider).value, 1);
+
+    final panZoomSurface = find.byKey(
+      const ValueKey<String>('viewport-pan-zoom-surface'),
+    );
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(panZoomSurface),
+        scrollDelta: const Offset(0, -20),
+      ),
+    );
+    await tester.pump();
+    expect(tester.widget<Slider>(zoomSlider).value, 1);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(panZoomSurface),
+        scrollDelta: const Offset(0, -20),
+      ),
+    );
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+    expect(tester.widget<Slider>(zoomSlider).value, closeTo(1.1, 0.0001));
+  });
+
   testWidgets('the same source file can be added as independent instances', (
     WidgetTester tester,
   ) async {

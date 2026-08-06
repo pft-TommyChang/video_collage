@@ -18,6 +18,7 @@ const double _viewportEditingSliderMinimumDisplayWidth = 156;
 const double _viewportEditingZoomIconsMinimumDisplayWidth = 200;
 const double _viewportEditingControlsMinimumDisplayHeight = 48;
 const double _viewportEditingControlsMaximumDisplayWidth = 294;
+const double _viewportEditingBorderDisplayWidth = 3;
 const double _cropActionsMinimumDisplayWidth =
     _viewportActionEdgeDisplayPadding +
     _viewportActionButtonDisplaySize * 2 +
@@ -135,9 +136,9 @@ class _ViewportEditingPanel extends StatelessWidget {
             children: <Widget>[
               if (showSlider) ...<Widget>[
                 if (showZoomIcons) ...<Widget>[
-                  const Icon(
-                    Icons.remove_circle_outline,
-                    size: _viewportEditingZoomIconDisplaySize,
+                  _ViewportZoomStepButton(
+                    icon: Icons.remove_circle_outline,
+                    onPressed: () => onZoomChanged(viewport.zoom - 0.1),
                   ),
                   const SizedBox(width: controlGap * 0.25),
                 ],
@@ -164,9 +165,9 @@ class _ViewportEditingPanel extends StatelessWidget {
                 ),
                 if (showZoomIcons) ...<Widget>[
                   const SizedBox(width: controlGap * 0.25),
-                  const Icon(
-                    Icons.add_circle_outline,
-                    size: _viewportEditingZoomIconDisplaySize,
+                  _ViewportZoomStepButton(
+                    icon: Icons.add_circle_outline,
+                    onPressed: () => onZoomChanged(viewport.zoom + 0.1),
                   ),
                 ],
                 const SizedBox(width: controlGap * 0.5),
@@ -190,6 +191,25 @@ class _ViewportEditingPanel extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ViewportZoomStepButton extends StatelessWidget {
+  const _ViewportZoomStepButton({required this.icon, required this.onPressed});
+
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: Icon(icon, size: _viewportEditingZoomIconDisplaySize),
       ),
     );
   }
@@ -459,8 +479,40 @@ class _ViewportControls extends StatefulWidget {
 
 class _ViewportControlsState extends State<_ViewportControls> {
   bool _isHovered = false;
+  bool _isZoomModifierPressed = false;
   final Set<int> _pressedViewportPointers = <int>{};
+  final FocusNode _zoomKeyboardFocusNode = FocusNode(
+    debugLabel: 'viewport zoom keyboard focus',
+  );
   double _gestureStartZoom = 1;
+
+  @override
+  void didUpdateWidget(covariant _ViewportControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isEditing && !oldWidget.isEditing) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _zoomKeyboardFocusNode.requestFocus();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _zoomKeyboardFocusNode.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult _handleZoomKeyEvent(FocusNode node, KeyEvent event) {
+    final isPressed =
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isControlPressed;
+    if (_isZoomModifierPressed != isPressed) {
+      setState(() => _isZoomModifierPressed = isPressed);
+    }
+    return KeyEventResult.ignored;
+  }
 
   void _setViewportPointerPressed(int pointer, {required bool isPressed}) {
     setState(() {
@@ -508,6 +560,7 @@ class _ViewportControlsState extends State<_ViewportControls> {
   @override
   Widget build(BuildContext context) {
     final controls = MouseRegion(
+      key: ValueKey<String>('viewport-controls-${widget.clip.id}'),
       cursor: widget.isEditing
           ? _pressedViewportPointers.isNotEmpty
                 ? SystemMouseCursors.grabbing
@@ -518,7 +571,6 @@ class _ViewportControlsState extends State<_ViewportControls> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final tileSize = constraints.biggest;
-          final shortSide = tileSize.shortestSide;
           final previewDisplayScale = widget.previewDisplayScale.clamp(
             0.001,
             double.infinity,
@@ -588,15 +640,18 @@ class _ViewportControlsState extends State<_ViewportControls> {
                   ),
                   onPointerSignal: (event) {
                     if (event is PointerScrollEvent &&
-                        (HardwareKeyboard.instance.isMetaPressed ||
+                        event.scrollDelta.dy != 0 &&
+                        (_isZoomModifierPressed ||
+                            HardwareKeyboard.instance.isMetaPressed ||
                             HardwareKeyboard.instance.isControlPressed)) {
                       _updateZoom(
-                        widget.viewport.zoom *
-                            (event.scrollDelta.dy > 0 ? 0.92 : 1.08),
+                        widget.viewport.zoom +
+                            (event.scrollDelta.dy > 0 ? -0.1 : 0.1),
                       );
                     }
                   },
                   child: GestureDetector(
+                    key: const ValueKey<String>('viewport-pan-zoom-surface'),
                     behavior: HitTestBehavior.translucent,
                     onScaleStart: (_) {
                       _gestureStartZoom = widget.viewport.zoom;
@@ -614,7 +669,9 @@ class _ViewportControlsState extends State<_ViewportControls> {
                       decoration: BoxDecoration(
                         border: Border.all(
                           color: const Color(0xFFFF7657),
-                          width: math.max(2, shortSide * 0.008),
+                          width:
+                              _viewportEditingBorderDisplayWidth /
+                              previewDisplayScale,
                         ),
                       ),
                     ),
@@ -702,9 +759,18 @@ class _ViewportControlsState extends State<_ViewportControls> {
     if (!widget.isEditing) {
       return controls;
     }
-    return TapRegion(
-      onTapOutside: (_) => widget.onDone?.call(),
-      child: controls,
+    return Focus(
+      focusNode: _zoomKeyboardFocusNode,
+      onKeyEvent: _handleZoomKeyEvent,
+      onFocusChange: (hasFocus) {
+        if (!hasFocus && _isZoomModifierPressed) {
+          setState(() => _isZoomModifierPressed = false);
+        }
+      },
+      child: TapRegion(
+        onTapOutside: (_) => widget.onDone?.call(),
+        child: controls,
+      ),
     );
   }
 }
