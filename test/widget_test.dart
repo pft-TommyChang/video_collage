@@ -111,6 +111,23 @@ void main() {
       findsOneWidget,
     );
     expect(
+      tester.getSize(
+        find.byKey(const ValueKey<String>('merge-preview-play-button')),
+      ),
+      const Size.square(36),
+    );
+    expect(
+      find.byKey(const ValueKey<String>('merge-seek-bar')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('merge-playback-time')),
+        matching: find.text('0:00 / 0:00'),
+      ),
+      findsOneWidget,
+    );
+    expect(
       tester.getSize(find.byKey(const ValueKey<String>('merge-save-button'))),
       const Size(160, 40),
     );
@@ -120,6 +137,19 @@ void main() {
         matching: find.byKey(const ValueKey<String>('merge-add-video-tile')),
       ),
       findsOneWidget,
+    );
+    expect(
+      tester.getSize(
+        find.byKey(const ValueKey<String>('merge-add-video-button')),
+      ),
+      const Size.square(36),
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('merge-add-video-tile')),
+        matching: find.byType(OutlinedButton),
+      ),
+      findsNothing,
     );
     expect(
       tester.getCenter(find.text('Merge & Save')).dx,
@@ -205,6 +235,30 @@ void main() {
     final mergeListBorder = mergeListDecoration.border! as Border;
     expect(mergeListBorder.top.width, 1);
     expect(mergeListBorder.top.color, const Color(0xFFD8D0C4));
+    expect(find.text('0:00 / 0:07'), findsOneWidget);
+    expect(
+      tester
+          .getBottomLeft(
+            find.byKey(const ValueKey<String>('merge-playback-controls')),
+          )
+          .dy,
+      lessThan(
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey<String>('merge-list-container')),
+            )
+            .dy,
+      ),
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('merge-list-container')),
+        matching: find.byKey(
+          const ValueKey<String>('merge-preview-play-button'),
+        ),
+      ),
+      findsNothing,
+    );
     final firstThumbnailSize = tester.getSize(
       find.byKey(const ValueKey<String>('merge-thumbnail-merge-video-1')),
     );
@@ -230,6 +284,20 @@ void main() {
       closeTo(1920 / 1080, 0.01),
     );
     expect(outputPreviewSize.width, greaterThan(firstThumbnailSize.width));
+    expect(
+      tester
+          .getCenter(find.byKey(const ValueKey<String>('merge-add-video-tile')))
+          .dx,
+      greaterThan(
+        tester
+            .getCenter(
+              find.byKey(
+                const ValueKey<String>('merge-thumbnail-merge-video-2'),
+              ),
+            )
+            .dx,
+      ),
+    );
 
     final thumbnailListener = tester.widget<Listener>(
       find.byKey(const ValueKey<String>('merge-thumbnail-tap-merge-video-2')),

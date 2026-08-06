@@ -15,6 +15,9 @@ const double _mergeDialogWidth = 760;
 const double _mergeMaximumPreviewHeight = 400;
 const double _mergeListHeight = 106;
 const double _mergeThumbnailSize = 90;
+const double _mergePlaybackControlsHeight = 36;
+const double _mergeCompactButtonSize = 36;
+const double _mergeAddButtonWidth = 44;
 const double _mergeSaveButtonWidth = 160;
 const double _mergeActionButtonHeight = 40;
 
@@ -210,7 +213,38 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
+                SizedBox(
+                  key: const ValueKey<String>('merge-playback-controls'),
+                  height: _mergePlaybackControlsHeight,
+                  child: Row(
+                    children: <Widget>[
+                      SizedBox(
+                        width: 40,
+                        child: _MergePlayButton(
+                          controller: selectedController,
+                          onPressed: selectedController == null || _isMerging
+                              ? null
+                              : () => unawaited(_togglePlayback()),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _MergeSeekBar(
+                          controller: selectedController,
+                          elapsedBeforeVideo: _durationBeforeVideo(
+                            selectedVideo,
+                          ),
+                          totalDuration: _totalDuration,
+                          enabled: !_isMerging,
+                          onSeek: (position) =>
+                              unawaited(_seekPreview(position)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Container(
                   key: const ValueKey<String>('merge-list-container'),
                   height: _mergeListHeight,
@@ -231,23 +265,6 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                   clipBehavior: Clip.antiAlias,
                   child: Row(
                     children: <Widget>[
-                      SizedBox(
-                        width: 76,
-                        child: _MergePlayButton(
-                          controller: selectedController,
-                          onPressed: selectedController == null || _isMerging
-                              ? null
-                              : () => unawaited(_togglePlayback()),
-                        ),
-                      ),
-                      const SizedBox(
-                        height: 64,
-                        child: VerticalDivider(
-                          width: 1,
-                          thickness: 1,
-                          color: Color(0xFFD8D0C4),
-                        ),
-                      ),
                       Expanded(
                         child: ReorderableListView.builder(
                           key: const ValueKey<String>('merge-list'),
@@ -262,23 +279,9 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                             elevation: 0,
                             child: child,
                           ),
-                          itemCount: _videos.length + 1,
+                          itemCount: _videos.length,
                           onReorder: _isMerging ? (_, _) {} : _reorder,
                           itemBuilder: (context, index) {
-                            if (index == _videos.length) {
-                              return Padding(
-                                key: const ValueKey<String>(
-                                  'merge-add-video-tile',
-                                ),
-                                padding: const EdgeInsets.only(right: 6),
-                                child: _MergeAddVideoTile(
-                                  isLoading: _isAdding,
-                                  onPressed: _isAdding || _isMerging
-                                      ? null
-                                      : _addVideos,
-                                ),
-                              );
-                            }
                             final video = _videos[index];
                             return ReorderableDragStartListener(
                               key: ValueKey<String>(video.id),
@@ -302,6 +305,24 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                               ),
                             );
                           },
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 64,
+                        child: VerticalDivider(
+                          width: 1,
+                          thickness: 1,
+                          color: Color(0xFFD8D0C4),
+                        ),
+                      ),
+                      Padding(
+                        key: const ValueKey<String>('merge-add-video-tile'),
+                        padding: const EdgeInsets.fromLTRB(7, 7, 8, 7),
+                        child: _MergeAddVideoButton(
+                          isLoading: _isAdding,
+                          onPressed: _isAdding || _isMerging
+                              ? null
+                              : _addVideos,
                         ),
                       ),
                     ],
@@ -553,6 +574,67 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       }
     }
     return null;
+  }
+
+  Duration _durationBeforeVideo(VideoClipInfo? selectedVideo) {
+    if (selectedVideo == null) {
+      return Duration.zero;
+    }
+    var elapsed = Duration.zero;
+    for (final video in _videos) {
+      if (video.id == selectedVideo.id) {
+        break;
+      }
+      elapsed += video.duration;
+    }
+    return elapsed;
+  }
+
+  Future<void> _seekPreview(Duration sequencePosition) async {
+    if (_videos.isEmpty || _isMerging) {
+      return;
+    }
+
+    final targetPosition = sequencePosition < Duration.zero
+        ? Duration.zero
+        : sequencePosition > _totalDuration
+        ? _totalDuration
+        : sequencePosition;
+    var elapsed = Duration.zero;
+    var targetVideo = _videos.last;
+    var positionInVideo = targetVideo.duration;
+    for (final video in _videos) {
+      final videoEnd = elapsed + video.duration;
+      if (targetPosition < videoEnd || video.id == _videos.last.id) {
+        targetVideo = video;
+        positionInVideo = targetPosition - elapsed;
+        break;
+      }
+      elapsed = videoEnd;
+    }
+
+    final wasPlaying = _isSequencePlaying;
+    final current = _thumbnailControllers[_selectedVideoId];
+    final target = _thumbnailControllers[targetVideo.id];
+    if (current != null &&
+        !identical(current, target) &&
+        current.value.isPlaying) {
+      await current.pause();
+    }
+    if (!mounted) {
+      return;
+    }
+    if (_selectedVideoId != targetVideo.id) {
+      setState(() => _selectedVideoId = targetVideo.id);
+    }
+    if (target == null || !target.value.isInitialized) {
+      return;
+    }
+    await target.seekTo(positionInVideo);
+    if (wasPlaying && positionInVideo < target.value.duration) {
+      await target.setVolume(1);
+      await target.play();
+    }
   }
 
   Future<void> _selectVideo(VideoClipInfo video) async {
@@ -977,6 +1059,91 @@ class _EmptyMergePreview extends StatelessWidget {
   }
 }
 
+class _MergeSeekBar extends StatelessWidget {
+  const _MergeSeekBar({
+    required this.controller,
+    required this.elapsedBeforeVideo,
+    required this.totalDuration,
+    required this.enabled,
+    required this.onSeek,
+  });
+
+  final VideoPlayerController? controller;
+  final Duration elapsedBeforeVideo;
+  final Duration totalDuration;
+  final bool enabled;
+  final ValueChanged<Duration> onSeek;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = this.controller;
+    if (controller == null) {
+      return _buildContents(context, const VideoPlayerValue.uninitialized());
+    }
+    return ValueListenableBuilder<VideoPlayerValue>(
+      valueListenable: controller,
+      builder: (context, value, _) => _buildContents(context, value),
+    );
+  }
+
+  Widget _buildContents(BuildContext context, VideoPlayerValue value) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final totalMilliseconds = totalDuration.inMilliseconds;
+    final rawPosition =
+        elapsedBeforeVideo +
+        (value.isInitialized ? value.position : Duration.zero);
+    final currentPosition = rawPosition > totalDuration
+        ? totalDuration
+        : rawPosition;
+    final sliderValue = totalMilliseconds == 0
+        ? 0.0
+        : currentPosition.inMilliseconds.clamp(0, totalMilliseconds).toDouble();
+    final canSeek = enabled && value.isInitialized && totalMilliseconds > 0;
+    final timeStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: const Color(0xFF747B88),
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
+
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 4,
+              inactiveTrackColor: primary.withValues(alpha: 0.28),
+              disabledInactiveTrackColor: const Color(0xFFD0C2BE),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 15),
+            ),
+            child: Slider(
+              key: const ValueKey<String>('merge-seek-bar'),
+              min: 0,
+              max: totalMilliseconds == 0 ? 1 : totalMilliseconds.toDouble(),
+              value: sliderValue,
+              onChanged: canSeek
+                  ? (milliseconds) =>
+                        onSeek(Duration(milliseconds: milliseconds.round()))
+                  : null,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          key: const ValueKey<String>('merge-playback-time'),
+          width: 92,
+          child: Text(
+            '${_formatMergeDuration(currentPosition)} / '
+            '${_formatMergeDuration(totalDuration)}',
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            style: timeStyle,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MergePlayButton extends StatelessWidget {
   const _MergePlayButton({required this.controller, required this.onPressed});
 
@@ -986,46 +1153,47 @@ class _MergePlayButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = this.controller;
+    if (controller == null) {
+      return _buildButton(context, isPlaying: false);
+    }
+    return ValueListenableBuilder<VideoPlayerValue>(
+      valueListenable: controller,
+      builder: (context, value, _) =>
+          _buildButton(context, isPlaying: value.isPlaying),
+    );
+  }
+
+  Widget _buildButton(BuildContext context, {required bool isPlaying}) {
     final primary = Theme.of(context).colorScheme.primary;
     return Center(
-      child: Material(
-        color: onPressed == null ? const Color(0xFF343943) : primary,
-        shape: const CircleBorder(),
-        child: InkWell(
-          key: const ValueKey<String>('merge-preview-play-button'),
-          onTap: onPressed,
-          customBorder: const CircleBorder(),
-          child: SizedBox.square(
-            dimension: 52,
-            child: Center(
-              child: controller == null
-                  ? const Icon(
-                      Icons.play_arrow_rounded,
-                      size: 31,
-                      color: Color(0xFF747A84),
-                    )
-                  : ValueListenableBuilder<VideoPlayerValue>(
-                      valueListenable: controller,
-                      builder: (context, value, _) => Icon(
-                        value.isPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        size: 31,
-                        color: value.isInitialized
-                            ? Colors.white
-                            : const Color(0xFF747A84),
-                      ),
-                    ),
-            ),
-          ),
+      child: IconButton(
+        key: const ValueKey<String>('merge-preview-play-button'),
+        onPressed: onPressed,
+        tooltip: isPlaying ? 'Pause' : 'Play',
+        iconSize: 25,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(
+          width: _mergeCompactButtonSize,
+          height: _mergeCompactButtonSize,
         ),
+        style: IconButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          foregroundColor: primary,
+          disabledForegroundColor: const Color(0xFF9A9EA6),
+          minimumSize: const Size.square(_mergeCompactButtonSize),
+          maximumSize: const Size.square(_mergeCompactButtonSize),
+        ),
+        icon: Icon(isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
       ),
     );
   }
 }
 
-class _MergeAddVideoTile extends StatelessWidget {
-  const _MergeAddVideoTile({required this.isLoading, required this.onPressed});
+class _MergeAddVideoButton extends StatelessWidget {
+  const _MergeAddVideoButton({
+    required this.isLoading,
+    required this.onPressed,
+  });
 
   final bool isLoading;
   final VoidCallback? onPressed;
@@ -1033,30 +1201,35 @@ class _MergeAddVideoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    return SizedBox.square(
-      dimension: _mergeThumbnailSize,
-      child: Tooltip(
-        message: 'Add video',
-        child: OutlinedButton(
+    return SizedBox(
+      width: _mergeAddButtonWidth,
+      height: _mergeThumbnailSize,
+      child: Center(
+        child: IconButton(
+          key: const ValueKey<String>('merge-add-video-button'),
           onPressed: onPressed,
-          style: OutlinedButton.styleFrom(
-            padding: EdgeInsets.zero,
-            foregroundColor: primary,
-            backgroundColor: primary.withValues(alpha: 0.035),
-            side: BorderSide(color: primary.withValues(alpha: 0.42)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
-            ),
+          tooltip: 'Add video',
+          iconSize: 25,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(
+            width: _mergeCompactButtonSize,
+            height: _mergeCompactButtonSize,
           ),
-          child: isLoading
+          style: IconButton.styleFrom(
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            foregroundColor: primary,
+            minimumSize: const Size.square(_mergeCompactButtonSize),
+            maximumSize: const Size.square(_mergeCompactButtonSize),
+          ),
+          icon: isLoading
               ? SizedBox.square(
-                  dimension: 20,
+                  dimension: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
                     color: primary,
                   ),
                 )
-              : const Icon(Icons.add_rounded, size: 32),
+              : const Icon(Icons.add_rounded),
         ),
       ),
     );
