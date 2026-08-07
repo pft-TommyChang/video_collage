@@ -771,7 +771,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
   Future<void> _advancePreviewFrom(String id) async {
     try {
       final currentIndex = _videos.indexWhere((video) => video.id == id);
-      if (currentIndex < 0 || currentIndex >= _videos.length - 1) {
+      if (currentIndex < 0) {
         if (mounted) {
           setState(() => _isSequencePlaying = false);
         }
@@ -782,6 +782,18 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       if (current?.value.isPlaying == true) {
         await current?.pause();
       }
+      if (currentIndex >= _videos.length - 1) {
+        final currentVideo = _videos[currentIndex];
+        if (current?.value.isInitialized == true &&
+            current!.value.position != currentVideo.trimEnd) {
+          await current.seekTo(currentVideo.trimEnd);
+        }
+        if (mounted) {
+          setState(() => _isSequencePlaying = false);
+        }
+        return;
+      }
+
       final nextVideo = _videos[currentIndex + 1];
       final next = _thumbnailControllers[nextVideo.id];
       if (next == null || !next.value.isInitialized || !mounted) {
