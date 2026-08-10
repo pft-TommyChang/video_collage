@@ -4,9 +4,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:video_collage_mac/src/models.dart';
+import 'package:video_collage_mac/src/services/github_update_service.dart';
 import 'package:video_collage_mac/src/services/system_dialog_service.dart';
 import 'package:video_collage_mac/src/services/video_export_service.dart';
 import 'package:video_collage_mac/src/video_merge_dialog.dart';
@@ -31,6 +33,9 @@ void main() {
     'AppIcon.appiconset',
     'app_icon_$size.png',
   );
+
+  Widget buildTestApp() =>
+      const VideoCollageApp(checkForUpdatesOnLaunch: false);
 
   void mockPendingMediaFiles(WidgetTester tester, List<String> mediaPaths) {
     var didConsumeMedia = false;
@@ -80,10 +85,14 @@ void main() {
   testWidgets('renders app shell', (WidgetTester tester) async {
     useTestWindow(tester, const Size(1600, 1000));
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
 
     expect(find.text('Perfect Collage'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey<String>('open-update-download-page')),
+      findsNothing,
+    );
     expect(find.byTooltip('Auto Layout'), findsOneWidget);
     expect(find.byTooltip('Merge videos'), findsOneWidget);
     expect(
@@ -92,10 +101,46 @@ void main() {
     );
   });
 
+  testWidgets('shows the update button only when a newer release is found', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    PackageInfo.setMockInitialValues(
+      appName: 'Perfect Collage',
+      packageName: 'video_collage_mac',
+      version: '1.5.0',
+      buildNumber: '150',
+      buildSignature: '',
+    );
+
+    await tester.pumpWidget(
+      VideoCollageApp(
+        updateService: _FakeUpdateService(
+          GitHubRelease(
+            tagName: 'v1.6.0',
+            pageUrl: Uri.parse(
+              'https://github.com/pft-TommyChang/video_collage/releases/tag/v1.6.0',
+            ),
+          ),
+        ),
+      ),
+    );
+    await pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey<String>('open-update-download-page')),
+    );
+
+    expect(find.byTooltip('Perfect Collage 1.6.0 available'), findsOneWidget);
+    expect(
+      tester.getCenter(find.byTooltip('Perfect Collage 1.6.0 available')).dx,
+      greaterThan(tester.getCenter(find.text('0:00 / 0:00')).dx),
+    );
+  });
+
   testWidgets('opens the video merge tool', (WidgetTester tester) async {
     useTestWindow(tester, const Size(1600, 1000));
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Merge videos'));
     await tester.pumpAndSettle();
@@ -573,7 +618,7 @@ void main() {
   ) async {
     useTestWindow(tester, const Size(1600, 1000));
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Collapse panel'), findsOneWidget);
@@ -659,7 +704,7 @@ void main() {
   ) async {
     useTestWindow(tester, const Size(1600, 1000));
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
 
     final lastExportButton = tester.widget<IconButton>(
@@ -676,7 +721,7 @@ void main() {
   ) async {
     useTestWindow(tester, const Size(800, 640));
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
 
     expect(find.text('0:00 / 0:00'), findsOneWidget);
@@ -726,7 +771,7 @@ void main() {
     useTestWindow(tester, const Size(1600, 1000));
     mockPendingMediaFiles(tester, <String>[appIconPath(32), appIconPath(64)]);
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await pumpUntilFound(tester, find.text('Auto layout picked 1×2 • 16:9.'));
 
     expect(find.text('2 loaded • capacity 2'), findsOneWidget);
@@ -757,7 +802,7 @@ void main() {
     useTestWindow(tester, const Size(1600, 1000));
     mockPendingMediaFiles(tester, <String>[appIconPath(64)]);
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await pumpUntilFound(tester, find.textContaining('Auto layout picked'));
 
     final viewportControls = find.byWidgetPredicate(
@@ -844,7 +889,7 @@ void main() {
     final repeatedPath = appIconPath(64);
     mockPendingMediaFiles(tester, <String>[repeatedPath, repeatedPath]);
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await pumpUntilFound(tester, find.text('2 loaded • capacity 2'));
 
     final firstSlot = find.byKey(const ValueKey<String>('preview-slot-0'));
@@ -887,7 +932,7 @@ void main() {
       appIconPath(128),
     ]);
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await pumpUntilFound(tester, find.text('3 loaded • capacity 3'));
 
     final middleSlot = find.byKey(const ValueKey<String>('preview-slot-1'));
@@ -933,7 +978,7 @@ void main() {
     useTestWindow(tester, const Size(1600, 1000));
     mockPendingMediaFiles(tester, <String>[appIconPath(32)]);
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await pumpUntilFound(tester, find.textContaining('1 loaded'));
 
     await tester.tap(find.byTooltip('Reset all'));
@@ -967,7 +1012,7 @@ void main() {
   ) async {
     useTestWindow(tester, const Size(1600, 1000));
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
 
     await tester.tap(
@@ -986,7 +1031,7 @@ void main() {
   ) async {
     useTestWindow(tester, const Size(1600, 1000));
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
 
     for (final label in <String>['Rows', 'Columns']) {
@@ -1013,7 +1058,7 @@ void main() {
   ) async {
     useTestWindow(tester, const Size(1600, 1000));
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
 
     await scrollSettingsIntoView(
@@ -1038,7 +1083,7 @@ void main() {
   ) async {
     useTestWindow(tester, const Size(1600, 1000));
 
-    await tester.pumpWidget(const VideoCollageApp());
+    await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
     await scrollSettingsIntoView(tester, find.text('Canvas'));
 
@@ -1060,6 +1105,15 @@ void main() {
 
     expect(find.textContaining(RegExp(r'^#[0-9A-F]{6}$')), findsOneWidget);
   });
+}
+
+class _FakeUpdateService extends GitHubUpdateService {
+  _FakeUpdateService(this.release) : super(owner: 'test', repository: 'test');
+
+  final GitHubRelease release;
+
+  @override
+  Future<GitHubRelease> fetchLatestRelease() async => release;
 }
 
 class _FakeMergeDialogService extends SystemDialogService {

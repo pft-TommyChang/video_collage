@@ -67,4 +67,55 @@ extension _AppController on _VideoCollageScreenState {
       _isConsumingOpenedMedia = false;
     }
   }
+
+  Future<void> _checkForUpdatesInBackground() async {
+    if (_isCheckingForUpdates) {
+      return;
+    }
+
+    _isCheckingForUpdates = true;
+
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final release = await widget.updateService.fetchLatestRelease();
+      if (!mounted) {
+        return;
+      }
+
+      final hasUpdate = GitHubUpdateService.isNewerVersion(
+        currentVersion: packageInfo.version,
+        releaseTag: release.tagName,
+      );
+      if (hasUpdate) {
+        _updateState(() {
+          _availableUpdate = release;
+        });
+      }
+    } catch (error) {
+      debugPrint('Background update check failed: $error');
+    } finally {
+      _isCheckingForUpdates = false;
+    }
+  }
+
+  Future<void> _openAvailableUpdate() async {
+    final release = _availableUpdate;
+    if (release == null) {
+      return;
+    }
+
+    try {
+      final didLaunch = await launchUrl(
+        release.pageUrl,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!didLaunch && mounted) {
+        _showToast('Unable to open the GitHub Release page.');
+      }
+    } catch (_) {
+      if (mounted) {
+        _showToast('Unable to open the GitHub Release page.');
+      }
+    }
+  }
 }

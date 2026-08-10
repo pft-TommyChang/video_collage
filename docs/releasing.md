@@ -34,6 +34,11 @@ Expected release assets:
 - `PerfectCollage-<version>-windows-x64.zip`
 - `PerfectCollage-<version>-windows-x64.sha256`
 
+The app checks the repository's latest published GitHub Release in the
+background at launch. When its tag is newer than the app version, an update
+button appears beside the preview duration and opens the Release page. Drafts
+and prereleases are not shown by GitHub's latest-release endpoint.
+
 ## How to publish a release on GitHub
 
 1. Confirm `pubspec.yaml` has the correct version.

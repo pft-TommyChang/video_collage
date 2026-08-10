@@ -8,9 +8,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import 'models.dart';
+import 'services/github_update_service.dart';
 import 'services/editor_settings_store.dart';
 import 'services/desktop_file_service.dart';
 import 'services/system_dialog_service.dart';
@@ -39,9 +41,16 @@ class VideoCollageApp extends StatelessWidget {
   const VideoCollageApp({
     super.key,
     this.deferFirstFrameUntilSettingsRestored = false,
+    this.checkForUpdatesOnLaunch = true,
+    this.updateService = const GitHubUpdateService(
+      owner: 'pft-TommyChang',
+      repository: 'video_collage',
+    ),
   });
 
   final bool deferFirstFrameUntilSettingsRestored;
+  final bool checkForUpdatesOnLaunch;
+  final GitHubUpdateService updateService;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +73,8 @@ class VideoCollageApp extends StatelessWidget {
       home: VideoCollageScreen(
         deferFirstFrameUntilSettingsRestored:
             deferFirstFrameUntilSettingsRestored,
+        checkForUpdatesOnLaunch: checkForUpdatesOnLaunch,
+        updateService: updateService,
       ),
     );
   }
@@ -73,9 +84,13 @@ class VideoCollageScreen extends StatefulWidget {
   const VideoCollageScreen({
     super.key,
     this.deferFirstFrameUntilSettingsRestored = false,
+    this.checkForUpdatesOnLaunch = true,
+    required this.updateService,
   });
 
   final bool deferFirstFrameUntilSettingsRestored;
+  final bool checkForUpdatesOnLaunch;
+  final GitHubUpdateService updateService;
 
   @override
   State<VideoCollageScreen> createState() => _VideoCollageScreenState();
@@ -116,6 +131,8 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   bool _isSyncingSequentialPreview = false;
   bool _isConsumingOpenedMedia = false;
   bool _isVideoMergeDialogOpen = false;
+  bool _isCheckingForUpdates = false;
+  GitHubRelease? _availableUpdate;
   bool _shouldConsumeOpenedMediaAgain = false;
   int? _externalDropHoverSlotIndex;
   int? _lastPreviewProgressSecond;
@@ -182,6 +199,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       unawaited(_consumeOpenedMediaFiles());
     });
     unawaited(_loadAppVersion());
+    if (widget.checkForUpdatesOnLaunch) {
+      unawaited(_checkForUpdatesInBackground());
+    }
     unawaited(_restoreSettings());
     unawaited(_restoreExportHistory());
   }

@@ -19,6 +19,7 @@ Perfect Collage is built for comparisons, social posts, multi-camera views, and 
 - Control aspect ratio, resolution, borders, corners, colors, audio, and duration.
 - Export photo-only collages as `JPG`; export projects containing video as `MP4`.
 - Track recent exports and quickly open files or reveal them in Finder.
+- Get a quiet in-app notification when a newer GitHub Release is available.
 - Reset individual sections or use **Reset All** to start fresh.
 
 ## 🚀 Quick Start

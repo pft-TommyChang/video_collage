@@ -812,6 +812,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                       isPreviewMuted: _isPreviewMuted,
                                       previewPosition: previewPosition,
                                       previewDuration: exportDuration,
+                                      availableUpdate: _availableUpdate,
                                       onExpandPanel: _isSidePanelCollapsed
                                           ? _expandSidePanel
                                           : null,
@@ -825,6 +826,8 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                       onResetAll: _isImporting
                                           ? null
                                           : () => unawaited(_confirmResetAll()),
+                                      onOpenUpdate: () =>
+                                          unawaited(_openAvailableUpdate()),
                                       onTogglePlayback: () => unawaited(
                                         _setPreviewPlayback(!_isPreviewPlaying),
                                       ),
