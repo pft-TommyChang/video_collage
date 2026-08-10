@@ -19,6 +19,7 @@ const double _viewportEditingZoomIconsMinimumDisplayWidth = 200;
 const double _viewportEditingControlsMinimumDisplayHeight = 48;
 const double _viewportEditingControlsMaximumDisplayWidth = 294;
 const double _viewportEditingBorderDisplayWidth = 3;
+const Color _activeMediaEditIconColor = Color(0xFFFFC107);
 const double _cropActionsMinimumDisplayWidth =
     _viewportActionEdgeDisplayPadding +
     _viewportActionButtonDisplaySize * 2 +
@@ -691,7 +692,9 @@ class _ViewportControlsState extends State<_ViewportControls> {
                           icon: Icons.content_cut_rounded,
                           iconSize: hoverIconSize,
                           buttonSize: hoverControlSize,
-                          color: Colors.white,
+                          color: widget.clip.isTrimmed
+                              ? _activeMediaEditIconColor
+                              : Colors.white,
                         ),
                         SizedBox(width: hoverControlGap),
                       ],
@@ -704,7 +707,9 @@ class _ViewportControlsState extends State<_ViewportControls> {
                               : Icons.center_focus_strong_rounded,
                           iconSize: hoverIconSize,
                           buttonSize: hoverControlSize,
-                          color: !widget.canEdit
+                          color: !widget.viewport.isDefault
+                              ? _activeMediaEditIconColor
+                              : !widget.canEdit
                               ? Colors.white54
                               : Colors.white,
                         ),

@@ -185,14 +185,16 @@ class _ClipListTile extends StatelessWidget {
                 else
                   _buildThumbnailFallback(),
                 if (clip.isVideo)
-                  const Positioned(
+                  Positioned(
                     right: 4,
                     bottom: 4,
                     child: Icon(
                       Icons.content_cut_rounded,
                       size: 15,
-                      color: Colors.white,
-                      shadows: <Shadow>[
+                      color: clip.isTrimmed
+                          ? _activeMediaEditIconColor
+                          : Colors.white,
+                      shadows: const <Shadow>[
                         Shadow(
                           color: Color(0xE6000000),
                           blurRadius: 5,

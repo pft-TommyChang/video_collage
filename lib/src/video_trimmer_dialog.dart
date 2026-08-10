@@ -260,6 +260,10 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       await widget.exportService.cancelActiveExport();
       return;
     }
+    await _controller?.pause();
+    if (!mounted) {
+      return;
+    }
     final settings = await _showExportSettings();
     if (settings == null || !mounted) {
       return;

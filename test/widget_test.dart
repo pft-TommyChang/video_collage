@@ -825,6 +825,16 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pump();
     expect(tester.widget<Slider>(zoomSlider).value, closeTo(1.1, 0.0001));
+
+    await tester.tap(find.text('Done'));
+    await tester.pump();
+    await mouse.moveTo(Offset.zero);
+    await tester.pump();
+    await mouse.moveTo(tester.getCenter(viewportControls));
+    await tester.pump();
+    final activeCropIcon = find.byIcon(Icons.center_focus_strong_rounded);
+    expect(activeCropIcon, findsOneWidget);
+    expect(tester.widget<Icon>(activeCropIcon).color, const Color(0xFFFFC107));
   });
 
   testWidgets('the same source file can be added as independent instances', (
