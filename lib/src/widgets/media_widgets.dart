@@ -42,60 +42,30 @@ class _ClipListTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
                 _buildThumbnail(),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Flexible(
-                            child: Text(
-                              clip.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          IconButton(
-                            tooltip: 'Edit clip label',
-                            onPressed: onEditLabel,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
-                            ),
-                            visualDensity: VisualDensity.compact,
-                            iconSize: 15,
-                            splashRadius: 14,
-                            icon: const Icon(
-                              Icons.edit_outlined,
-                              color: Colors.black45,
-                            ),
-                          ),
-                        ],
-                      ),
+                      _buildHeader(context),
                       const SizedBox(height: 4),
-                      Text(
+                      _singleLineText(
                         _clipDetails,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: errorMessage == null
                               ? const Color(0xFF697180)
                               : const Color(0xFFB42318),
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
+                      _singleLineText(
                         _clipStatus,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: const Color(0xFF697180),
                         ),
                       ),
@@ -112,21 +82,63 @@ class _ClipListTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(
-                  height: 56,
-                  child: Center(
-                    child: IconButton(
-                      tooltip: 'Remove',
-                      onPressed: onRemove,
-                      icon: const Icon(Icons.close),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Row(
+            children: <Widget>[
+              Flexible(
+                child: _singleLineText(
+                  clip.name,
+                  Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                tooltip: 'Edit clip label',
+                onPressed: onEditLabel,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                visualDensity: VisualDensity.compact,
+                iconSize: 15,
+                splashRadius: 14,
+                icon: const Icon(Icons.edit_outlined, color: Colors.black45),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          key: ValueKey<String>('remove-media-${clip.id}'),
+          tooltip: 'Remove',
+          onPressed: onRemove,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          visualDensity: VisualDensity.compact,
+          iconSize: 18,
+          splashRadius: 16,
+          icon: const Icon(Icons.close),
+        ),
+      ],
+    );
+  }
+
+  Widget _singleLineText(String text, TextStyle? style) {
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
     );
   }
 
@@ -144,8 +156,8 @@ class _ClipListTile extends StatelessWidget {
       child: MouseRegion(
         cursor: onTrim == null ? MouseCursor.defer : SystemMouseCursors.click,
         child: Container(
-          width: 56,
-          height: 56,
+          width: 64,
+          height: 64,
           decoration: BoxDecoration(
             borderRadius: borderRadius,
             border: Border.all(color: inactiveBorderColor, width: 1.25),

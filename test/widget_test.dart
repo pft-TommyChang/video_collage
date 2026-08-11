@@ -785,6 +785,14 @@ void main() {
 
     expect(find.text('2 loaded • capacity 2'), findsOneWidget);
     expect(find.text('Auto layout picked 1×2 • 16:9.'), findsOneWidget);
+    expect(
+      tester
+          .getCenter(find.byKey(const ValueKey<String>('remove-media-clip-1')))
+          .dx,
+      tester
+          .getCenter(find.byKey(const ValueKey<String>('remove-media-clip-2')))
+          .dx,
+    );
 
     expect(find.byTooltip('Vertical Auto'), findsOneWidget);
     expect(find.byTooltip('Horizontal Auto'), findsOneWidget);
