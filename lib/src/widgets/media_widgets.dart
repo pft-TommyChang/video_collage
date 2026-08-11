@@ -94,7 +94,7 @@ class _ClipListTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Visible • ${(visibleAreaFraction * 100).round()}%',
+                        _clipStatus,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: const Color(0xFF697180),
                         ),
@@ -235,10 +235,6 @@ class _ClipListTile extends StatelessWidget {
   }
 
   String get _clipDetails {
-    final clipFormat = p
-        .extension(clip.path)
-        .replaceFirst('.', '')
-        .toLowerCase();
     if (isLoading) {
       return 'Importing preview...';
     }
@@ -247,15 +243,21 @@ class _ClipListTile extends StatelessWidget {
     }
     if (clip.width == 0 || clip.height == 0) {
       return clip.isPhoto
-          ? clipFormat
-          : '${formatDuration(clip.duration)} • $clipFormat';
+          ? _clipFormat
+          : '${formatDuration(clip.duration)} • ${formatFrameRate(clip.frameRate)}';
     }
     if (clip.isPhoto) {
-      return '${clip.width}×${clip.height} • $clipFormat';
+      return '${clip.width}×${clip.height}';
     }
     final trimLabel = clip.isTrimmed ? ' • trimmed' : '';
-    return '${clip.width}×${clip.height} • ${formatDuration(clip.duration)} • $clipFormat$trimLabel';
+    return '${clip.width}×${clip.height} • ${formatDuration(clip.duration)} • ${formatFrameRate(clip.frameRate)}$trimLabel';
   }
+
+  String get _clipStatus =>
+      'Visible • ${(visibleAreaFraction * 100).round()}% • $_clipFormat';
+
+  String get _clipFormat =>
+      p.extension(clip.path).replaceFirst('.', '').toLowerCase();
 }
 
 Size? _previewVideoDisplaySize({

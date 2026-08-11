@@ -157,7 +157,7 @@ class PersistedEditorSettings {
     final clipLabelVisualStyleName = json['clipLabelVisualStyle'] as String?;
     final clipLabelVisualStyle = ClipLabelVisualStyle.values.firstWhere(
       (style) => style.name == clipLabelVisualStyleName,
-      orElse: () => ClipLabelVisualStyle.dark,
+      orElse: () => ClipLabelVisualStyle.transparentOutline,
     );
 
     return PersistedEditorSettings(

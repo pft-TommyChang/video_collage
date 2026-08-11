@@ -113,6 +113,7 @@ class SystemDialogService {
     final durationMilliseconds = map['durationMilliseconds'];
     final hasAudio = map['hasAudio'];
     final mediaKindName = map['mediaKind'];
+    final frameRate = map['frameRate'];
 
     if (width is! int ||
         height is! int ||
@@ -137,6 +138,7 @@ class SystemDialogService {
         height: height,
         hasAudio: hasAudio,
         mediaKind: mediaKind,
+        frameRate: frameRate is num ? frameRate.toDouble() : 0,
       ),
     );
   }

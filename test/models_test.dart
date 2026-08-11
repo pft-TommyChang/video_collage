@@ -5,10 +5,14 @@ import 'package:video_collage_mac/src/models.dart';
 import 'package:video_collage_mac/src/services/editor_settings_store.dart';
 
 void main() {
-  test('persisted settings default clip label padding is 10', () {
+  test('persisted settings use the current clip label defaults', () {
     final settings = PersistedEditorSettings.fromJson(<String, dynamic>{});
 
     expect(settings.clipLabelPadding, 10);
+    expect(
+      settings.clipLabelVisualStyle,
+      ClipLabelVisualStyle.transparentOutline,
+    );
     expect(settings.isSidePanelCollapsed, isFalse);
   });
 
@@ -254,5 +258,11 @@ void main() {
       ),
       const Duration(seconds: 4),
     );
+  });
+
+  test('formats integer and fractional video frame rates', () {
+    expect(formatFrameRate(30), '30 FPS');
+    expect(formatFrameRate(29.97), '29.97 FPS');
+    expect(formatFrameRate(0), 'FPS unavailable');
   });
 }

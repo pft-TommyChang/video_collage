@@ -9,13 +9,11 @@ class _PreviewToolbar extends StatelessWidget {
     required this.isPreviewMuted,
     required this.previewPosition,
     required this.previewDuration,
-    required this.availableUpdate,
     required this.onExpandPanel,
     required this.onAutoLayout,
     required this.onVerticalAutoLayout,
     required this.onHorizontalAutoLayout,
     required this.onResetAll,
-    required this.onOpenUpdate,
     required this.onTogglePlayback,
     required this.onResetPreview,
     required this.onToggleMute,
@@ -30,13 +28,11 @@ class _PreviewToolbar extends StatelessWidget {
   final bool isPreviewMuted;
   final Duration previewPosition;
   final Duration previewDuration;
-  final GitHubRelease? availableUpdate;
   final VoidCallback? onExpandPanel;
   final VoidCallback onAutoLayout;
   final VoidCallback onVerticalAutoLayout;
   final VoidCallback onHorizontalAutoLayout;
   final VoidCallback? onResetAll;
-  final VoidCallback onOpenUpdate;
   final VoidCallback onTogglePlayback;
   final VoidCallback onResetPreview;
   final VoidCallback onToggleMute;
@@ -163,16 +159,6 @@ class _PreviewToolbar extends StatelessWidget {
                   ],
                 ),
               ),
-              if (availableUpdate != null) ...<Widget>[
-                const SizedBox(width: 6),
-                _PreviewLayoutButton(
-                  key: const ValueKey<String>('open-update-download-page'),
-                  onPressed: onOpenUpdate,
-                  tooltip:
-                      'Perfect Collage ${availableUpdate!.version} available',
-                  icon: const Icon(Icons.new_releases_outlined, size: 18),
-                ),
-              ],
             ],
           ),
         );
@@ -191,7 +177,6 @@ class _PreviewToolbar extends StatelessWidget {
 
 class _PreviewLayoutButton extends StatelessWidget {
   const _PreviewLayoutButton({
-    super.key,
     required this.onPressed,
     required this.tooltip,
     required this.icon,

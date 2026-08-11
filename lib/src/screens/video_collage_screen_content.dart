@@ -118,18 +118,59 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                                   fontWeight: FontWeight.w700,
                                                 ),
                                           ),
-                                          Text(
-                                            'Version $_appVersion',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.copyWith(
-                                                  color: const Color(
-                                                    0xFF697180,
+                                          Tooltip(
+                                            message: _availableUpdate == null
+                                                ? ''
+                                                : 'Perfect Collage ${_availableUpdate!.version} available',
+                                            child: InkWell(
+                                              key: _availableUpdate == null
+                                                  ? null
+                                                  : const ValueKey<String>(
+                                                      'open-update-download-page',
+                                                    ),
+                                              onTap: _availableUpdate == null
+                                                  ? null
+                                                  : () => unawaited(
+                                                      _openAvailableUpdate(),
+                                                    ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: <Widget>[
+                                                  Flexible(
+                                                    child: Text(
+                                                      'Version $_appVersion',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .labelSmall
+                                                          ?.copyWith(
+                                                            color: const Color(
+                                                              0xFF697180,
+                                                            ),
+                                                            fontSize: 10,
+                                                            height: 1,
+                                                          ),
+                                                    ),
                                                   ),
-                                                  fontSize: 10,
-                                                  height: 1,
-                                                ),
+                                                  if (_availableUpdate !=
+                                                      null) ...<Widget>[
+                                                    const SizedBox(width: 4),
+                                                    const Icon(
+                                                      Icons.error_rounded,
+                                                      key: ValueKey<String>(
+                                                        'update-available-indicator',
+                                                      ),
+                                                      size: 16,
+                                                      color: Color(0xFFE0523D),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -812,7 +853,6 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                       isPreviewMuted: _isPreviewMuted,
                                       previewPosition: previewPosition,
                                       previewDuration: exportDuration,
-                                      availableUpdate: _availableUpdate,
                                       onExpandPanel: _isSidePanelCollapsed
                                           ? _expandSidePanel
                                           : null,
@@ -826,8 +866,6 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                       onResetAll: _isImporting
                                           ? null
                                           : () => unawaited(_confirmResetAll()),
-                                      onOpenUpdate: () =>
-                                          unawaited(_openAvailableUpdate()),
                                       onTogglePlayback: () => unawaited(
                                         _setPreviewPlayback(!_isPreviewPlaying),
                                       ),

@@ -133,12 +133,14 @@ class AppDelegate: FlutterAppDelegate {
     let height = Int(abs(transformedSize.height).rounded())
     let durationSeconds = CMTimeGetSeconds(asset.duration)
     let hasAudio = !asset.tracks(withMediaType: .audio).isEmpty
+    let frameRate = Double(videoTrack.nominalFrameRate)
 
     result([
       "width": width,
       "height": height,
       "durationSeconds": durationSeconds.isFinite ? durationSeconds : 0,
       "hasAudio": hasAudio,
+      "frameRate": frameRate.isFinite ? frameRate : 0,
     ])
   }
 
@@ -201,6 +203,7 @@ class AppDelegate: FlutterAppDelegate {
     let height = Int(abs(transformedSize.height).rounded())
     let durationSeconds = CMTimeGetSeconds(asset.duration)
     let hasAudio = !asset.tracks(withMediaType: .audio).isEmpty
+    let frameRate = Double(videoTrack.nominalFrameRate)
 
     return [
       "path": url.path,
@@ -209,6 +212,7 @@ class AppDelegate: FlutterAppDelegate {
       "durationMilliseconds": Int((durationSeconds.isFinite ? durationSeconds : 0) * 1000),
       "hasAudio": hasAudio,
       "mediaKind": "video",
+      "frameRate": frameRate.isFinite ? frameRate : 0,
     ]
   }
 }

@@ -1,5 +1,13 @@
 part of '../video_collage_app.dart';
 
+typedef _PendingExternalReplacement = ({
+  String id,
+  String path,
+  int? slotIndex,
+  VideoClipInfo? replacedClip,
+  String? inheritedLabel,
+});
+
 extension _MediaController on _VideoCollageScreenState {
   Future<void> _pickMedia() async {
     _updateState(() {
@@ -87,20 +95,24 @@ extension _MediaController on _VideoCollageScreenState {
   void _removeClip(VideoClipInfo clip) {
     _controllers.remove(clip.id)?.dispose();
     _updateState(() {
-      _clips.removeWhere((candidate) => candidate.id == clip.id);
-      _slotAssignments.removeWhere((_, id) => id == clip.id);
-      _clipViewports.remove(clip.id);
-      if (_editingViewportClipId == clip.id) {
-        _editingViewportClipId = null;
-      }
-      _loadingClipIds.remove(clip.id);
-      _clipErrors.remove(clip.id);
+      _removeClipState(clip.id);
       if (_controllers.isEmpty) {
         _isPreviewPlaying = false;
       }
       _statusMessage = 'Removed ${clip.name}.';
     });
     unawaited(_syncPreviewPlaybackMode());
+  }
+
+  void _removeClipState(String instanceId) {
+    _clips.removeWhere((clip) => clip.id == instanceId);
+    _slotAssignments.removeWhere((_, id) => id == instanceId);
+    _clipViewports.remove(instanceId);
+    _loadingClipIds.remove(instanceId);
+    _clipErrors.remove(instanceId);
+    if (_editingViewportClipId == instanceId) {
+      _editingViewportClipId = null;
+    }
   }
 
   void _clearClips() {
@@ -608,37 +620,88 @@ extension _MediaController on _VideoCollageScreenState {
     unawaited(_syncPreviewPlaybackMode());
   }
 
-  Future<void> _handleExternalDropToSlot(
-    int slotIndex,
-    List<DropItem> items,
+  Future<void> _replaceSlotsFromExternalDrop(
+    int startSlotIndex,
+    List<String> paths,
   ) async {
-    final supportedPaths = _supportedMediaDropPaths(items);
-    if (supportedPaths.isEmpty) {
+    if (!mounted || paths.isEmpty || _gridCapacity == 0) {
       return;
     }
 
-    if (supportedPaths.length > 1) {
-      await _importExternalMedia(supportedPaths);
-      return;
-    }
+    final assignedCount = math.min(paths.length, _gridCapacity);
+    final pending = <_PendingExternalReplacement>[
+      for (final (index, path) in paths.indexed)
+        _pendingExternalReplacement(
+          path: path,
+          slotIndex: index < assignedCount
+              ? (startSlotIndex + index) % _gridCapacity
+              : null,
+        ),
+    ];
 
-    final path = supportedPaths.first;
-    final instanceId = _newClipInstanceId();
-
-    if (!mounted) {
-      return;
+    for (final item in pending) {
+      final replacedClip = item.replacedClip;
+      if (replacedClip != null) {
+        _controllers.remove(replacedClip.id)?.dispose();
+      }
     }
 
     _updateState(() {
-      _clips.add(_placeholderClip(path, instanceId: instanceId));
-      _replaceClipInSlot(instanceId, slotIndex);
-      _loadingClipIds.add(instanceId);
-      _clipErrors.remove(instanceId);
-      _statusMessage =
-          'Replacing slot ${slotIndex + 1} with ${p.basename(path)}.';
+      for (final item in pending) {
+        final replacedClip = item.replacedClip;
+        if (replacedClip != null) {
+          _removeClipState(replacedClip.id);
+        }
+        _queueExternalClipState(
+          id: item.id,
+          path: item.path,
+          slotIndex: item.slotIndex,
+          label: item.inheritedLabel,
+        );
+      }
+
+      final candidateCount = paths.length - assignedCount;
+      _statusMessage = candidateCount == 0
+          ? 'Replacing $assignedCount slot(s) from slot ${startSlotIndex + 1}.'
+          : 'Replacing $assignedCount slot(s) from slot ${startSlotIndex + 1}; '
+                '$candidateCount kept in Media.';
     });
 
-    await _loadClip(path, instanceId: instanceId);
+    for (final item in pending) {
+      await _loadClip(item.path, instanceId: item.id);
+    }
+  }
+
+  _PendingExternalReplacement _pendingExternalReplacement({
+    required String path,
+    required int? slotIndex,
+  }) {
+    final replacedClip = slotIndex == null ? null : _clipForSlot(slotIndex);
+    final hasCustomLabel =
+        replacedClip != null &&
+        replacedClip.name != _defaultClipNameForPath(replacedClip.path);
+    return (
+      id: _newClipInstanceId(),
+      path: path,
+      slotIndex: slotIndex,
+      replacedClip: replacedClip,
+      inheritedLabel: hasCustomLabel ? replacedClip.name : null,
+    );
+  }
+
+  void _queueExternalClipState({
+    required String id,
+    required String path,
+    required int? slotIndex,
+    String? label,
+  }) {
+    final placeholder = _placeholderClip(path, instanceId: id);
+    _clips.add(label == null ? placeholder : placeholder.copyWith(name: label));
+    if (slotIndex != null) {
+      _replaceClipInSlot(id, slotIndex);
+    }
+    _loadingClipIds.add(id);
+    _clipErrors.remove(id);
   }
 
   Future<void> _handleExternalDrop(
@@ -646,6 +709,11 @@ extension _MediaController on _VideoCollageScreenState {
     required int? preferredSlotIndex,
     Offset? globalPosition,
   }) async {
+    final supportedPaths = _supportedMediaDropPaths(items);
+    if (supportedPaths.isEmpty) {
+      return;
+    }
+
     final slotIndex = globalPosition == null
         ? preferredSlotIndex
         : _slotIndexForGlobalDropPosition(globalPosition) ?? preferredSlotIndex;
@@ -655,13 +723,8 @@ extension _MediaController on _VideoCollageScreenState {
       });
     }
 
-    if (slotIndex != null) {
-      await _handleExternalDropToSlot(slotIndex, items);
-      return;
-    }
-
-    final supportedPaths = _supportedMediaDropPaths(items);
-    if (supportedPaths.isEmpty) {
+    if (slotIndex != null || supportedPaths.length > 1) {
+      await _replaceSlotsFromExternalDrop(slotIndex ?? 0, supportedPaths);
       return;
     }
 
@@ -691,10 +754,11 @@ extension _MediaController on _VideoCollageScreenState {
 
     _updateState(() {
       for (final pending in pendingClips) {
-        _clips.add(_placeholderClip(pending.path, instanceId: pending.id));
-        _slotAssignments[_nextAvailableSlot()] = pending.id;
-        _loadingClipIds.add(pending.id);
-        _clipErrors.remove(pending.id);
+        _queueExternalClipState(
+          id: pending.id,
+          path: pending.path,
+          slotIndex: _nextAvailableSlot(),
+        );
       }
       final assignedVisibleCount = math.min(
         pendingClips.length,

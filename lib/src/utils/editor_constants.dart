@@ -111,7 +111,7 @@ const ClipLabelDisplayMode _defaultClipLabelDisplayMode =
 const ClipLabelAlignment _defaultClipLabelAlignment =
     ClipLabelAlignment.topLeft;
 const ClipLabelVisualStyle _defaultClipLabelVisualStyle =
-    ClipLabelVisualStyle.dark;
+    ClipLabelVisualStyle.transparentOutline;
 const bool _defaultAppendDateTimeToExportName = true;
 const PlayMode _defaultPlayMode = PlayMode.parallel;
 const AudioMode _defaultAudioMode = AudioMode.firstClip;

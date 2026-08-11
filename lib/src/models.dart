@@ -184,6 +184,7 @@ class VideoClipInfo {
     required this.height,
     required this.hasAudio,
     required this.mediaKind,
+    this.frameRate = 0,
     this.sourceDuration,
     this.trimStart = Duration.zero,
   });
@@ -199,6 +200,7 @@ class VideoClipInfo {
   final int height;
   final bool hasAudio;
   final MediaKind mediaKind;
+  final double frameRate;
   final Duration? sourceDuration;
   final Duration trimStart;
 
@@ -220,6 +222,7 @@ class VideoClipInfo {
     int? height,
     bool? hasAudio,
     MediaKind? mediaKind,
+    double? frameRate,
     Duration? sourceDuration,
     Duration? trimStart,
   }) {
@@ -232,6 +235,7 @@ class VideoClipInfo {
       height: height ?? this.height,
       hasAudio: hasAudio ?? this.hasAudio,
       mediaKind: mediaKind ?? this.mediaKind,
+      frameRate: frameRate ?? this.frameRate,
       sourceDuration: sourceDuration ?? this.sourceDuration,
       trimStart: trimStart ?? this.trimStart,
     );
@@ -502,6 +506,17 @@ String formatDuration(Duration duration) {
     return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
   return '$minutes:${seconds.toString().padLeft(2, '0')}';
+}
+
+String formatFrameRate(double frameRate) {
+  if (frameRate <= 0 || !frameRate.isFinite) {
+    return 'FPS unavailable';
+  }
+  final rounded = frameRate.round();
+  final value = (frameRate - rounded).abs() < 0.005
+      ? '$rounded'
+      : frameRate.toStringAsFixed(2);
+  return '$value FPS';
 }
 
 String buildClipLabelText({

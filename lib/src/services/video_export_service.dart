@@ -486,6 +486,7 @@ class VideoExportService {
         height: nativeProbe.height,
         hasAudio: nativeProbe.hasAudio,
         mediaKind: MediaKind.video,
+        frameRate: nativeProbe.frameRate,
       );
     }
 
@@ -505,6 +506,12 @@ class VideoExportService {
         double.tryParse(information.getDuration() ?? '0') ?? 0;
     final fallbackWidth = stream?.getWidth() ?? 0;
     final fallbackHeight = stream?.getHeight() ?? 0;
+    final averageFrameRate = stream?.getAverageFrameRate();
+    final frameRate = _frameRateValue(
+      _isValidFrameRate(averageFrameRate)
+          ? averageFrameRate!
+          : _validFrameRate(stream?.getRealFrameRate()),
+    );
 
     return VideoClipInfo(
       path: filePath,
@@ -514,6 +521,7 @@ class VideoExportService {
       height: fallbackHeight,
       hasAudio: _hasAudioStream(information),
       mediaKind: MediaKind.video,
+      frameRate: frameRate,
     );
   }
 
@@ -533,6 +541,7 @@ class VideoExportService {
       final height = result['height'];
       final durationSeconds = result['durationSeconds'];
       final hasAudio = result['hasAudio'];
+      final frameRate = result['frameRate'];
 
       if (width is! int || height is! int || durationSeconds is! num) {
         return null;
@@ -543,6 +552,7 @@ class VideoExportService {
         height: height,
         durationSeconds: durationSeconds.toDouble(),
         hasAudio: hasAudio == true,
+        frameRate: frameRate is num ? frameRate.toDouble() : 0,
       );
     } on MissingPluginException {
       return null;
@@ -2092,12 +2102,14 @@ class _VideoDisplayMetadata {
     required this.height,
     required this.durationSeconds,
     required this.hasAudio,
+    required this.frameRate,
   });
 
   final int width;
   final int height;
   final double durationSeconds;
   final bool hasAudio;
+  final double frameRate;
 }
 
 class VideoExportProgress {

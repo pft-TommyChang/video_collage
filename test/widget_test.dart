@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -101,7 +102,7 @@ void main() {
     );
   });
 
-  testWidgets('shows the update button only when a newer release is found', (
+  testWidgets('makes only the version row clickable when an update is found', (
     WidgetTester tester,
   ) async {
     useTestWindow(tester, const Size(1600, 1000));
@@ -132,8 +133,16 @@ void main() {
 
     expect(find.byTooltip('Perfect Collage 1.6.0 available'), findsOneWidget);
     expect(
-      tester.getCenter(find.byTooltip('Perfect Collage 1.6.0 available')).dx,
-      greaterThan(tester.getCenter(find.text('0:00 / 0:00')).dx),
+      find.byKey(const ValueKey<String>('update-available-indicator')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getCenter(
+            find.byKey(const ValueKey<String>('update-available-indicator')),
+          )
+          .dx,
+      greaterThan(tester.getCenter(find.text('Version 1.5.0 (150)')).dx),
     );
   });
 
@@ -791,6 +800,191 @@ void main() {
 
     expect(find.text('2 loaded • capacity 2'), findsOneWidget);
     expect(find.text('Horizontal Auto picked 1×2 • 16:9.'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('dropping media onto a slot updates an unchanged label', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    mockPendingMediaFiles(tester, <String>[appIconPath(32)]);
+
+    await tester.pumpWidget(buildTestApp());
+    await pumpUntilFound(tester, find.textContaining('Auto layout picked'));
+
+    final firstSlot = find.byKey(const ValueKey<String>('preview-slot-0'));
+    final rootDropTarget = find.byType(DropTarget).first;
+    final dropPosition = tester.getCenter(firstSlot);
+    tester.widget<DropTarget>(rootDropTarget).onDragDone!(
+      DropDoneDetails(
+        files: <DropItem>[DropItemFile(appIconPath(64))],
+        localPosition: dropPosition,
+        globalPosition: dropPosition,
+      ),
+    );
+
+    await pumpUntilFound(
+      tester,
+      find.descendant(of: firstSlot, matching: find.text('app_icon_64')),
+    );
+
+    expect(
+      find.descendant(of: firstSlot, matching: find.text('app_icon_64')),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(of: firstSlot, matching: find.text('app_icon_32')),
+      findsNothing,
+    );
+    expect(find.textContaining('1 loaded • capacity'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('dropping media preserves a custom slot label', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    mockPendingMediaFiles(tester, <String>[appIconPath(32)]);
+
+    await tester.pumpWidget(buildTestApp());
+    await pumpUntilFound(tester, find.textContaining('Auto layout picked'));
+
+    final firstSlot = find.byKey(const ValueKey<String>('preview-slot-0'));
+    await tester.tap(
+      find.descendant(of: firstSlot, matching: find.text('app_icon_32')).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'My custom label');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final rootDropTarget = find.byType(DropTarget).first;
+    final dropPosition = tester.getCenter(firstSlot);
+    tester.widget<DropTarget>(rootDropTarget).onDragDone!(
+      DropDoneDetails(
+        files: <DropItem>[DropItemFile(appIconPath(64))],
+        localPosition: dropPosition,
+        globalPosition: dropPosition,
+      ),
+    );
+
+    await pumpUntilFound(
+      tester,
+      find.descendant(of: firstSlot, matching: find.text('My custom label')),
+    );
+
+    expect(find.textContaining('1 loaded • capacity'), findsOneWidget);
+    expect(
+      find.descendant(of: firstSlot, matching: find.text('app_icon_64')),
+      findsNothing,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('dropping multiple media replaces slots in wrapped order', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    mockPendingMediaFiles(tester, <String>[
+      appIconPath(32),
+      appIconPath(64),
+      appIconPath(128),
+    ]);
+
+    await tester.pumpWidget(buildTestApp());
+    await pumpUntilFound(tester, find.text('3 loaded • capacity 3'));
+
+    final firstSlot = find.byKey(const ValueKey<String>('preview-slot-0'));
+    final secondSlot = find.byKey(const ValueKey<String>('preview-slot-1'));
+    final thirdSlot = find.byKey(const ValueKey<String>('preview-slot-2'));
+    final dropPosition = tester.getCenter(secondSlot);
+    tester.widget<DropTarget>(find.byType(DropTarget).first).onDragDone!(
+      DropDoneDetails(
+        files: <DropItem>[
+          DropItemFile(appIconPath(256)),
+          DropItemFile(appIconPath(512)),
+          DropItemFile(appIconPath(1024)),
+          DropItemFile(appIconPath(16)),
+        ],
+        localPosition: dropPosition,
+        globalPosition: dropPosition,
+      ),
+    );
+
+    await pumpUntilFound(tester, find.text('4 loaded • capacity 3'));
+
+    expect(
+      find.descendant(of: secondSlot, matching: find.text('app_icon_256')),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(of: thirdSlot, matching: find.text('app_icon_512')),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(of: firstSlot, matching: find.text('app_icon_1024')),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(of: firstSlot, matching: find.text('app_icon_16')),
+      findsNothing,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('multi-drop outside the grid starts replacement at slot one', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    mockPendingMediaFiles(tester, <String>[
+      appIconPath(32),
+      appIconPath(64),
+      appIconPath(128),
+    ]);
+
+    await tester.pumpWidget(buildTestApp());
+    await pumpUntilFound(tester, find.text('3 loaded • capacity 3'));
+
+    tester.widget<DropTarget>(find.byType(DropTarget).first).onDragDone!(
+      DropDoneDetails(
+        files: <DropItem>[
+          DropItemFile(appIconPath(256)),
+          DropItemFile(appIconPath(512)),
+        ],
+        localPosition: Offset.zero,
+        globalPosition: Offset.zero,
+      ),
+    );
+
+    final firstSlot = find.byKey(const ValueKey<String>('preview-slot-0'));
+    final secondSlot = find.byKey(const ValueKey<String>('preview-slot-1'));
+    final thirdSlot = find.byKey(const ValueKey<String>('preview-slot-2'));
+    await pumpUntilFound(
+      tester,
+      find.descendant(of: secondSlot, matching: find.text('app_icon_512')),
+    );
+
+    expect(
+      find.descendant(of: firstSlot, matching: find.text('app_icon_256')),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(of: secondSlot, matching: find.text('app_icon_512')),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(of: thirdSlot, matching: find.text('app_icon_128')),
+      findsWidgets,
+    );
+    expect(find.text('3 loaded • capacity 3'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
