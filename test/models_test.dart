@@ -21,6 +21,8 @@ void main() {
 
     expect(settings.rows, 2);
     expect(settings.columns, 2);
+    expect(settings.borderThickness, 10);
+    expect(settings.tileCornerRadius, 10);
     expect(settings.aspectLabel, '1:1');
     expect(settings.outputWidth, 1080);
     expect(settings.outputHeight, 1080);

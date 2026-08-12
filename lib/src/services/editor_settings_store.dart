@@ -172,8 +172,8 @@ class PersistedEditorSettings {
       isOutputSectionCollapsed:
           json['isOutputSectionCollapsed'] as bool? ?? false,
       isSidePanelCollapsed: json['isSidePanelCollapsed'] as bool? ?? false,
-      borderThickness: (json['borderThickness'] as num?)?.toDouble() ?? 12,
-      tileCornerRadius: (json['tileCornerRadius'] as num?)?.toDouble() ?? 12,
+      borderThickness: (json['borderThickness'] as num?)?.toDouble() ?? 10,
+      tileCornerRadius: (json['tileCornerRadius'] as num?)?.toDouble() ?? 10,
       clipLabelFontSize: (json['clipLabelFontSize'] as num?)?.toDouble() ?? 12,
       clipLabelAlignment: clipLabelAlignment,
       clipLabelVisualStyle: clipLabelVisualStyle,

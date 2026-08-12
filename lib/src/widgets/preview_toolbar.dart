@@ -93,7 +93,7 @@ class _PreviewToolbar extends StatelessWidget {
                         _PreviewLayoutButton(
                           onPressed: onResetAll,
                           tooltip: 'Reset all',
-                          icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                          icon: const Icon(Icons.refresh, size: 18),
                         ),
                       ],
                     ),
