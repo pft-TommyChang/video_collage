@@ -237,6 +237,7 @@ class VideoExportService {
   Future<void> mergeVideos({
     required List<VideoClipInfo> videos,
     required String outputPath,
+    VideoClipInfo? mainVideo,
     ClipFitMode fitMode = ClipFitMode.cropCenter,
     VideoMergeFrameRateMode frameRateMode = VideoMergeFrameRateMode.firstVideo,
     void Function(VideoExportProgress progress)? onProgress,
@@ -248,7 +249,16 @@ class VideoExportService {
       throw const VideoExportException('Only video files can be merged.');
     }
 
-    final profile = await _probeMergeProfile(videos.first);
+    final referenceVideo = mainVideo ?? videos.first;
+    final mainVideoIndex = videos.indexWhere(
+      (video) => video.id == referenceVideo.id,
+    );
+    if (mainVideoIndex < 0) {
+      throw const VideoExportException(
+        'The main video is not in the merge list.',
+      );
+    }
+    final profile = await _probeMergeProfile(referenceVideo);
     final outputFrameRate = frameRateMode == VideoMergeFrameRateMode.firstVideo
         ? profile.frameRate
         : await _highestMergeFrameRate(videos, profile.frameRate);
@@ -260,7 +270,7 @@ class VideoExportService {
         : profile.height - 1;
     if (outputWidth < 2 || outputHeight < 2) {
       throw const VideoExportException(
-        'The first video has an invalid resolution.',
+        'The main video has an invalid resolution.',
       );
     }
 
@@ -333,7 +343,7 @@ class VideoExportService {
       '[mergedv]',
       if (hasAudio) ...<String>['-map', '[mergeda]'],
       '-map_metadata',
-      '0',
+      '$mainVideoIndex',
       '-metadata:s:v:0',
       'rotate=0',
       '-c:v',
@@ -379,21 +389,17 @@ class VideoExportService {
     );
   }
 
-  Future<_VideoMergeProfile> _probeMergeProfile(
-    VideoClipInfo firstVideo,
-  ) async {
-    final session = await FFprobeKit.getMediaInformation(firstVideo.path);
+  Future<_VideoMergeProfile> _probeMergeProfile(VideoClipInfo mainVideo) async {
+    final session = await FFprobeKit.getMediaInformation(mainVideo.path);
     final returnCode = await session.getReturnCode();
     final information = session.getMediaInformation();
     if (!ReturnCode.isSuccess(returnCode) || information == null) {
-      throw const VideoExportException(
-        'Could not read the first video format.',
-      );
+      throw const VideoExportException('Could not read the main video format.');
     }
     final videoStream = _findPrimaryVideoStream(information);
     if (videoStream == null) {
       throw const VideoExportException(
-        'The first file does not contain a video stream.',
+        'The main file does not contain a video stream.',
       );
     }
     final averageFrameRate = videoStream.getAverageFrameRate();
@@ -408,8 +414,8 @@ class VideoExportService {
       }
     }
     return _VideoMergeProfile(
-      width: firstVideo.width,
-      height: firstVideo.height,
+      width: mainVideo.width,
+      height: mainVideo.height,
       frameRate: frameRate,
       sampleRate: sampleRate,
     );
@@ -417,11 +423,11 @@ class VideoExportService {
 
   Future<String> _highestMergeFrameRate(
     List<VideoClipInfo> videos,
-    String firstFrameRate,
+    String baselineFrameRate,
   ) async {
-    var highest = firstFrameRate;
-    var highestValue = _frameRateValue(firstFrameRate);
-    for (final video in videos.skip(1)) {
+    var highest = baselineFrameRate;
+    var highestValue = _frameRateValue(baselineFrameRate);
+    for (final video in videos) {
       final candidate = await _probeMergeFrameRate(video.path);
       final candidateValue = _frameRateValue(candidate);
       if (candidateValue > highestValue) {

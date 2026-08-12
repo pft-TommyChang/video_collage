@@ -16,6 +16,16 @@ void main() {
     expect(settings.isSidePanelCollapsed, isFalse);
   });
 
+  test('persisted settings use the current layout defaults', () {
+    final settings = PersistedEditorSettings.fromJson(<String, dynamic>{});
+
+    expect(settings.rows, 2);
+    expect(settings.columns, 2);
+    expect(settings.aspectLabel, '1:1');
+    expect(settings.outputWidth, 1080);
+    expect(settings.outputHeight, 1080);
+  });
+
   test('persisted settings restore the side panel state', () {
     final settings = PersistedEditorSettings.fromJson(<String, dynamic>{
       'isSidePanelCollapsed': true,

@@ -332,6 +332,15 @@ void main() {
     expect(firstThumbnailSize, const Size.square(90));
     expect(find.text('0:03'), findsOneWidget);
     expect(find.text('0:04'), findsOneWidget);
+    expect(find.byTooltip('Main video: missing-first.mp4'), findsOneWidget);
+    expect(
+      find.byTooltip('Set missing-second.mp4 as main video'),
+      findsOneWidget,
+    );
+    final mainCrown = tester.widget<Icon>(
+      find.byKey(const ValueKey<String>('merge-main-crown')),
+    );
+    expect(mainCrown.color, const Color(0xFFFFC107));
     final selectedThumbnail = tester.widget<AnimatedContainer>(
       find.byKey(const ValueKey<String>('merge-thumbnail-merge-video-1')),
     );
@@ -387,6 +396,21 @@ void main() {
       closeTo(1920 / 1080, 0.01),
     );
 
+    await tester.tap(
+      find.byKey(const ValueKey<String>('merge-main-video-merge-video-2')),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('Main video: missing-second.mp4'), findsOneWidget);
+    expect(find.textContaining('Export: 1280×720'), findsOneWidget);
+    final mainVideoPreviewSize = tester.getSize(
+      find.byKey(const ValueKey<String>('merge-output-frame')),
+    );
+    expect(
+      mainVideoPreviewSize.width / mainVideoPreviewSize.height,
+      closeTo(1280 / 720, 0.01),
+    );
+
     final firstThumbnail = find.byKey(
       const ValueKey<String>('merge-thumbnail-merge-video-1'),
     );
@@ -405,6 +429,7 @@ void main() {
           .dx,
       lessThan(tester.getCenter(firstThumbnail).dx),
     );
+    expect(find.byTooltip('Main video: missing-second.mp4'), findsOneWidget);
   });
 
   testWidgets('merge tool supports duplicate source video instances', (
@@ -566,11 +591,16 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Highest FPS'));
     await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('merge-main-video-merge-video-2')),
+    );
+    await tester.pump();
     await tester.tap(find.text('Merge & Save'));
     await tester.pumpAndSettle();
 
     expect(exportService.mergeCalls, 1);
-    expect(dialogService.suggestedName, 'missing-first_merged.mp4');
+    expect(dialogService.suggestedName, 'missing-second_merged.mp4');
+    expect(exportService.mainVideo?.path, '/missing-second.mp4');
     expect(exportService.fitMode, ClipFitMode.centerInside);
     expect(exportService.frameRateMode, VideoMergeFrameRateMode.highest);
     expect(find.text('Merge Videos'), findsOneWidget);
@@ -1210,7 +1240,7 @@ void main() {
     await tester.tap(find.text('Reset Settings Only'));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('1 loaded • capacity 3'), findsOneWidget);
+    expect(find.text('1 loaded • capacity 4'), findsOneWidget);
     expect(find.text('Settings reset. Loaded media kept.'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Reset all'));
@@ -1218,7 +1248,7 @@ void main() {
     await tester.tap(find.text('Reset Settings + Media'));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('0 loaded • capacity 3'), findsOneWidget);
+    expect(find.text('0 loaded • capacity 4'), findsOneWidget);
     expect(find.text('Settings reset and all media removed.'), findsOneWidget);
   });
 
@@ -1258,7 +1288,7 @@ void main() {
         matching: find.widgetWithIcon(IconButton, Icons.add_circle_outline),
       );
 
-      for (var value = label == 'Rows' ? 1 : 3; value < 8; value++) {
+      for (var value = 2; value < 8; value++) {
         await tester.tap(addButton);
         await tester.pump();
       }
@@ -1353,6 +1383,7 @@ class _FakeMergeExportService extends VideoExportService {
   ClipFitMode? fitMode;
   VideoMergeFrameRateMode? frameRateMode;
   List<VideoClipInfo>? videos;
+  VideoClipInfo? mainVideo;
 
   @override
   Future<double> probeVideoFrameRate(String path) async {
@@ -1363,12 +1394,14 @@ class _FakeMergeExportService extends VideoExportService {
   Future<void> mergeVideos({
     required List<VideoClipInfo> videos,
     required String outputPath,
+    VideoClipInfo? mainVideo,
     ClipFitMode fitMode = ClipFitMode.cropCenter,
     VideoMergeFrameRateMode frameRateMode = VideoMergeFrameRateMode.firstVideo,
     void Function(VideoExportProgress progress)? onProgress,
   }) async {
     mergeCalls += 1;
     this.videos = List<VideoClipInfo>.of(videos);
+    this.mainVideo = mainVideo;
     if (cancelMerge) {
       throw const VideoExportException('Export cancelled.');
     }

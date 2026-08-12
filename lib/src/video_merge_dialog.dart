@@ -60,6 +60,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
   double _progress = 0;
   String? _message;
   String? _selectedVideoId;
+  String? _mainVideoId;
   String? _lastMergedOutputPath;
   int _nextMergeInstanceNumber = 1;
   ClipFitMode _mergeFitMode = ClipFitMode.cropCenter;
@@ -69,11 +70,12 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
       _videos.fold(Duration.zero, (total, video) => total + video.duration);
 
   double? get _outputFrameRate {
-    if (_videos.isEmpty) {
+    final mainVideo = _videoForId(_mainVideoId);
+    if (mainVideo == null) {
       return null;
     }
     if (_frameRateMode == VideoMergeFrameRateMode.firstVideo) {
-      return _videoFrameRates[_videos.first.id];
+      return _videoFrameRates[mainVideo.id];
     }
     final rates = _videos
         .map((video) => _videoFrameRates[video.id])
@@ -88,6 +90,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
     _mergeFitMode = widget.initialFitMode;
     _frameRateMode = widget.initialFrameRateMode;
     _selectedVideoId = _videos.isEmpty ? null : _videos.first.id;
+    _mainVideoId = _videos.isEmpty ? null : _videos.first.id;
     for (final video in _videos) {
       unawaited(_initializeThumbnail(video));
       unawaited(_initializeFrameRate(video));
@@ -104,7 +107,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final firstVideo = _videos.isEmpty ? null : _videos.first;
+    final mainVideo = _videoForId(_mainVideoId);
     final selectedVideo = _videoForId(_selectedVideoId);
     final selectedController = selectedVideo == null
         ? null
@@ -164,7 +167,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
               children: <Widget>[
                 SizedBox(
                   height: 22,
-                  child: firstVideo == null
+                  child: mainVideo == null
                       ? Text(
                           _isDraggingOver
                               ? 'Drop videos here'
@@ -183,7 +186,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                           children: <Widget>[
                             Expanded(
                               child: Text(
-                                'Export: ${firstVideo.width}×${firstVideo.height}  •  '
+                                'Export: ${mainVideo.width}×${mainVideo.height}  •  '
                                 '${_formatMergeFrameRate(_outputFrameRate, unavailable: 'FPS loading…')}  •  '
                                 '${_formatMergeDuration(_totalDuration)} total',
                                 maxLines: 1,
@@ -224,7 +227,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                             )
                           : _MergeOutputPreview(
                               video: selectedVideo,
-                              outputVideo: firstVideo!,
+                              outputVideo: mainVideo!,
                               controller: selectedController,
                               fitMode: _mergeFitMode,
                               onTap: _isMerging
@@ -316,9 +319,13 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                                   video: video,
                                   controller: _thumbnailControllers[video.id],
                                   isSelected: video.id == _selectedVideoId,
+                                  isMain: video.id == _mainVideoId,
                                   onTap: _isMerging
                                       ? null
                                       : () => unawaited(_selectVideo(video)),
+                                  onMakeMain: _isMerging
+                                      ? null
+                                      : () => _setMainVideo(video),
                                   onTrim: _isMerging
                                       ? null
                                       : () => unawaited(_trimVideo(video)),
@@ -489,6 +496,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
           setState(() {
             _videos.add(video);
             _selectedVideoId ??= video.id;
+            _mainVideoId ??= video.id;
           });
           unawaited(_initializeThumbnail(video));
           unawaited(_initializeFrameRate(video));
@@ -568,6 +576,20 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
           _selectedVideoId = _videos[index.clamp(0, _videos.length - 1)].id;
         }
       }
+      if (_mainVideoId == video.id) {
+        _mainVideoId = _videos.isEmpty ? null : _videos.first.id;
+      }
+    });
+  }
+
+  void _setMainVideo(VideoClipInfo video) {
+    if (_mainVideoId == video.id) {
+      return;
+    }
+    setState(() {
+      _mainVideoId = video.id;
+      _showMergeComplete = false;
+      _message = null;
     });
   }
 
@@ -828,10 +850,13 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
 
   Future<void> _merge() async {
     await _stopPreviewPlayback();
+    final mainVideo = _videoForId(_mainVideoId);
+    if (mainVideo == null) {
+      return;
+    }
     final outputPath = await widget.dialogService.pickSavePath(
       format: ExportFormat.mp4,
-      suggestedName:
-          '${p.basenameWithoutExtension(_videos.first.path)}_merged.mp4',
+      suggestedName: '${p.basenameWithoutExtension(mainVideo.path)}_merged.mp4',
       initialDirectory: widget.initialDirectory,
     );
     if (outputPath == null || outputPath.isEmpty || !mounted) {
@@ -847,6 +872,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
     try {
       await widget.exportService.mergeVideos(
         videos: List<VideoClipInfo>.of(_videos),
+        mainVideo: mainVideo,
         outputPath: outputPath,
         fitMode: _mergeFitMode,
         frameRateMode: _frameRateMode,
@@ -908,7 +934,9 @@ class _MergeVideoThumbnail extends StatelessWidget {
     required this.video,
     required this.controller,
     required this.isSelected,
+    required this.isMain,
     required this.onTap,
+    required this.onMakeMain,
     required this.onTrim,
     required this.onRemove,
   });
@@ -917,7 +945,9 @@ class _MergeVideoThumbnail extends StatelessWidget {
   final VideoClipInfo video;
   final VideoPlayerController? controller;
   final bool isSelected;
+  final bool isMain;
   final VoidCallback? onTap;
+  final VoidCallback? onMakeMain;
   final VoidCallback? onTrim;
   final VoidCallback? onRemove;
 
@@ -970,21 +1000,45 @@ class _MergeVideoThumbnail extends StatelessWidget {
               Positioned(
                 left: 5,
                 top: 5,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: const Color(0xCC000000),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 2,
-                    ),
-                    child: Text(
-                      '${index + 1}',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
+                child: Tooltip(
+                  message: isMain
+                      ? 'Main video: ${p.basename(video.path)}'
+                      : 'Set ${p.basename(video.path)} as main video',
+                  child: GestureDetector(
+                    key: ValueKey<String>('merge-main-video-${video.id}'),
+                    onTap: onMakeMain,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0xCC000000),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Text(
+                              '${index + 1}',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                            if (isMain) ...<Widget>[
+                              const SizedBox(width: 3),
+                              const Icon(
+                                Icons.workspace_premium_rounded,
+                                key: ValueKey<String>('merge-main-crown'),
+                                size: 14,
+                                color: Color(0xFFFFC107),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
                   ),

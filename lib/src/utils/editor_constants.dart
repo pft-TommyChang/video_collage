@@ -81,7 +81,7 @@ const _supportedPhotoExtensions = <String>{
 };
 
 final AspectRatioPreset _defaultAspectPreset = _aspectPresets.firstWhere(
-  (preset) => preset.label == '16:9',
+  (preset) => preset.label == '1:1',
 );
 final ResolutionPreset _defaultResolutionPreset = _resolutionPresets[1];
 
@@ -97,8 +97,8 @@ ButtonStyle _sectionHeaderIconButtonStyle() {
 final ColorChoice _defaultBorderColor = _colorChoices[0];
 final ColorChoice _defaultBackgroundColor = _colorChoices[1];
 
-const int _defaultRows = 1;
-const int _defaultColumns = 3;
+const int _defaultRows = 2;
+const int _defaultColumns = 2;
 const int _maxGridDimension = 8;
 const int _maxGridCapacity = _maxGridDimension * _maxGridDimension;
 const double _defaultBorderThickness = 12;
