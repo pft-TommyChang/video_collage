@@ -120,19 +120,14 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                           ),
                                           Tooltip(
                                             message: _availableUpdate == null
-                                                ? ''
+                                                ? 'Open GitHub Releases'
                                                 : 'Perfect Collage ${_availableUpdate!.version} available',
                                             child: InkWell(
-                                              key: _availableUpdate == null
-                                                  ? null
-                                                  : const ValueKey<String>(
-                                                      'open-update-download-page',
-                                                    ),
-                                              onTap: _availableUpdate == null
-                                                  ? null
-                                                  : () => unawaited(
-                                                      _openAvailableUpdate(),
-                                                    ),
+                                              key: const ValueKey<String>(
+                                                'open-release-page',
+                                              ),
+                                              onTap: () =>
+                                                  unawaited(_openReleasePage()),
                                               borderRadius:
                                                   BorderRadius.circular(4),
                                               child: Row(

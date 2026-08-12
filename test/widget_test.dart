@@ -91,7 +91,20 @@ void main() {
 
     expect(find.text('Perfect Collage'), findsWidgets);
     expect(
-      find.byKey(const ValueKey<String>('open-update-download-page')),
+      find.byKey(const ValueKey<String>('open-release-page')),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Open GitHub Releases'), findsOneWidget);
+    expect(
+      tester
+          .widget<InkWell>(
+            find.byKey(const ValueKey<String>('open-release-page')),
+          )
+          .onTap,
+      isNotNull,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('update-available-indicator')),
       findsNothing,
     );
     expect(find.byTooltip('Auto Layout'), findsOneWidget);
@@ -128,7 +141,7 @@ void main() {
     );
     await pumpUntilFound(
       tester,
-      find.byKey(const ValueKey<String>('open-update-download-page')),
+      find.byKey(const ValueKey<String>('update-available-indicator')),
     );
 
     expect(find.byTooltip('Perfect Collage 1.6.0 available'), findsOneWidget);

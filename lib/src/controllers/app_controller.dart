@@ -98,15 +98,16 @@ extension _AppController on _VideoCollageScreenState {
     }
   }
 
-  Future<void> _openAvailableUpdate() async {
-    final release = _availableUpdate;
-    if (release == null) {
-      return;
-    }
-
+  Future<void> _openReleasePage() async {
+    final pageUrl =
+        _availableUpdate?.pageUrl ??
+        Uri.https(
+          'github.com',
+          '/${widget.updateService.owner}/${widget.updateService.repository}/releases',
+        );
     try {
       final didLaunch = await launchUrl(
-        release.pageUrl,
+        pageUrl,
         mode: LaunchMode.externalApplication,
       );
       if (!didLaunch && mounted) {
