@@ -22,6 +22,17 @@ const double _mergeAddButtonWidth = 44;
 const double _mergeSaveButtonWidth = 160;
 const double _mergeActionButtonHeight = 40;
 
+@visibleForTesting
+Size mergeVideoPreviewDisplaySize({
+  required VideoClipInfo video,
+  required Size decodedSize,
+}) {
+  if (video.width > 0 && video.height > 0) {
+    return Size(video.width.toDouble(), video.height.toDouble());
+  }
+  return decodedSize;
+}
+
 class VideoMergeDialog extends StatefulWidget {
   const VideoMergeDialog({
     super.key,
@@ -299,11 +310,20 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                             vertical: 7,
                           ),
                           buildDefaultDragHandles: false,
-                          proxyDecorator: (child, index, animation) => Material(
-                            color: Colors.transparent,
-                            elevation: 0,
-                            child: child,
-                          ),
+                          proxyDecorator: (child, index, animation) =>
+                              MouseRegion(
+                                key: const ValueKey<String>(
+                                  'merge-reorder-proxy-cursor',
+                                ),
+                                cursor: SystemMouseCursors.grabbing,
+                                child: IgnorePointer(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    elevation: 0,
+                                    child: child,
+                                  ),
+                                ),
+                              ),
                           itemCount: _videos.length,
                           onReorder: _isMerging ? (_, _) {} : _reorder,
                           itemBuilder: (context, index) {
@@ -314,24 +334,28 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                               enabled: !_isMerging,
                               child: Padding(
                                 padding: const EdgeInsets.only(right: 6),
-                                child: _MergeVideoThumbnail(
-                                  index: index,
-                                  video: video,
-                                  controller: _thumbnailControllers[video.id],
-                                  isSelected: video.id == _selectedVideoId,
-                                  isMain: video.id == _mainVideoId,
-                                  onTap: _isMerging
-                                      ? null
-                                      : () => unawaited(_selectVideo(video)),
-                                  onMakeMain: _isMerging
-                                      ? null
-                                      : () => _setMainVideo(video),
-                                  onTrim: _isMerging
-                                      ? null
-                                      : () => unawaited(_trimVideo(video)),
-                                  onRemove: _isMerging
-                                      ? null
-                                      : () => _removeVideo(index),
+                                child: _MergeReorderCursor(
+                                  videoId: video.id,
+                                  enabled: !_isMerging,
+                                  child: _MergeVideoThumbnail(
+                                    index: index,
+                                    video: video,
+                                    controller: _thumbnailControllers[video.id],
+                                    isSelected: video.id == _selectedVideoId,
+                                    isMain: video.id == _mainVideoId,
+                                    onTap: _isMerging
+                                        ? null
+                                        : () => unawaited(_selectVideo(video)),
+                                    onMakeMain: _isMerging
+                                        ? null
+                                        : () => _setMainVideo(video),
+                                    onTrim: _isMerging
+                                        ? null
+                                        : () => unawaited(_trimVideo(video)),
+                                    onRemove: _isMerging
+                                        ? null
+                                        : () => _removeVideo(index),
+                                  ),
                                 ),
                               ),
                             );
@@ -928,6 +952,49 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
   }
 }
 
+class _MergeReorderCursor extends StatefulWidget {
+  const _MergeReorderCursor({
+    required this.videoId,
+    required this.enabled,
+    required this.child,
+  });
+
+  final String videoId;
+  final bool enabled;
+  final Widget child;
+
+  @override
+  State<_MergeReorderCursor> createState() => _MergeReorderCursorState();
+}
+
+class _MergeReorderCursorState extends State<_MergeReorderCursor> {
+  bool _isPointerDown = false;
+
+  void _setPointerDown(bool value) {
+    if (_isPointerDown != value) {
+      setState(() => _isPointerDown = value);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      key: ValueKey<String>('merge-thumbnail-cursor-${widget.videoId}'),
+      cursor: !widget.enabled
+          ? MouseCursor.defer
+          : _isPointerDown
+          ? SystemMouseCursors.grabbing
+          : SystemMouseCursors.grab,
+      child: Listener(
+        onPointerDown: widget.enabled ? (_) => _setPointerDown(true) : null,
+        onPointerUp: widget.enabled ? (_) => _setPointerDown(false) : null,
+        onPointerCancel: widget.enabled ? (_) => _setPointerDown(false) : null,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class _MergeVideoThumbnail extends StatelessWidget {
   const _MergeVideoThumbnail({
     required this.index,
@@ -954,56 +1021,62 @@ class _MergeVideoThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isReady = controller?.value.isInitialized == true;
-    return MouseRegion(
-      cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.grab,
-      child: Listener(
-        key: ValueKey<String>('merge-thumbnail-tap-${video.id}'),
-        behavior: HitTestBehavior.opaque,
-        onPointerDown: onTap == null ? null : (_) => onTap!(),
-        child: AnimatedContainer(
-          key: ValueKey<String>('merge-thumbnail-${video.id}'),
-          duration: const Duration(milliseconds: 140),
-          width: _mergeThumbnailSize,
-          height: _mergeThumbnailSize,
-          decoration: BoxDecoration(
-            color: const Color(0xFF20242C),
-            borderRadius: BorderRadius.circular(9),
+    final previewVideoSize = isReady
+        ? mergeVideoPreviewDisplaySize(
+            video: video,
+            decodedSize: controller!.value.size,
+          )
+        : null;
+    return Listener(
+      key: ValueKey<String>('merge-thumbnail-tap-${video.id}'),
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: onTap == null ? null : (_) => onTap!(),
+      child: AnimatedContainer(
+        key: ValueKey<String>('merge-thumbnail-${video.id}'),
+        duration: const Duration(milliseconds: 140),
+        width: _mergeThumbnailSize,
+        height: _mergeThumbnailSize,
+        decoration: BoxDecoration(
+          color: const Color(0xFF20242C),
+          borderRadius: BorderRadius.circular(9),
+        ),
+        foregroundDecoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFFFF7A59)
+                : const Color(0xFFE7DED1),
+            width: isSelected ? 3 : 1,
           ),
-          foregroundDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFFFF7A59)
-                  : const Color(0xFFE7DED1),
-              width: isSelected ? 3 : 1,
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              isReady
-                  ? FittedBox(
-                      fit: BoxFit.cover,
-                      child: SizedBox(
-                        width: controller!.value.size.width,
-                        height: controller!.value.size.height,
-                        child: VideoPlayer(controller!),
-                      ),
-                    )
-                  : const Center(
-                      child: Icon(
-                        Icons.movie_outlined,
-                        color: Color(0xFFB8C0CC),
-                      ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            isReady
+                ? FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: previewVideoSize!.width,
+                      height: previewVideoSize.height,
+                      child: VideoPlayer(controller!),
                     ),
-              Positioned(
-                left: 5,
-                top: 5,
-                child: Tooltip(
-                  message: isMain
-                      ? 'Main video: ${p.basename(video.path)}'
-                      : 'Set ${p.basename(video.path)} as main video',
+                  )
+                : const Center(
+                    child: Icon(Icons.movie_outlined, color: Color(0xFFB8C0CC)),
+                  ),
+            Positioned(
+              left: 5,
+              top: 5,
+              child: Tooltip(
+                message: isMain
+                    ? 'Main video: ${p.basename(video.path)}'
+                    : 'Set ${p.basename(video.path)} as main video',
+                child: MouseRegion(
+                  key: ValueKey<String>('merge-main-video-cursor-${video.id}'),
+                  cursor: onMakeMain == null
+                      ? MouseCursor.defer
+                      : SystemMouseCursors.click,
                   child: GestureDetector(
                     key: ValueKey<String>('merge-main-video-${video.id}'),
                     onTap: onMakeMain,
@@ -1044,71 +1117,71 @@ class _MergeVideoThumbnail extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                right: 3,
-                top: 3,
-                child: IconButton(
-                  onPressed: onRemove,
-                  tooltip: 'Remove ${p.basename(video.path)}',
-                  icon: const Icon(Icons.close_rounded),
-                  iconSize: 16,
-                  color: Colors.white,
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xBB000000),
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size.square(24),
-                    maximumSize: const Size.square(24),
-                  ),
+            ),
+            Positioned(
+              right: 3,
+              top: 3,
+              child: IconButton(
+                onPressed: onRemove,
+                tooltip: 'Remove ${p.basename(video.path)}',
+                icon: const Icon(Icons.close_rounded),
+                iconSize: 16,
+                color: Colors.white,
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xBB000000),
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size.square(24),
+                  maximumSize: const Size.square(24),
                 ),
               ),
-              Positioned(
-                left: 3,
-                bottom: 3,
-                child: IconButton(
-                  key: ValueKey<String>('merge-trim-${video.id}'),
-                  onPressed: onTrim,
-                  tooltip: 'Trim ${p.basename(video.path)}',
-                  icon: Icon(
-                    Icons.content_cut_rounded,
-                    size: 15,
-                    color: video.isTrimmed
-                        ? const Color(0xFFFFC107)
-                        : Colors.white,
-                  ),
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xBB000000),
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size.square(24),
-                    maximumSize: const Size.square(24),
-                  ),
+            ),
+            Positioned(
+              left: 3,
+              bottom: 3,
+              child: IconButton(
+                key: ValueKey<String>('merge-trim-${video.id}'),
+                onPressed: onTrim,
+                tooltip: 'Trim ${p.basename(video.path)}',
+                icon: Icon(
+                  Icons.content_cut_rounded,
+                  size: 15,
+                  color: video.isTrimmed
+                      ? const Color(0xFFFFC107)
+                      : Colors.white,
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xBB000000),
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size.square(24),
+                  maximumSize: const Size.square(24),
                 ),
               ),
-              Positioned(
-                right: 5,
-                bottom: 5,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: const Color(0xCC000000),
-                    borderRadius: BorderRadius.circular(4),
+            ),
+            Positioned(
+              right: 5,
+              bottom: 5,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xCC000000),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 2,
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
+                  child: Text(
+                    _formatMergeDuration(video.duration),
+                    maxLines: 1,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
                     ),
-                    child: Text(
-                      _formatMergeDuration(video.duration),
-                      maxLines: 1,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1136,6 +1209,12 @@ class _MergeOutputPreview extends StatelessWidget {
         ? outputVideo.width / outputVideo.height
         : 16 / 9;
     final isReady = controller?.value.isInitialized == true;
+    final previewVideoSize = isReady
+        ? mergeVideoPreviewDisplaySize(
+            video: video,
+            decodedSize: controller!.value.size,
+          )
+        : null;
 
     return AspectRatio(
       key: const ValueKey<String>('merge-output-preview'),
@@ -1157,8 +1236,8 @@ class _MergeOutputPreview extends StatelessWidget {
                     fit: fitMode.previewFit,
                     alignment: Alignment.center,
                     child: SizedBox(
-                      width: controller!.value.size.width,
-                      height: controller!.value.size.height,
+                      width: previewVideoSize!.width,
+                      height: previewVideoSize.height,
                       child: VideoPlayer(controller!),
                     ),
                   )

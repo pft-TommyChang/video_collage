@@ -330,6 +330,26 @@ void main() {
       find.byKey(const ValueKey<String>('merge-thumbnail-merge-video-1')),
     );
     expect(firstThumbnailSize, const Size.square(90));
+    expect(
+      tester
+          .widget<MouseRegion>(
+            find.byKey(
+              const ValueKey<String>('merge-thumbnail-cursor-merge-video-1'),
+            ),
+          )
+          .cursor,
+      SystemMouseCursors.grab,
+    );
+    expect(
+      tester
+          .widget<MouseRegion>(
+            find.byKey(
+              const ValueKey<String>('merge-main-video-cursor-merge-video-1'),
+            ),
+          )
+          .cursor,
+      SystemMouseCursors.click,
+    );
     expect(find.text('0:03'), findsOneWidget);
     expect(find.text('0:04'), findsOneWidget);
     expect(find.byTooltip('Main video: missing-first.mp4'), findsOneWidget);
@@ -414,8 +434,38 @@ void main() {
     final firstThumbnail = find.byKey(
       const ValueKey<String>('merge-thumbnail-merge-video-1'),
     );
-    final drag = await tester.startGesture(tester.getCenter(firstThumbnail));
+    final firstThumbnailCenter =
+        tester.getTopLeft(firstThumbnail) + const Offset(65, 45);
+    const mergeDragPointer = 99;
+    final drag = await tester.createGesture(
+      pointer: mergeDragPointer,
+      kind: PointerDeviceKind.mouse,
+    );
+    await drag.addPointer(location: firstThumbnailCenter);
+    await drag.moveTo(firstThumbnailCenter + const Offset(1, 0));
     await tester.pump();
+    await drag.down(firstThumbnailCenter + const Offset(1, 0));
+    await tester.pump();
+    expect(
+      tester
+          .widget<MouseRegion>(
+            find.byKey(
+              const ValueKey<String>('merge-thumbnail-cursor-merge-video-1'),
+            ),
+          )
+          .cursor,
+      SystemMouseCursors.grabbing,
+    );
+    await drag.moveBy(const Offset(2, 0));
+    await tester.pump();
+    expect(
+      tester
+          .widget<MouseRegion>(
+            find.byKey(const ValueKey<String>('merge-reorder-proxy-cursor')),
+          )
+          .cursor,
+      SystemMouseCursors.grabbing,
+    );
     await drag.moveBy(const Offset(350, 0));
     await tester.pump(const Duration(milliseconds: 300));
     await drag.up();
@@ -431,6 +481,29 @@ void main() {
     );
     expect(find.byTooltip('Main video: missing-second.mp4'), findsOneWidget);
   });
+
+  test(
+    'merge previews prefer probed display dimensions for rotated videos',
+    () {
+      const portraitMov = VideoClipInfo(
+        path: '/portrait.mov',
+        name: 'Portrait MOV',
+        duration: Duration(seconds: 3),
+        width: 1080,
+        height: 1920,
+        hasAudio: true,
+        mediaKind: MediaKind.video,
+      );
+
+      expect(
+        mergeVideoPreviewDisplaySize(
+          video: portraitMov,
+          decodedSize: const Size(1920, 1080),
+        ),
+        const Size(1080, 1920),
+      );
+    },
+  );
 
   testWidgets('merge tool supports duplicate source video instances', (
     WidgetTester tester,
