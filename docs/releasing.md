@@ -106,6 +106,7 @@ Requirements:
 Notes:
 
 - Codex-generated release notes are only attempted for the local upload flow in `./scripts/release_macos.sh`.
+- Codex-generated notes use concise `新增功能`, `體驗改善`, and `修正問題` sections, with optional `維護更新` and Markdown notes. Each item has a short bold label and one sentence; empty sections are omitted.
 - If `codex` is not installed, not authenticated, or fails to return notes, the script keeps the old behavior and uses `gh release create --generate-notes`.
 
 ## Important note about signing

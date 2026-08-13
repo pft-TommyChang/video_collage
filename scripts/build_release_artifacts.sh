@@ -48,16 +48,30 @@ Git range: ${git_range}
 
 Use the local git repository in the current working directory as the only source of truth.
 Requirements:
-- Focus on user-visible changes, packaging, release workflow, and compatibility changes.
+- Write in Traditional Chinese.
+- Include only user-visible features and bug fixes. Mention packaging, compatibility,
+  or release workflow changes only when they directly affect users.
 - Do not invent changes that are not supported by the repository history.
-- Keep it concise and readable for a GitHub Release description.
+- Keep every bullet to one short sentence and remove implementation details.
+- Group changes under these headings:
+  ## ✨ 新增功能
+  ## 🚀 體驗改善
+  ## 🐛 修正問題
+  ## 🔧 維護更新
+- Under each heading, use concise bullets in this format:
+  - **短標題**：一句話說明。
+- Omit a section when there are no matching changes.
+- Use 維護更新 only for changes that directly affect installation, compatibility, or delivery.
+- Put an important user-facing limitation in a Markdown note instead of a change section:
+  > [!NOTE]
+  > 一句話注意事項。
+- Omit the note when there is no important limitation.
+- Do not use Major changes, Minor changes, Highlights, or a summary paragraph.
 - Output Markdown only, with no code fences.
-- Use this structure:
-  ## Highlights
-  - bullet
-  ## Full Changelog
-  - bullet
-- If this is the first release or the history is sparse, say that briefly and still summarize the most important shipped items.
+- End with exactly one comparison link in this format when a previous tag exists:
+  **完整變更**：https://github.com/pft-TommyChang/video_collage/compare/${previous_tag:-PREVIOUS_TAG}...${release_tag}
+- For the first release, omit the comparison link.
+- If the history is sparse, report only changes that can be verified; do not add filler text.
 EOF
 )"
 
