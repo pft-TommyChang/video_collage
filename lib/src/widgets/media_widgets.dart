@@ -151,13 +151,11 @@ class _ClipListTile extends StatelessWidget {
             _buildAiTag(
               context,
               'C2PA',
-              trailing: metadata.c2paStatus == C2paStatus.signed
-                  ? const Icon(
-                      Icons.check_rounded,
-                      size: 11,
-                      color: Color(0xFF2E7D32),
-                    )
-                  : null,
+              trailing: Icon(
+                Icons.circle,
+                size: 9,
+                color: _c2paStatusColor(metadata.c2paStatus),
+              ),
             ),
           if (metadata.hasC2pa && vendor != null) const SizedBox(width: 6),
           if (vendor != null) ...<Widget>[
@@ -360,8 +358,9 @@ class _ClipListTile extends StatelessWidget {
     final metadata = clip.aiMetadata;
     final parts = <String>[
       if (metadata.hasC2pa) 'C2PA',
-      if (metadata.c2paStatus == C2paStatus.signed) 'Trust',
-      if (metadata.c2paStatus == C2paStatus.invalid) 'Untrust',
+      if (metadata.c2paStatus == C2paStatus.trusted) 'Trust',
+      if (metadata.c2paStatus == C2paStatus.untrusted) 'Untrust',
+      if (metadata.c2paStatus == C2paStatus.invalid) 'INVALID',
       if (metadata.vendor != null) metadata.vendor!,
       if (metadata.model != null) metadata.model!,
     ];
@@ -371,6 +370,13 @@ class _ClipListTile extends StatelessWidget {
   String get _clipFormat =>
       p.extension(clip.path).replaceFirst('.', '').toUpperCase();
 }
+
+Color _c2paStatusColor(C2paStatus status) => switch (status) {
+  C2paStatus.invalid => const Color(0xFFC62828),
+  C2paStatus.untrusted => const Color(0xFFF9A825),
+  C2paStatus.trusted => const Color(0xFF2E7D32),
+  C2paStatus.unknown || C2paStatus.absent => const Color(0xFF8C98A8),
+};
 
 Size? _previewVideoDisplaySize({
   required VideoClipInfo? clip,

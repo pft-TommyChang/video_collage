@@ -38,7 +38,7 @@ class ColorChoice {
 
 enum MediaKind { video, photo }
 
-enum C2paStatus { unknown, absent, present, signed, invalid }
+enum C2paStatus { unknown, absent, untrusted, trusted, invalid }
 
 class AiMediaMetadata {
   const AiMediaMetadata({
@@ -52,7 +52,7 @@ class AiMediaMetadata {
   final String? model;
 
   bool get hasC2pa => switch (c2paStatus) {
-    C2paStatus.present || C2paStatus.signed || C2paStatus.invalid => true,
+    C2paStatus.untrusted || C2paStatus.trusted || C2paStatus.invalid => true,
     C2paStatus.unknown || C2paStatus.absent => false,
   };
 

@@ -50,6 +50,10 @@ case "$PACKAGE_ARCH" in
 esac
 chmod 755 "$TARGET_BINARY"
 
+"$TARGET_BINARY" \
+  --settings "$APP_PATH/Contents/Resources/c2pa.toml" \
+  init trust
+
 SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 APP_ENTITLEMENTS="${APP_ENTITLEMENTS:-$ROOT_DIR/macos/Runner/Release.entitlements}"
 HELPER_ENTITLEMENTS="$ROOT_DIR/macos/Runner/C2paTool.entitlements"
@@ -64,4 +68,4 @@ codesign \
   --sign "$SIGN_IDENTITY" \
   "$APP_PATH"
 
-echo "Installed c2patool ${C2PATOOL_VERSION} at $TARGET_BINARY"
+echo "Installed c2patool ${C2PATOOL_VERSION} and the C2PA trust list at $TARGET_BINARY"

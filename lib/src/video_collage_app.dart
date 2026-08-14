@@ -42,6 +42,7 @@ class VideoCollageApp extends StatelessWidget {
     super.key,
     this.deferFirstFrameUntilSettingsRestored = false,
     this.checkForUpdatesOnLaunch = true,
+    this.refreshC2paTrustListOnLaunch = true,
     this.updateService = const GitHubUpdateService(
       owner: 'pft-TommyChang',
       repository: 'video_collage',
@@ -50,6 +51,7 @@ class VideoCollageApp extends StatelessWidget {
 
   final bool deferFirstFrameUntilSettingsRestored;
   final bool checkForUpdatesOnLaunch;
+  final bool refreshC2paTrustListOnLaunch;
   final GitHubUpdateService updateService;
 
   @override
@@ -74,6 +76,7 @@ class VideoCollageApp extends StatelessWidget {
         deferFirstFrameUntilSettingsRestored:
             deferFirstFrameUntilSettingsRestored,
         checkForUpdatesOnLaunch: checkForUpdatesOnLaunch,
+        refreshC2paTrustListOnLaunch: refreshC2paTrustListOnLaunch,
         updateService: updateService,
       ),
     );
@@ -85,11 +88,13 @@ class VideoCollageScreen extends StatefulWidget {
     super.key,
     this.deferFirstFrameUntilSettingsRestored = false,
     this.checkForUpdatesOnLaunch = true,
+    this.refreshC2paTrustListOnLaunch = true,
     required this.updateService,
   });
 
   final bool deferFirstFrameUntilSettingsRestored;
   final bool checkForUpdatesOnLaunch;
+  final bool refreshC2paTrustListOnLaunch;
   final GitHubUpdateService updateService;
 
   @override
@@ -125,6 +130,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   Timer? _parallelPreviewTimer;
   Timer? _sequentialPreviewTimer;
   Timer? _exportCompletionTimer;
+  Timer? _c2paTrustListRefreshTimer;
   OverlayEntry? _toastOverlayEntry;
   bool _isRestoringSettings = false;
   bool _isSyncingParallelPreview = false;
@@ -202,6 +208,13 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     if (widget.checkForUpdatesOnLaunch) {
       unawaited(_checkForUpdatesInBackground());
     }
+    if (widget.refreshC2paTrustListOnLaunch) {
+      unawaited(_refreshC2paTrustListInBackground());
+      _c2paTrustListRefreshTimer = Timer.periodic(
+        const Duration(hours: 24),
+        (_) => unawaited(_refreshC2paTrustListInBackground()),
+      );
+    }
     unawaited(_restoreSettings());
     unawaited(_restoreExportHistory());
   }
@@ -214,6 +227,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     _parallelPreviewTimer?.cancel();
     _sequentialPreviewTimer?.cancel();
     _exportCompletionTimer?.cancel();
+    _c2paTrustListRefreshTimer?.cancel();
     _toastOverlayEntry?.remove();
     _widthController.dispose();
     _heightController.dispose();

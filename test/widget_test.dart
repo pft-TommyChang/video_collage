@@ -35,8 +35,10 @@ void main() {
     'app_icon_$size.png',
   );
 
-  Widget buildTestApp() =>
-      const VideoCollageApp(checkForUpdatesOnLaunch: false);
+  Widget buildTestApp() => const VideoCollageApp(
+    checkForUpdatesOnLaunch: false,
+    refreshC2paTrustListOnLaunch: false,
+  );
 
   void mockPendingMediaFiles(WidgetTester tester, List<String> mediaPaths) {
     var didConsumeMedia = false;
@@ -129,6 +131,7 @@ void main() {
 
     await tester.pumpWidget(
       VideoCollageApp(
+        refreshC2paTrustListOnLaunch: false,
         updateService: _FakeUpdateService(
           GitHubRelease(
             tagName: 'v1.6.0',

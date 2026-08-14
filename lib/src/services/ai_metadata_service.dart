@@ -6,9 +6,18 @@ import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:path/path.dart' as p;
 
 import '../models.dart';
+import 'c2pa_trust_list_service.dart';
 
 class AiMetadataService {
-  const AiMetadataService();
+  const AiMetadataService({
+    this.trustListService = const C2paTrustListService(),
+  });
+
+  final C2paTrustListService trustListService;
+
+  Future<bool> refreshTrustListIfNeeded() {
+    return trustListService.refreshIfNeeded();
+  }
 
   Future<AiMediaMetadata> probe(String filePath) async {
     final results = await Future.wait<AiMediaMetadata>(
@@ -38,21 +47,32 @@ class AiMetadataService {
     }
 
     try {
-      final result = await Process.run(executable, <String>[filePath]);
+      final settingsPath = await trustListService.settingsPathFor(executable);
+      final result = await Process.run(
+        executable,
+        _c2paArguments(filePath, settingsPath),
+      );
       if (result.exitCode != 0) {
         final message = '${result.stdout}\n${result.stderr}'.toLowerCase();
         return AiMediaMetadata(
           c2paStatus: message.contains('no claim found')
               ? C2paStatus.absent
-              : C2paStatus.unknown,
+              : C2paStatus.invalid,
         );
       }
       return parseC2paJson(result.stdout as String);
     } on FormatException {
-      return const AiMediaMetadata(c2paStatus: C2paStatus.present);
+      return const AiMediaMetadata(c2paStatus: C2paStatus.invalid);
     } on ProcessException {
       return const AiMediaMetadata();
     }
+  }
+
+  List<String> _c2paArguments(String filePath, String? settingsPath) {
+    if (settingsPath == null) {
+      return <String>[filePath];
+    }
+    return <String>['--settings', settingsPath, filePath];
   }
 
   String? _findC2paTool() {
@@ -109,7 +129,7 @@ class AiMetadataService {
     final activeLabel = root['active_manifest'];
     final active = manifests[activeLabel] ?? manifests.values.first;
     if (active is! Map) {
-      return const AiMediaMetadata(c2paStatus: C2paStatus.present);
+      return const AiMediaMetadata(c2paStatus: C2paStatus.invalid);
     }
 
     String? vendor;
@@ -180,14 +200,27 @@ class AiMetadataService {
               .whereType<String>()
               .toSet()
         : const <String>{};
-    final status =
-        validationCodes.any(
-          (code) => code.contains('mismatch') || code.contains('invalid'),
-        )
+    final hasUntrustedCredential = validationCodes.any(
+      (code) =>
+          code == 'signingCredential.untrusted' ||
+          code == 'signingCredential.untrustedIndefinite',
+    );
+    final hasValidationFailure = validationCodes.any(
+      (code) =>
+          code != 'signingCredential.untrusted' &&
+          code != 'signingCredential.untrustedIndefinite',
+    );
+    final hasTrustedCredential = successCodes.contains(
+      'signingCredential.trusted',
+    );
+    final hasValidSignature = successCodes.contains('claimSignature.validated');
+    final status = hasValidationFailure
         ? C2paStatus.invalid
-        : successCodes.contains('claimSignature.validated')
-        ? C2paStatus.signed
-        : C2paStatus.present;
+        : hasTrustedCredential
+        ? C2paStatus.trusted
+        : hasUntrustedCredential || hasValidSignature
+        ? C2paStatus.untrusted
+        : C2paStatus.invalid;
 
     return AiMediaMetadata(c2paStatus: status, vendor: vendor, model: model);
   }

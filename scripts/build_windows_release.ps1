@@ -38,6 +38,11 @@ try {
   $C2paToolSource = Join-Path $C2paToolWorkDir 'extracted\c2patool\c2patool.exe'
   $C2paToolTarget = Join-Path $BundleDir 'c2patool.exe'
   Copy-Item -Path $C2paToolSource -Destination $C2paToolTarget -Force
+  $C2paSettingsPath = Join-Path $BundleDir 'c2pa.toml'
+  & $C2paToolTarget --settings $C2paSettingsPath init trust
+  if ($LASTEXITCODE -ne 0) {
+    throw "c2patool failed to install the official C2PA trust list"
+  }
 }
 finally {
   Remove-Item $C2paToolWorkDir -Recurse -Force -ErrorAction SilentlyContinue

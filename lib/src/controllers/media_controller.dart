@@ -986,6 +986,7 @@ extension _MediaController on _VideoCollageScreenState {
           }
         });
         unawaited(_syncPreviewPlaybackMode());
+        unawaited(_refreshClipAiMetadata(instanceId, path));
       } catch (error) {
         if (!mounted) {
           return;
@@ -1069,6 +1070,7 @@ extension _MediaController on _VideoCollageScreenState {
         previousController?.dispose();
       }
       unawaited(_syncPreviewPlaybackMode());
+      unawaited(_refreshClipAiMetadata(instanceId, path));
       controller = null;
     } catch (error) {
       controller?.dispose();
@@ -1088,6 +1090,28 @@ extension _MediaController on _VideoCollageScreenState {
         _statusMessage =
             'Loaded metadata for ${probedClip.name}, but preview failed.';
       });
+      if (probedClip != null) {
+        unawaited(_refreshClipAiMetadata(instanceId, path));
+      }
+    }
+  }
+
+  Future<void> _refreshClipAiMetadata(String instanceId, String path) async {
+    try {
+      final metadata = await _exportService.probeAiMetadata(path);
+      if (!mounted) {
+        return;
+      }
+      _updateState(() {
+        final index = _clips.indexWhere(
+          (clip) => clip.id == instanceId && clip.path == path,
+        );
+        if (index >= 0) {
+          _clips[index] = _clips[index].copyWith(aiMetadata: metadata);
+        }
+      });
+    } catch (_) {
+      // Basic media information and preview remain available if C2PA fails.
     }
   }
 
@@ -1103,7 +1127,7 @@ extension _MediaController on _VideoCollageScreenState {
     final path = _clips[existingIndex].path;
 
     try {
-      final refreshed = await _exportService.probeMedia(path);
+      final refreshed = await _exportService.probeMediaWithAiMetadata(path);
       if (!mounted) {
         return;
       }

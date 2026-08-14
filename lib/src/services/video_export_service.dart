@@ -75,6 +75,14 @@ class VideoExportService {
     return FFmpegKit.cancel();
   }
 
+  Future<bool> refreshC2paTrustList() {
+    return _aiMetadataService.refreshTrustListIfNeeded();
+  }
+
+  Future<AiMediaMetadata> probeAiMetadata(String filePath) {
+    return _aiMetadataService.probe(filePath);
+  }
+
   Future<VideoThumbnailStrip> generateVideoThumbnails({
     required String filePath,
     required Duration duration,
@@ -228,10 +236,14 @@ class VideoExportService {
   }
 
   Future<VideoClipInfo> probeMedia(String filePath) async {
-    final mediaFuture = _isPhotoPath(filePath)
+    return _isPhotoPath(filePath)
         ? _probePhoto(filePath)
         : _probeVideo(filePath);
-    final metadataFuture = _aiMetadataService.probe(filePath);
+  }
+
+  Future<VideoClipInfo> probeMediaWithAiMetadata(String filePath) async {
+    final mediaFuture = probeMedia(filePath);
+    final metadataFuture = probeAiMetadata(filePath);
     final media = await mediaFuture;
     return media.copyWith(aiMetadata: await metadataFuture);
   }

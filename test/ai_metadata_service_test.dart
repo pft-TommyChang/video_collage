@@ -5,7 +5,7 @@ import 'package:video_collage_mac/src/models.dart';
 import 'package:video_collage_mac/src/services/ai_metadata_service.dart';
 
 void main() {
-  test('parses vendor, model, and signed state from C2PA', () {
+  test('parses vendor, model, and trusted state from C2PA', () {
     final source = jsonEncode(<String, Object>{
       'active_manifest': 'manifest-1',
       'manifests': <String, Object>{
@@ -31,6 +31,7 @@ void main() {
         'activeManifest': <String, Object>{
           'success': <Object>[
             <String, Object>{'code': 'claimSignature.validated'},
+            <String, Object>{'code': 'signingCredential.trusted'},
           ],
         },
       },
@@ -38,9 +39,34 @@ void main() {
 
     final metadata = AiMetadataService.parseC2paJson(source);
 
-    expect(metadata.c2paStatus, C2paStatus.signed);
+    expect(metadata.c2paStatus, C2paStatus.trusted);
     expect(metadata.vendor, 'BytePlus');
     expect(metadata.model, 'dreamina-seedance-2-5');
+  });
+
+  test('marks a valid signature with an untrusted credential untrusted', () {
+    final source = jsonEncode(<String, Object>{
+      'active_manifest': 'manifest-1',
+      'manifests': <String, Object>{
+        'manifest-1': <String, Object>{
+          'signature_info': <String, Object>{'issuer': 'Example Inc.'},
+        },
+      },
+      'validation_status': <Object>[
+        <String, Object>{'code': 'signingCredential.untrusted'},
+      ],
+      'validation_results': <String, Object>{
+        'activeManifest': <String, Object>{
+          'success': <Object>[
+            <String, Object>{'code': 'claimSignature.validated'},
+          ],
+        },
+      },
+    });
+
+    final metadata = AiMetadataService.parseC2paJson(source);
+
+    expect(metadata.c2paStatus, C2paStatus.untrusted);
   });
 
   test('marks a mismatched C2PA claim invalid', () {
