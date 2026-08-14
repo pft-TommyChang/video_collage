@@ -25,6 +25,8 @@ class _ClipListTile extends StatelessWidget {
   final VoidCallback onEditLabel;
   final VoidCallback onRemove;
 
+  static const double _aiMetadataRowHeight = 16;
+
   @override
   Widget build(BuildContext context) {
     final itemBorderColor = isUsed
@@ -42,7 +44,7 @@ class _ClipListTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+            padding: const EdgeInsets.fromLTRB(8, 8, 4, 8),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
@@ -52,7 +54,10 @@ class _ClipListTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      _buildHeader(context),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _buildHeader(context),
+                      ),
                       const SizedBox(height: 4),
                       _singleLineText(
                         _clipDetails,
@@ -63,10 +68,14 @@ class _ClipListTile extends StatelessWidget {
                               : const Color(0xFFB42318),
                         ),
                       ),
-                      if (clip.aiMetadata.hasDisplayableInfo) ...<Widget>[
-                        const SizedBox(height: 4),
-                        _buildAiMetadataRow(context),
-                      ],
+                      const SizedBox(height: 4),
+                      SizedBox(
+                        key: ValueKey<String>('ai-metadata-row-${clip.id}'),
+                        height: _aiMetadataRowHeight,
+                        child: clip.aiMetadata.hasDisplayableInfo
+                            ? _buildAiMetadataRow(context)
+                            : null,
+                      ),
                       if (errorMessage != null) ...<Widget>[
                         const SizedBox(height: 4),
                         Text(
@@ -143,25 +152,41 @@ class _ClipListTile extends StatelessWidget {
   Widget _buildAiMetadataRow(BuildContext context) {
     final metadata = clip.aiMetadata;
     final vendor = metadata.vendor;
+    final model = metadata.model;
     return Tooltip(
       message: _aiMetadataTooltip,
-      child: Row(
-        children: <Widget>[
-          if (metadata.hasC2pa)
-            _buildAiTag(
-              context,
-              'C2PA',
-              trailing: Icon(
-                Icons.circle,
-                size: 9,
-                color: _c2paStatusColor(metadata.c2paStatus),
-              ),
-            ),
-          if (metadata.hasC2pa && vendor != null) const SizedBox(width: 6),
-          if (vendor != null) ...<Widget>[
-            Flexible(child: _buildAiTag(context, vendor)),
-          ],
-        ],
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          scrollbars: false,
+          dragDevices: const <PointerDeviceKind>{
+            PointerDeviceKind.touch,
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.trackpad,
+          },
+        ),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (metadata.hasC2pa)
+                _buildAiTag(
+                  context,
+                  'C2PA',
+                  trailing: Icon(
+                    Icons.circle,
+                    size: 9,
+                    color: _c2paStatusColor(metadata.c2paStatus),
+                  ),
+                ),
+              if (metadata.hasC2pa && vendor != null) const SizedBox(width: 6),
+              if (vendor != null) _buildAiTag(context, vendor),
+              if ((metadata.hasC2pa || vendor != null) && model != null)
+                const SizedBox(width: 6),
+              if (model != null) _buildAiTag(context, model),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -177,15 +202,13 @@ class _ClipListTile extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Flexible(
-              child: _singleLineText(
-                label,
-                Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: const Color(0xFF7A5A50),
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  height: 1,
-                ),
+            _singleLineText(
+              label,
+              Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: const Color(0xFF7A5A50),
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                height: 1,
               ),
             ),
             if (trailing != null) ...<Widget>[
@@ -360,7 +383,7 @@ class _ClipListTile extends StatelessWidget {
       if (metadata.hasC2pa) 'C2PA',
       if (metadata.c2paStatus == C2paStatus.trusted) 'Trust',
       if (metadata.c2paStatus == C2paStatus.untrusted) 'Untrust',
-      if (metadata.c2paStatus == C2paStatus.invalid) 'INVALID',
+      if (metadata.c2paStatus == C2paStatus.invalid) 'Invalid',
       if (metadata.vendor != null) metadata.vendor!,
       if (metadata.model != null) metadata.model!,
     ];

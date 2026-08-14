@@ -135,7 +135,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                                 children: <Widget>[
                                                   Flexible(
                                                     child: Text(
-                                                      'Version $_appVersion',
+                                                      _versionLabel,
                                                       maxLines: 1,
                                                       overflow:
                                                           TextOverflow.ellipsis,
@@ -1269,6 +1269,14 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
         ),
       ),
     );
+  }
+
+  String get _versionLabel {
+    final trustListVersion = _c2paTrustListVersion;
+    final trustListLabel = trustListVersion == null
+        ? ''
+        : ' • C2PA TL ${trustListVersion.label}';
+    return 'Version $_appVersion$trustListLabel';
   }
 
   void _collapseSidePanel() {

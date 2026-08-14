@@ -17,6 +17,7 @@ import 'package:path/path.dart' as p;
 
 import '../models.dart';
 import 'ai_metadata_service.dart';
+import 'c2pa_trust_list_service.dart';
 
 class VideoExportException implements Exception {
   const VideoExportException(this.message);
@@ -77,6 +78,10 @@ class VideoExportService {
 
   Future<bool> refreshC2paTrustList() {
     return _aiMetadataService.refreshTrustListIfNeeded();
+  }
+
+  Future<C2paTrustListVersion?> c2paTrustListVersion() {
+    return _aiMetadataService.trustListVersion();
   }
 
   Future<AiMediaMetadata> probeAiMetadata(String filePath) {

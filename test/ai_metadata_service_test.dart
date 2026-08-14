@@ -126,4 +126,10 @@ void main() {
     expect(metadata.hasC2pa, isFalse);
     expect(metadata.hasDisplayableInfo, isTrue);
   });
+
+  test('model-only metadata remains displayable', () {
+    const metadata = AiMediaMetadata(model: 'seedream-4-5');
+
+    expect(metadata.hasDisplayableInfo, isTrue);
+  });
 }

@@ -56,7 +56,7 @@ class AiMediaMetadata {
     C2paStatus.unknown || C2paStatus.absent => false,
   };
 
-  bool get hasDisplayableInfo => hasC2pa || vendor != null;
+  bool get hasDisplayableInfo => hasC2pa || vendor != null || model != null;
 }
 
 enum AudioMode {

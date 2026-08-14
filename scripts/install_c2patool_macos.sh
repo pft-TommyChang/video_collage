@@ -11,6 +11,7 @@ APP_PATH="$1"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly C2PATOOL_VERSION="0.27.6"
 readonly C2PATOOL_ARCHIVE_SHA256="9af980fa45b980cb932434876481aec497e4c1804310af2af34cf8f8a1897d1e"
+readonly C2PA_TRUST_LIST_METADATA_URL="https://raw.githubusercontent.com/c2pa-org/conformance-public/refs/heads/main/trust-list/C2PA-TRUST-LIST.json"
 C2PATOOL_ARCHIVE="c2patool-v${C2PATOOL_VERSION}-universal-apple-darwin.zip"
 C2PATOOL_URL="https://github.com/contentauth/c2pa-rs/releases/download/c2patool-v${C2PATOOL_VERSION}/${C2PATOOL_ARCHIVE}"
 WORK_DIR="$(mktemp -d)"
@@ -53,6 +54,9 @@ chmod 755 "$TARGET_BINARY"
 "$TARGET_BINARY" \
   --settings "$APP_PATH/Contents/Resources/c2pa.toml" \
   init trust
+curl --fail --location --silent --show-error \
+  "$C2PA_TRUST_LIST_METADATA_URL" \
+  --output "$APP_PATH/Contents/Resources/c2pa-trust-list.json"
 
 SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 APP_ENTITLEMENTS="${APP_ENTITLEMENTS:-$ROOT_DIR/macos/Runner/Release.entitlements}"

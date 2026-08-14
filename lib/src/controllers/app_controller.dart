@@ -3,10 +3,15 @@ part of '../video_collage_app.dart';
 extension _AppController on _VideoCollageScreenState {
   Future<void> _refreshC2paTrustListInBackground() async {
     try {
+      await _loadC2paTrustListVersion();
       final didUpdate = await _exportService.refreshC2paTrustList();
-      if (!didUpdate || !mounted) {
+      if (!mounted) {
         return;
       }
+      if (!didUpdate) {
+        return;
+      }
+      await _loadC2paTrustListVersion();
 
       final clips = _clips
           .map((clip) => (id: clip.id, path: clip.path))
@@ -16,6 +21,15 @@ extension _AppController on _VideoCollageScreenState {
       }
     } catch (error) {
       debugPrint('Background C2PA trust list update failed: $error');
+    }
+  }
+
+  Future<void> _loadC2paTrustListVersion() async {
+    final version = await _exportService.c2paTrustListVersion();
+    if (mounted) {
+      _updateState(() {
+        _c2paTrustListVersion = version;
+      });
     }
   }
 

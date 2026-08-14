@@ -906,6 +906,18 @@ void main() {
     expect(find.text('Auto layout picked 1×2 • 16:9.'), findsOneWidget);
     expect(
       tester
+          .getSize(find.byKey(const ValueKey<String>('ai-metadata-row-clip-1')))
+          .height,
+      16,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey<String>('ai-metadata-row-clip-2')))
+          .height,
+      16,
+    );
+    expect(
+      tester
           .getCenter(find.byKey(const ValueKey<String>('remove-media-clip-1')))
           .dx,
       tester

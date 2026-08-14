@@ -6,6 +6,20 @@ import 'package:path/path.dart' as p;
 typedef C2paTrustListDownloader = Future<List<int>> Function(Uri uri);
 typedef C2paSupportDirectoryProvider = Future<Directory> Function();
 
+class C2paTrustListVersion {
+  const C2paTrustListVersion({
+    required this.versionIdentifier,
+    required this.sequenceNumber,
+    required this.issueDate,
+  });
+
+  final int versionIdentifier;
+  final int sequenceNumber;
+  final DateTime issueDate;
+
+  String get label => 'v$versionIdentifier.$sequenceNumber';
+}
+
 class C2paTrustListService {
   const C2paTrustListService({
     this.updateInterval = const Duration(hours: 24),
@@ -20,7 +34,12 @@ class C2paTrustListService {
     'https://raw.githubusercontent.com/c2pa-org/conformance-public/'
     'refs/heads/main/trust-list/C2PA-TRUST-LIST.pem',
   );
+  static final Uri officialTrustListMetadataUri = Uri.parse(
+    'https://raw.githubusercontent.com/c2pa-org/conformance-public/'
+    'refs/heads/main/trust-list/C2PA-TRUST-LIST.json',
+  );
   static const String _trustListFileName = 'c2pa-trust-list.pem';
+  static const String _metadataFileName = 'c2pa-trust-list.json';
   static const Duration _connectionTimeout = Duration(seconds: 10);
   static const Duration _responseTimeout = Duration(seconds: 15);
   static const int _maximumDownloadBytes = 2 * 1024 * 1024;
@@ -32,21 +51,48 @@ class C2paTrustListService {
 
   Future<bool> refreshIfNeeded() async {
     final trustList = await _cachedTrustListFile();
-    if (await _isFreshValidTrustList(trustList)) {
+    final metadata = _metadataFileBeside(trustList);
+    if (await _isFreshValidTrustList(trustList) &&
+        await _isFreshValidMetadata(metadata)) {
       return false;
     }
 
     try {
-      final bytes = await (_downloader ?? _download)(officialTrustListUri);
-      if (!_isValidPem(bytes)) {
+      final downloader = _downloader ?? _download;
+      final downloads = await Future.wait<List<int>>(<Future<List<int>>>[
+        downloader(officialTrustListUri),
+        downloader(officialTrustListMetadataUri),
+      ]);
+      final trustListBytes = downloads[0];
+      final metadataBytes = downloads[1];
+      if (!_isValidPem(trustListBytes)) {
         throw const FormatException('The C2PA trust list is not valid PEM.');
       }
-      await _replaceFile(trustList, bytes);
+      if (_parseVersion(metadataBytes) == null) {
+        throw const FormatException(
+          'The C2PA trust list metadata is not valid JSON.',
+        );
+      }
+      await _replaceFile(trustList, trustListBytes);
+      await _replaceFile(metadata, metadataBytes);
       return true;
     } catch (_) {
       // Keep the last valid cached list, or let the caller use the bundled one.
       return false;
     }
+  }
+
+  Future<C2paTrustListVersion?> versionFor(String c2paToolPath) async {
+    final cachedTrustList = await _cachedTrustListFile();
+    final cachedVersion = await _versionForPair(cachedTrustList);
+    if (cachedVersion != null) {
+      return cachedVersion;
+    }
+
+    final bundledTrustList = File(
+      p.join(p.dirname(c2paToolPath), _trustListFileName),
+    );
+    return _versionForPair(bundledTrustList);
   }
 
   Future<String?> settingsPathFor(String c2paToolPath) async {
@@ -69,6 +115,10 @@ class C2paTrustListService {
     return File(p.join(directory.path, 'c2pa', _trustListFileName));
   }
 
+  File _metadataFileBeside(File trustList) {
+    return File(p.join(trustList.parent.path, _metadataFileName));
+  }
+
   Future<bool> _isFreshValidTrustList(File file) async {
     if (!await _isValidTrustListFile(file)) {
       return false;
@@ -76,6 +126,64 @@ class C2paTrustListService {
     final modified = await file.lastModified();
     final age = (_now ?? DateTime.now)().difference(modified);
     return !age.isNegative && age < updateInterval;
+  }
+
+  Future<bool> _isFreshValidMetadata(File file) async {
+    if (await _versionFromFile(file) == null) {
+      return false;
+    }
+    final modified = await file.lastModified();
+    final age = (_now ?? DateTime.now)().difference(modified);
+    return !age.isNegative && age < updateInterval;
+  }
+
+  Future<C2paTrustListVersion?> _versionForPair(File trustList) async {
+    if (!await _isValidTrustListFile(trustList)) {
+      return null;
+    }
+    return _versionFromFile(_metadataFileBeside(trustList));
+  }
+
+  Future<C2paTrustListVersion?> _versionFromFile(File file) async {
+    try {
+      if (!await file.exists() || await file.length() > _maximumDownloadBytes) {
+        return null;
+      }
+      return _parseVersion(await file.readAsBytes());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  C2paTrustListVersion? _parseVersion(List<int> bytes) {
+    if (bytes.isEmpty || bytes.length > _maximumDownloadBytes) {
+      return null;
+    }
+    try {
+      final root = jsonDecode(utf8.decode(bytes));
+      final lote = root is Map ? root['LoTE'] : null;
+      final information = lote is Map ? lote['ListAndSchemeInformation'] : null;
+      if (information is! Map) {
+        return null;
+      }
+      final versionIdentifier = information['LoTEVersionIdentifier'];
+      final sequenceNumber = information['LoTESequenceNumber'];
+      final issueDate = DateTime.tryParse(
+        information['ListIssueDateTime']?.toString() ?? '',
+      );
+      if (versionIdentifier is! num ||
+          sequenceNumber is! num ||
+          issueDate == null) {
+        return null;
+      }
+      return C2paTrustListVersion(
+        versionIdentifier: versionIdentifier.toInt(),
+        sequenceNumber: sequenceNumber.toInt(),
+        issueDate: issueDate,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> _isValidTrustListFile(File file) async {

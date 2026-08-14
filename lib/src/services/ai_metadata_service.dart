@@ -19,6 +19,11 @@ class AiMetadataService {
     return trustListService.refreshIfNeeded();
   }
 
+  Future<C2paTrustListVersion?> trustListVersion() async {
+    final executable = _findC2paTool();
+    return executable == null ? null : trustListService.versionFor(executable);
+  }
+
   Future<AiMediaMetadata> probe(String filePath) async {
     final results = await Future.wait<AiMediaMetadata>(
       <Future<AiMediaMetadata>>[

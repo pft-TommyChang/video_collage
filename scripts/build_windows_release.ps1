@@ -43,6 +43,8 @@ try {
   if ($LASTEXITCODE -ne 0) {
     throw "c2patool failed to install the official C2PA trust list"
   }
+  $C2paTrustListMetadataUrl = 'https://raw.githubusercontent.com/c2pa-org/conformance-public/refs/heads/main/trust-list/C2PA-TRUST-LIST.json'
+  Invoke-WebRequest -Uri $C2paTrustListMetadataUrl -OutFile (Join-Path $BundleDir 'c2pa-trust-list.json')
 }
 finally {
   Remove-Item $C2paToolWorkDir -Recurse -Force -ErrorAction SilentlyContinue

@@ -12,9 +12,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import 'models.dart';
-import 'services/github_update_service.dart';
-import 'services/editor_settings_store.dart';
+import 'services/c2pa_trust_list_service.dart';
 import 'services/desktop_file_service.dart';
+import 'services/editor_settings_store.dart';
+import 'services/github_update_service.dart';
 import 'services/system_dialog_service.dart';
 import 'services/video_export_service.dart';
 import 'video_merge_dialog.dart';
@@ -189,6 +190,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   ExportHistoryEntry? _sessionLastExportEntry;
   String _lastExportDirectory = '';
   String _appVersion = '…';
+  C2paTrustListVersion? _c2paTrustListVersion;
 
   ExportHistoryEntry? get _lastExportEntry => _sessionLastExportEntry;
 
