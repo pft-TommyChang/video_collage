@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../models.dart';
+import 'ai_metadata_service.dart';
 
 class VideoExportException implements Exception {
   const VideoExportException(this.message);
@@ -57,7 +58,10 @@ class _VideoMergeProfile {
 }
 
 class VideoExportService {
-  VideoExportService();
+  VideoExportService({AiMetadataService? aiMetadataService})
+    : _aiMetadataService = aiMetadataService ?? const AiMetadataService();
+
+  final AiMetadataService _aiMetadataService;
 
   static const String _decoderThreadCount = '1';
   static const String _complexFilterThreadCount = '4';
@@ -224,10 +228,12 @@ class VideoExportService {
   }
 
   Future<VideoClipInfo> probeMedia(String filePath) async {
-    if (_isPhotoPath(filePath)) {
-      return _probePhoto(filePath);
-    }
-    return _probeVideo(filePath);
+    final mediaFuture = _isPhotoPath(filePath)
+        ? _probePhoto(filePath)
+        : _probeVideo(filePath);
+    final metadataFuture = _aiMetadataService.probe(filePath);
+    final media = await mediaFuture;
+    return media.copyWith(aiMetadata: await metadataFuture);
   }
 
   Future<double> probeVideoFrameRate(String path) async {

@@ -21,6 +21,28 @@ if (-not (Test-Path (Join-Path $BundleDir 'PerfectCollage.exe'))) {
   throw "Windows release executable was not found in $BundleDir"
 }
 
+$C2paToolVersion = '0.27.6'
+$C2paToolSha256 = 'bebc9468f8aeb87b91013dce374ed0bd224f97c9b88c6dd14fb620a08ca6a54c'
+$C2paToolArchiveName = "c2patool-v$C2paToolVersion-x86_64-pc-windows-msvc.zip"
+$C2paToolUrl = "https://github.com/contentauth/c2pa-rs/releases/download/c2patool-v$C2paToolVersion/$C2paToolArchiveName"
+$C2paToolWorkDir = Join-Path ([System.IO.Path]::GetTempPath()) ("perfect-collage-c2pa-" + [guid]::NewGuid())
+$C2paToolArchive = Join-Path $C2paToolWorkDir $C2paToolArchiveName
+New-Item -ItemType Directory -Path $C2paToolWorkDir -Force | Out-Null
+try {
+  Invoke-WebRequest -Uri $C2paToolUrl -OutFile $C2paToolArchive
+  $ActualC2paToolSha256 = (Get-FileHash -Path $C2paToolArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($ActualC2paToolSha256 -ne $C2paToolSha256) {
+    throw "c2patool checksum mismatch: $ActualC2paToolSha256"
+  }
+  Expand-Archive -Path $C2paToolArchive -DestinationPath (Join-Path $C2paToolWorkDir 'extracted')
+  $C2paToolSource = Join-Path $C2paToolWorkDir 'extracted\c2patool\c2patool.exe'
+  $C2paToolTarget = Join-Path $BundleDir 'c2patool.exe'
+  Copy-Item -Path $C2paToolSource -Destination $C2paToolTarget -Force
+}
+finally {
+  Remove-Item $C2paToolWorkDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
 Remove-Item $ArchivePath, $ChecksumPath -Force -ErrorAction SilentlyContinue
 Compress-Archive -Path (Join-Path $BundleDir '*') -DestinationPath $ArchivePath -CompressionLevel Optimal

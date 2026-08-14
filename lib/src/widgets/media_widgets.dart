@@ -57,18 +57,16 @@ class _ClipListTile extends StatelessWidget {
                       _singleLineText(
                         _clipDetails,
                         Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 11,
                           color: errorMessage == null
                               ? const Color(0xFF697180)
                               : const Color(0xFFB42318),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      _singleLineText(
-                        _clipStatus,
-                        Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: const Color(0xFF697180),
-                        ),
-                      ),
+                      if (clip.aiMetadata.hasDisplayableInfo) ...<Widget>[
+                        const SizedBox(height: 4),
+                        _buildAiMetadataRow(context),
+                      ],
                       if (errorMessage != null) ...<Widget>[
                         const SizedBox(height: 4),
                         Text(
@@ -142,6 +140,66 @@ class _ClipListTile extends StatelessWidget {
     );
   }
 
+  Widget _buildAiMetadataRow(BuildContext context) {
+    final metadata = clip.aiMetadata;
+    final vendor = metadata.vendor;
+    return Tooltip(
+      message: _aiMetadataTooltip,
+      child: Row(
+        children: <Widget>[
+          if (metadata.hasC2pa)
+            _buildAiTag(
+              context,
+              'C2PA',
+              trailing: metadata.c2paStatus == C2paStatus.signed
+                  ? const Icon(
+                      Icons.check_rounded,
+                      size: 11,
+                      color: Color(0xFF2E7D32),
+                    )
+                  : null,
+            ),
+          if (metadata.hasC2pa && vendor != null) const SizedBox(width: 6),
+          if (vendor != null) ...<Widget>[
+            Flexible(child: _buildAiTag(context, vendor)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiTag(BuildContext context, String label, {Widget? trailing}) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFF7A5A50)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Flexible(
+              child: _singleLineText(
+                label,
+                Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: const Color(0xFF7A5A50),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+            ),
+            if (trailing != null) ...<Widget>[
+              const SizedBox(width: 1),
+              trailing,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildThumbnail() {
     const borderRadius = BorderRadius.all(Radius.circular(14));
     const inactiveBorderColor = Color(0xFFD6DCE4);
@@ -196,6 +254,37 @@ class _ClipListTile extends StatelessWidget {
                   )
                 else
                   _buildThumbnailFallback(),
+                Positioned(
+                  left: 4,
+                  bottom: 4,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xD9000000),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 14,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: Center(
+                          child: Text(
+                            _clipFormat,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w700,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
                 if (clip.isVideo)
                   Positioned(
                     right: 4,
@@ -255,21 +344,32 @@ class _ClipListTile extends StatelessWidget {
     }
     if (clip.width == 0 || clip.height == 0) {
       return clip.isPhoto
-          ? _clipFormat
-          : '${formatDuration(clip.duration)} • ${formatFrameRate(clip.frameRate)}';
+          ? _visibleAreaLabel
+          : '$_visibleAreaLabel • ${formatDuration(clip.duration)} • ${formatFrameRate(clip.frameRate)}';
     }
     if (clip.isPhoto) {
-      return '${clip.width}×${clip.height}';
+      return '${clip.width}×${clip.height} • $_visibleAreaLabel';
     }
     final trimLabel = clip.isTrimmed ? ' • trimmed' : '';
-    return '${clip.width}×${clip.height} • ${formatDuration(clip.duration)} • ${formatFrameRate(clip.frameRate)}$trimLabel';
+    return '${clip.width}×${clip.height} • $_visibleAreaLabel • ${formatDuration(clip.duration)} • ${formatFrameRate(clip.frameRate)}$trimLabel';
   }
 
-  String get _clipStatus =>
-      'Visible • ${(visibleAreaFraction * 100).round()}% • $_clipFormat';
+  String get _visibleAreaLabel => '${(visibleAreaFraction * 100).round()}%';
+
+  String get _aiMetadataTooltip {
+    final metadata = clip.aiMetadata;
+    final parts = <String>[
+      if (metadata.hasC2pa) 'C2PA',
+      if (metadata.c2paStatus == C2paStatus.signed) 'Trust',
+      if (metadata.c2paStatus == C2paStatus.invalid) 'Untrust',
+      if (metadata.vendor != null) metadata.vendor!,
+      if (metadata.model != null) metadata.model!,
+    ];
+    return parts.join(' • ');
+  }
 
   String get _clipFormat =>
-      p.extension(clip.path).replaceFirst('.', '').toLowerCase();
+      p.extension(clip.path).replaceFirst('.', '').toUpperCase();
 }
 
 Size? _previewVideoDisplaySize({

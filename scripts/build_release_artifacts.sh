@@ -109,6 +109,9 @@ flutter build macos \
   --build-name="$BUILD_NAME" \
   --build-number="$BUILD_NUMBER"
 
+"$ROOT_DIR/scripts/install_c2patool_macos.sh" \
+  "$ROOT_DIR/build/macos/Build/Products/Release/Perfect Collage.app"
+
 "$ROOT_DIR/scripts/package_macos_dmg.sh" \
   "$ROOT_DIR/build/macos/Build/Products/Release/Perfect Collage.app" \
   "$BUILD_NAME" \

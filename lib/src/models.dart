@@ -37,6 +37,27 @@ class ColorChoice {
 
 enum MediaKind { video, photo }
 
+enum C2paStatus { unknown, absent, present, signed, invalid }
+
+class AiMediaMetadata {
+  const AiMediaMetadata({
+    this.c2paStatus = C2paStatus.unknown,
+    this.vendor,
+    this.model,
+  });
+
+  final C2paStatus c2paStatus;
+  final String? vendor;
+  final String? model;
+
+  bool get hasC2pa => switch (c2paStatus) {
+    C2paStatus.present || C2paStatus.signed || C2paStatus.invalid => true,
+    C2paStatus.unknown || C2paStatus.absent => false,
+  };
+
+  bool get hasDisplayableInfo => hasC2pa || vendor != null;
+}
+
 enum AudioMode {
   firstClip,
   mixAll,
@@ -187,6 +208,7 @@ class VideoClipInfo {
     this.frameRate = 0,
     this.sourceDuration,
     this.trimStart = Duration.zero,
+    this.aiMetadata = const AiMediaMetadata(),
   });
 
   /// Identifies one use of a source file inside an editor session.
@@ -203,6 +225,7 @@ class VideoClipInfo {
   final double frameRate;
   final Duration? sourceDuration;
   final Duration trimStart;
+  final AiMediaMetadata aiMetadata;
 
   String get id => instanceId.isEmpty ? path : instanceId;
 
@@ -225,6 +248,7 @@ class VideoClipInfo {
     double? frameRate,
     Duration? sourceDuration,
     Duration? trimStart,
+    AiMediaMetadata? aiMetadata,
   }) {
     return VideoClipInfo(
       instanceId: instanceId ?? this.instanceId,
@@ -238,6 +262,7 @@ class VideoClipInfo {
       frameRate: frameRate ?? this.frameRate,
       sourceDuration: sourceDuration ?? this.sourceDuration,
       trimStart: trimStart ?? this.trimStart,
+      aiMetadata: aiMetadata ?? this.aiMetadata,
     );
   }
 }
