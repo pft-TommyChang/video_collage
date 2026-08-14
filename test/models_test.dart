@@ -8,7 +8,7 @@ void main() {
   test('persisted settings use the current clip label defaults', () {
     final settings = PersistedEditorSettings.fromJson(<String, dynamic>{});
 
-    expect(settings.clipLabelPadding, 10);
+    expect(settings.clipLabelPadding, 6);
     expect(
       settings.clipLabelVisualStyle,
       ClipLabelVisualStyle.transparentOutline,
