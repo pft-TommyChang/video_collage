@@ -18,6 +18,9 @@ namespace {
 
 constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 
+/// Matches the central color of the Flutter preview area's gradient.
+constexpr COLORREF kStartupBackgroundColor = RGB(0xF4, 0xE7, 0xD5);
+
 /// Registry key for app theme preference.
 ///
 /// A value of 0 indicates apps should use dark mode. A non-zero or missing
@@ -82,12 +85,14 @@ class WindowClassRegistrar {
   static WindowClassRegistrar* instance_;
 
   bool class_registered_ = false;
+  HBRUSH background_brush_ = nullptr;
 };
 
 WindowClassRegistrar* WindowClassRegistrar::instance_ = nullptr;
 
 const wchar_t* WindowClassRegistrar::GetWindowClass() {
   if (!class_registered_) {
+    background_brush_ = CreateSolidBrush(kStartupBackgroundColor);
     WNDCLASS window_class{};
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
     window_class.lpszClassName = kWindowClassName;
@@ -97,7 +102,7 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.hInstance = GetModuleHandle(nullptr);
     window_class.hIcon =
         LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
-    window_class.hbrBackground = 0;
+    window_class.hbrBackground = background_brush_;
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
     RegisterClass(&window_class);
@@ -108,6 +113,10 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
 
 void WindowClassRegistrar::UnregisterWindowClass() {
   UnregisterClass(kWindowClassName, nullptr);
+  if (background_brush_ != nullptr) {
+    DeleteObject(background_brush_);
+    background_brush_ = nullptr;
+  }
   class_registered_ = false;
 }
 

@@ -10,6 +10,10 @@
 
 Perfect Collage 適合製作比較畫面、社群貼文、多鏡頭畫面與簡單 montage。把素材放進格子、確認 Preview，接著直接輸出，不需要操作複雜的影片時間軸。
 
+> [!NOTE]
+> 目前僅使用 macOS 環境進行開發與測試，Windows 版尚未在 Windows
+> 開發環境中實際測試。如果遇到 Windows 特有的問題，請[建立 Issue](https://github.com/pft-TommyChang/video_collage/issues)回報。
+
 ## ✨ 主要功能
 
 - 一次加入多張圖片與多段影片，也支援拖拉匯入。

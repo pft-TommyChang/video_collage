@@ -2,6 +2,12 @@ import Cocoa
 import FlutterMacOS
 
 class MainFlutterWindow: NSWindow, NSWindowDelegate {
+  private let startupBackgroundColor = NSColor(
+    srgbRed: 0xF4 / 255.0,
+    green: 0xE7 / 255.0,
+    blue: 0xD5 / 255.0,
+    alpha: 1
+  )
   private let initialContentSize = NSSize(width: 1080, height: 840)
   private let minimumContentSize = NSSize(width: 800, height: 600)
   private let savedContentWidthKey = "video_collage.window.contentWidth"
@@ -9,6 +15,10 @@ class MainFlutterWindow: NSWindow, NSWindowDelegate {
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
+    // FlutterView is black until the first Flutter frame is rendered. Use the
+    // preview area's central gradient color for a seamless startup transition.
+    self.backgroundColor = startupBackgroundColor
+    flutterViewController.backgroundColor = startupBackgroundColor
     self.contentViewController = flutterViewController
     self.contentMinSize = minimumContentSize
     self.delegate = self

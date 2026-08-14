@@ -10,6 +10,11 @@
 
 Perfect Collage is built for comparisons, social posts, multi-camera views, and quick montage layouts. Arrange your media, preview the result, and export—without working through a full video-editing timeline.
 
+> [!NOTE]
+> Development and testing are currently performed on macOS only. The Windows
+> build has not been tested in a Windows development environment. If you run
+> into a Windows-specific problem, please [open an issue](https://github.com/pft-TommyChang/video_collage/issues).
+
 ## ✨ Highlights
 
 - Import multiple photos and videos, including drag and drop.
