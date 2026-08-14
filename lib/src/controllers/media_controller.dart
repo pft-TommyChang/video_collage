@@ -1154,6 +1154,7 @@ extension _MediaController on _VideoCollageScreenState {
       context: context,
       builder: (dialogContext) {
         return _ClipLabelEditDialog(
+          clip: clip,
           initialLabel: clip.name,
           initialDisplayMode: _clipLabelDisplayMode,
           showTwoClipPresets: showTwoClipPresets,

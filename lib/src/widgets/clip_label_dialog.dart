@@ -14,11 +14,13 @@ class _ClipLabelEditResult {
 
 class _ClipLabelEditDialog extends StatefulWidget {
   const _ClipLabelEditDialog({
+    required this.clip,
     required this.initialLabel,
     required this.initialDisplayMode,
     required this.showTwoClipPresets,
   });
 
+  final VideoClipInfo clip;
   final String initialLabel;
   final ClipLabelDisplayMode initialDisplayMode;
   final bool showTwoClipPresets;
@@ -175,27 +177,49 @@ class _ClipLabelEditDialogState extends State<_ClipLabelEditDialog> {
                   const SizedBox(height: 8),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: _singleClipLabelPresetRows
-                        .map((presetRow) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: presetRow
-                                  .map((preset) {
-                                    return OutlinedButton(
-                                      style: compactPresetButtonStyle,
-                                      onPressed: () =>
-                                          _applySingleClipPreset(preset),
-                                      child: Text(preset),
-                                    );
-                                  })
-                                  .toList(growable: false),
-                            ),
-                          );
-                        })
-                        .toList(growable: false),
+                    children: <Widget>[
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: ClipLabelSourcePreset.values
+                            .map((preset) {
+                              final value = preset.valueFor(widget.clip);
+                              final buttonLabel = preset.buttonLabelFor(
+                                widget.clip,
+                              );
+                              if (value == null || buttonLabel == null) {
+                                return null;
+                              }
+                              return OutlinedButton(
+                                style: compactPresetButtonStyle,
+                                onPressed: () => _applySingleClipPreset(value),
+                                child: Text(buttonLabel),
+                              );
+                            })
+                            .whereType<Widget>()
+                            .toList(growable: false),
+                      ),
+                      const SizedBox(height: 8),
+                      ..._singleClipLabelPresetRows.map((presetRow) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: presetRow
+                                .map((preset) {
+                                  return OutlinedButton(
+                                    style: compactPresetButtonStyle,
+                                    onPressed: () =>
+                                        _applySingleClipPreset(preset),
+                                    child: Text(preset),
+                                  );
+                                })
+                                .toList(growable: false),
+                          ),
+                        );
+                      }),
+                    ],
                   ),
                   if (widget.showTwoClipPresets) ...<Widget>[
                     const SizedBox(height: 8),

@@ -1,4 +1,5 @@
 import 'package:flutter/painting.dart';
+import 'package:path/path.dart' as p;
 
 class AspectRatioPreset {
   const AspectRatioPreset({
@@ -265,6 +266,50 @@ class VideoClipInfo {
       aiMetadata: aiMetadata ?? this.aiMetadata,
     );
   }
+}
+
+enum ClipLabelSourcePreset {
+  vendorName,
+  modelName,
+  fileName;
+
+  String? valueFor(VideoClipInfo clip) {
+    final vendor = _capitalizeFirst(clip.aiMetadata.vendor);
+    final model = _capitalizeFirst(clip.aiMetadata.model);
+
+    return switch (this) {
+      ClipLabelSourcePreset.vendorName => vendor,
+      ClipLabelSourcePreset.modelName => model,
+      ClipLabelSourcePreset.fileName => _nonEmpty(
+        p.basenameWithoutExtension(clip.path),
+      ),
+    };
+  }
+
+  String? buttonLabelFor(VideoClipInfo clip) {
+    final value = valueFor(clip);
+    if (this != ClipLabelSourcePreset.fileName || value == null) {
+      return value;
+    }
+    final characters = value.runes;
+    if (characters.length <= 20) {
+      return value;
+    }
+    return '${String.fromCharCodes(characters.take(20))}...';
+  }
+}
+
+String? _capitalizeFirst(String? value) {
+  final normalized = _nonEmpty(value);
+  if (normalized == null) {
+    return null;
+  }
+  return '${normalized[0].toUpperCase()}${normalized.substring(1)}';
+}
+
+String? _nonEmpty(String? value) {
+  final normalized = value?.trim();
+  return normalized == null || normalized.isEmpty ? null : normalized;
 }
 
 class ExportOptions {

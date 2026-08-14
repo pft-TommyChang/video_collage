@@ -249,6 +249,72 @@ void main() {
     expect(second.trimStart, const Duration(seconds: 1));
   });
 
+  test(
+    'metadata clip label presets capitalize metadata and restore file name',
+    () {
+      const clip = VideoClipInfo(
+        path: '/tmp/my_generated-video.mp4',
+        name: 'Custom label',
+        duration: Duration(seconds: 4),
+        width: 1920,
+        height: 1080,
+        hasAudio: false,
+        mediaKind: MediaKind.video,
+        aiMetadata: AiMediaMetadata(vendor: 'openai', model: 'flux'),
+      );
+
+      expect(ClipLabelSourcePreset.vendorName.valueFor(clip), 'Openai');
+      expect(ClipLabelSourcePreset.modelName.valueFor(clip), 'Flux');
+      expect(
+        ClipLabelSourcePreset.fileName.valueFor(clip),
+        'my_generated-video',
+      );
+    },
+  );
+
+  test(
+    'metadata clip label presets are unavailable when metadata is missing',
+    () {
+      const clip = VideoClipInfo(
+        path: '/tmp/example.mp4',
+        name: 'Example',
+        duration: Duration(seconds: 4),
+        width: 1920,
+        height: 1080,
+        hasAudio: false,
+        mediaKind: MediaKind.video,
+      );
+
+      expect(ClipLabelSourcePreset.vendorName.valueFor(clip), isNull);
+      expect(ClipLabelSourcePreset.modelName.valueFor(clip), isNull);
+      expect(ClipLabelSourcePreset.fileName.valueFor(clip), 'example');
+    },
+  );
+
+  test(
+    'file name preset button truncates display but keeps the full value',
+    () {
+      const clip = VideoClipInfo(
+        path: '/tmp/12345678901234567890extra.mp4',
+        name: 'Example',
+        duration: Duration(seconds: 4),
+        width: 1920,
+        height: 1080,
+        hasAudio: false,
+        mediaKind: MediaKind.video,
+      );
+
+      expect(
+        ClipLabelSourcePreset.fileName.buttonLabelFor(clip),
+        '12345678901234567890...',
+      );
+      expect(
+        ClipLabelSourcePreset.fileName.valueFor(clip),
+        '12345678901234567890extra',
+      );
+    },
+  );
+
   test('trimmed duration participates in export duration calculation', () {
     const clip = VideoClipInfo(
       path: '/tmp/example.mp4',
