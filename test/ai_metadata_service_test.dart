@@ -40,7 +40,7 @@ void main() {
     final metadata = AiMetadataService.parseC2paJson(source);
 
     expect(metadata.c2paStatus, C2paStatus.conformant);
-    expect(metadata.vendor, 'BytePlus');
+    expect(metadata.vendor, 'Byteplus Pte. Ltd.');
     expect(metadata.model, 'dreamina-seedance-2-5');
   });
 
@@ -93,7 +93,7 @@ void main() {
     final metadata = AiMetadataService.parseC2paJson(source);
 
     expect(metadata.c2paStatus, C2paStatus.conformant);
-    expect(metadata.vendor, 'OpenAI');
+    expect(metadata.vendor, 'OpenAI Media Service');
   });
 
   test('labels a credential trusted only by the legacy pass separately', () {
@@ -138,7 +138,7 @@ void main() {
     final metadata = AiMetadataService.parseC2paJson(source);
 
     expect(metadata.c2paStatus, C2paStatus.invalid);
-    expect(metadata.vendor, 'Runway');
+    expect(metadata.vendor, 'RUNWAY AI, INC.');
   });
 
   test('parses HeyGen custom container metadata', () {

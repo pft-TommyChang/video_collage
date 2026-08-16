@@ -159,10 +159,9 @@ class AiMetadataService {
     String? model;
     final signatureInfo = active['signature_info'];
     if (signatureInfo is Map) {
-      vendor = _canonicalVendor(
-        _nonEmptyString(signatureInfo['issuer']) ??
-            _nonEmptyString(signatureInfo['common_name']),
-      );
+      vendor =
+          _nonEmptyString(signatureInfo['issuer']) ??
+          _nonEmptyString(signatureInfo['common_name']);
     }
 
     final assertions = active['assertions'];
@@ -176,9 +175,7 @@ class AiMetadataService {
         if (label == 'c2pa.creative_work' && data is Map) {
           final authors = data['author'];
           if (authors is List && authors.isNotEmpty && authors.first is Map) {
-            vendor ??= _canonicalVendor(
-              _nonEmptyString((authors.first as Map)['name']),
-            );
+            vendor ??= _nonEmptyString((authors.first as Map)['name']);
           }
         }
         if (label != 'c2pa.actions.v2' || data is! Map) {
@@ -193,12 +190,6 @@ class AiMetadataService {
           if (parameters is Map) {
             model ??= _nonEmptyString(parameters['model_name']);
           }
-          final softwareAgent = action['softwareAgent'];
-          final agentName = softwareAgent is Map
-              ? _nonEmptyString(softwareAgent['name'])
-              : _nonEmptyString(softwareAgent);
-          vendor ??= _vendorFromAgent(agentName);
-          model ??= _modelFromAgent(agentName, softwareAgent);
         }
       }
     }
@@ -297,47 +288,6 @@ class AiMetadataService {
     } on FormatException {
       return null;
     }
-  }
-
-  static String? _modelFromAgent(String? name, dynamic softwareAgent) {
-    if (name == null ||
-        !(name.startsWith('gpt-image') ||
-            name.startsWith('FLUX') ||
-            name == 'Grok Imagine')) {
-      return null;
-    }
-    final version = softwareAgent is Map
-        ? _nonEmptyString(softwareAgent['version'])
-        : null;
-    return version == null ? name : '$name $version';
-  }
-
-  static String? _vendorFromAgent(String? name) {
-    if (name == null) {
-      return null;
-    }
-    if (name.contains('BytePlus')) return 'BytePlus';
-    if (name.contains('Runway')) return 'Runway';
-    if (name.contains('Grok')) return 'xAI';
-    if (name.startsWith('gpt-image')) return 'OpenAI';
-    if (name.startsWith('FLUX')) return 'Black Forest Labs';
-    return null;
-  }
-
-  static String? _canonicalVendor(String? value) {
-    if (value == null) return null;
-    final lower = value.toLowerCase();
-    if (lower.contains('self-signed') || lower.contains('local use only')) {
-      return null;
-    }
-    if (lower.contains('byteplus')) return 'BytePlus';
-    if (lower.contains('black forest')) return 'Black Forest Labs';
-    if (lower.contains('google')) return 'Google';
-    if (lower.contains('openai')) return 'OpenAI';
-    if (lower.contains('runway')) return 'Runway';
-    if (lower.contains('spacexai') || lower.contains('xai')) return 'xAI';
-    if (lower.contains('heygen')) return 'HeyGen';
-    return value;
   }
 
   static String? _nonEmptyString(dynamic value) {
