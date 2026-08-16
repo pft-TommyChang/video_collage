@@ -88,6 +88,9 @@ extension _SettingsController on _VideoCollageScreenState {
           .clamp(0, _maxClipLabelPadding)
           .toDouble();
       _includeClipLabelsInOutput = savedSettings.includeClipLabelsInOutput;
+      _setPreferAiMetadataForClipLabels(
+        savedSettings.preferAiMetadataForClipLabels,
+      );
       _clipLabelDisplayMode = savedSettings.clipLabelDisplayMode;
       _clipLabelAlignment = savedSettings.clipLabelAlignment;
       _clipLabelVisualStyle = savedSettings.clipLabelVisualStyle;
@@ -181,6 +184,7 @@ extension _SettingsController on _VideoCollageScreenState {
         clipLabelVisualStyle: _clipLabelVisualStyle,
         clipLabelPadding: _clipLabelPadding,
         includeClipLabelsInOutput: _includeClipLabelsInOutput,
+        preferAiMetadataForClipLabels: _preferAiMetadataForClipLabels,
         clipLabelDisplayMode: _clipLabelDisplayMode,
         fitMode: _selectedFitMode.name,
         outputWidth: _outputWidth,

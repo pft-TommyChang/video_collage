@@ -468,6 +468,21 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                           });
                                         },
                                       ),
+                                      SwitchListTile.adaptive(
+                                        key: const ValueKey<String>(
+                                          'prefer-ai-metadata-labels-switch',
+                                        ),
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text('Use AI labels'),
+                                        value: _preferAiMetadataForClipLabels,
+                                        onChanged: (value) {
+                                          _setStateAndSave(() {
+                                            _setPreferAiMetadataForClipLabels(
+                                              value,
+                                            );
+                                          });
+                                        },
+                                      ),
                                       if (_includeClipLabelsInOutput) ...<
                                         Widget
                                       >[

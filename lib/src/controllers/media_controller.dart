@@ -27,11 +27,15 @@ extension _MediaController on _VideoCollageScreenState {
           for (final pending in pendingClips) {
             final initialClip = pending.selection.clipInfo;
             _clips.add(
-              (initialClip ??
-                      _placeholderClip(
-                        pending.selection.path,
-                        instanceId: pending.id,
-                      ))
+              (initialClip == null
+                      ? _placeholderClip(
+                          pending.selection.path,
+                          instanceId: pending.id,
+                        )
+                      : applyAiMetadataLabelPreference(
+                          initialClip,
+                          _preferAiMetadataForClipLabels,
+                        ))
                   .copyWith(instanceId: pending.id),
             );
             _loadingClipIds.add(pending.id);
@@ -254,6 +258,7 @@ extension _MediaController on _VideoCollageScreenState {
       _clipLabelFontSize = _defaultClipLabelFontSize;
       _clipLabelPadding = _defaultClipLabelPadding;
       _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
+      _setPreferAiMetadataForClipLabels(_defaultPreferAiMetadataForClipLabels);
       _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
       _clipLabelAlignment = _defaultClipLabelAlignment;
       _clipLabelVisualStyle = _defaultClipLabelVisualStyle;
@@ -312,6 +317,7 @@ extension _MediaController on _VideoCollageScreenState {
       _clipLabelFontSize = _defaultClipLabelFontSize;
       _clipLabelPadding = _defaultClipLabelPadding;
       _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
+      _setPreferAiMetadataForClipLabels(_defaultPreferAiMetadataForClipLabels);
       _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
       _clipLabelAlignment = _defaultClipLabelAlignment;
       _clipLabelVisualStyle = _defaultClipLabelVisualStyle;
@@ -677,15 +683,13 @@ extension _MediaController on _VideoCollageScreenState {
     required int? slotIndex,
   }) {
     final replacedClip = slotIndex == null ? null : _clipForSlot(slotIndex);
-    final hasCustomLabel =
-        replacedClip != null &&
-        replacedClip.name != _defaultClipNameForPath(replacedClip.path);
+    final hasCustomLabel = replacedClip?.hasCustomLabel ?? false;
     return (
       id: _newClipInstanceId(),
       path: path,
       slotIndex: slotIndex,
       replacedClip: replacedClip,
-      inheritedLabel: hasCustomLabel ? replacedClip.name : null,
+      inheritedLabel: hasCustomLabel ? replacedClip!.name : null,
     );
   }
 
@@ -696,7 +700,11 @@ extension _MediaController on _VideoCollageScreenState {
     String? label,
   }) {
     final placeholder = _placeholderClip(path, instanceId: id);
-    _clips.add(label == null ? placeholder : placeholder.copyWith(name: label));
+    _clips.add(
+      label == null
+          ? placeholder
+          : placeholder.copyWith(name: label, hasCustomLabel: true),
+    );
     if (slotIndex != null) {
       _replaceClipInSlot(id, slotIndex);
     }
@@ -957,6 +965,7 @@ extension _MediaController on _VideoCollageScreenState {
       mediaKind: _isSupportedPhotoPath(path)
           ? MediaKind.photo
           : MediaKind.video,
+      useAiMetadataLabel: _preferAiMetadataForClipLabels,
     );
   }
 
@@ -981,6 +990,8 @@ extension _MediaController on _VideoCollageScreenState {
             _clips[index] = clip.copyWith(
               instanceId: instanceId,
               name: _clips[index].name,
+              hasCustomLabel: _clips[index].hasCustomLabel,
+              useAiMetadataLabel: _clips[index].useAiMetadataLabel,
             );
             _statusMessage = 'Loaded ${_clips[index].name}.';
           }
@@ -1014,6 +1025,8 @@ extension _MediaController on _VideoCollageScreenState {
                 _clips[index] = probedClip!.copyWith(
                   instanceId: instanceId,
                   name: _clips[index].name,
+                  hasCustomLabel: _clips[index].hasCustomLabel,
+                  useAiMetadataLabel: _clips[index].useAiMetadataLabel,
                 );
               }
             });
@@ -1062,6 +1075,8 @@ extension _MediaController on _VideoCollageScreenState {
           _clips[index] = clip.copyWith(
             instanceId: instanceId,
             name: _clips[index].name,
+            hasCustomLabel: _clips[index].hasCustomLabel,
+            useAiMetadataLabel: _clips[index].useAiMetadataLabel,
           );
           _statusMessage = 'Loaded ${_clips[index].name}.';
         }
@@ -1107,11 +1122,19 @@ extension _MediaController on _VideoCollageScreenState {
           (clip) => clip.id == instanceId && clip.path == path,
         );
         if (index >= 0) {
-          _clips[index] = _clips[index].copyWith(aiMetadata: metadata);
+          final current = _clips[index];
+          _clips[index] = applyAiMetadataToClipLabel(current, metadata);
         }
       });
     } catch (_) {
       // Basic media information and preview remain available if C2PA fails.
+    }
+  }
+
+  void _setPreferAiMetadataForClipLabels(bool value) {
+    _preferAiMetadataForClipLabels = value;
+    for (var index = 0; index < _clips.length; index++) {
+      _clips[index] = applyAiMetadataLabelPreference(_clips[index], value);
     }
   }
 
@@ -1138,10 +1161,19 @@ extension _MediaController on _VideoCollageScreenState {
           return;
         }
         final current = _clips[currentIndex];
+        final refreshedDefault = defaultClipLabelFor(
+          refreshed,
+          preferAiMetadata: current.useAiMetadataLabel,
+        );
+        final refreshedName = current.hasCustomLabel
+            ? current.name
+            : refreshedDefault;
         if (!current.isTrimmed) {
           _clips[currentIndex] = refreshed.copyWith(
             instanceId: instanceId,
-            name: current.name,
+            name: refreshedName,
+            hasCustomLabel: current.hasCustomLabel,
+            useAiMetadataLabel: current.useAiMetadataLabel,
           );
           return;
         }
@@ -1157,7 +1189,9 @@ extension _MediaController on _VideoCollageScreenState {
             : sourceDuration;
         _clips[currentIndex] = refreshed.copyWith(
           instanceId: instanceId,
-          name: current.name,
+          name: refreshedName,
+          hasCustomLabel: current.hasCustomLabel,
+          useAiMetadataLabel: current.useAiMetadataLabel,
           duration: trimmedDuration,
           sourceDuration: sourceDuration,
           trimStart: trimStart,
@@ -1217,6 +1251,7 @@ extension _MediaController on _VideoCollageScreenState {
           if (clipIndex >= 0) {
             _clips[clipIndex] = _clips[clipIndex].copyWith(
               name: presetLabels[index],
+              hasCustomLabel: true,
             );
           }
         }
@@ -1248,7 +1283,10 @@ extension _MediaController on _VideoCollageScreenState {
           ? 'Label display: ${result.displayMode.label}.'
           : null;
       if (index >= 0) {
-        _clips[index] = _clips[index].copyWith(name: updatedName);
+        _clips[index] = _clips[index].copyWith(
+          name: updatedName,
+          hasCustomLabel: true,
+        );
       }
       _statusMessage = [?updateMessage, ?displayMessage].join(' ');
     });

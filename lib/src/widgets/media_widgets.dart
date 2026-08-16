@@ -292,7 +292,7 @@ class _ClipListTile extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 3),
                         child: Center(
                           child: Text(
-                            _clipFormat,
+                            _clipMediaType,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: Colors.white,
@@ -390,8 +390,7 @@ class _ClipListTile extends StatelessWidget {
     return parts.join(' • ');
   }
 
-  String get _clipFormat =>
-      p.extension(clip.path).replaceFirst('.', '').toUpperCase();
+  String get _clipMediaType => shortMediaTypeLabel(clip.path, clip.mediaKind);
 }
 
 Color _c2paStatusColor(C2paStatus status) => switch (status) {

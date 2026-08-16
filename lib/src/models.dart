@@ -38,6 +38,21 @@ class ColorChoice {
 
 enum MediaKind { video, photo }
 
+String shortMediaTypeLabel(String path, MediaKind mediaKind) {
+  return switch (p.extension(path).toLowerCase()) {
+    '.jpg' || '.jpeg' => 'JPG',
+    '.png' => 'PNG',
+    '.webp' => 'WEBP',
+    '.heic' => 'HEIC',
+    '.heif' => 'HEIF',
+    '.mp4' || '.m4v' => 'MP4',
+    '.mov' => 'MOV',
+    '.avi' => 'AVI',
+    '.mkv' => 'MKV',
+    _ => mediaKind == MediaKind.photo ? 'IMAGE' : 'VIDEO',
+  };
+}
+
 enum C2paStatus { unknown, absent, untrusted, trusted, invalid }
 
 class AiMediaMetadata {
@@ -210,6 +225,8 @@ class VideoClipInfo {
     this.sourceDuration,
     this.trimStart = Duration.zero,
     this.aiMetadata = const AiMediaMetadata(),
+    this.hasCustomLabel = false,
+    this.useAiMetadataLabel = false,
   });
 
   /// Identifies one use of a source file inside an editor session.
@@ -227,6 +244,8 @@ class VideoClipInfo {
   final Duration? sourceDuration;
   final Duration trimStart;
   final AiMediaMetadata aiMetadata;
+  final bool hasCustomLabel;
+  final bool useAiMetadataLabel;
 
   String get id => instanceId.isEmpty ? path : instanceId;
 
@@ -250,6 +269,8 @@ class VideoClipInfo {
     Duration? sourceDuration,
     Duration? trimStart,
     AiMediaMetadata? aiMetadata,
+    bool? hasCustomLabel,
+    bool? useAiMetadataLabel,
   }) {
     return VideoClipInfo(
       instanceId: instanceId ?? this.instanceId,
@@ -264,6 +285,8 @@ class VideoClipInfo {
       sourceDuration: sourceDuration ?? this.sourceDuration,
       trimStart: trimStart ?? this.trimStart,
       aiMetadata: aiMetadata ?? this.aiMetadata,
+      hasCustomLabel: hasCustomLabel ?? this.hasCustomLabel,
+      useAiMetadataLabel: useAiMetadataLabel ?? this.useAiMetadataLabel,
     );
   }
 }
@@ -297,6 +320,48 @@ enum ClipLabelSourcePreset {
     }
     return '${String.fromCharCodes(characters.take(20))}...';
   }
+}
+
+String defaultClipLabelFor(
+  VideoClipInfo clip, {
+  required bool preferAiMetadata,
+}) {
+  if (preferAiMetadata) {
+    final model = ClipLabelSourcePreset.modelName.valueFor(clip);
+    if (model != null) {
+      return model;
+    }
+    final vendor = ClipLabelSourcePreset.vendorName.valueFor(clip);
+    if (vendor != null) {
+      return vendor;
+    }
+  }
+  return ClipLabelSourcePreset.fileName.valueFor(clip) ?? clip.name;
+}
+
+VideoClipInfo applyAiMetadataToClipLabel(
+  VideoClipInfo clip,
+  AiMediaMetadata metadata,
+) {
+  return applyAiMetadataLabelPreference(
+    clip.copyWith(aiMetadata: metadata),
+    clip.useAiMetadataLabel,
+  );
+}
+
+VideoClipInfo applyAiMetadataLabelPreference(
+  VideoClipInfo clip,
+  bool preferAiMetadata,
+) {
+  final updated = clip.copyWith(useAiMetadataLabel: preferAiMetadata);
+  return updated.hasCustomLabel
+      ? updated
+      : updated.copyWith(
+          name: defaultClipLabelFor(
+            updated,
+            preferAiMetadata: preferAiMetadata,
+          ),
+        );
 }
 
 String? _capitalizeFirst(String? value) {

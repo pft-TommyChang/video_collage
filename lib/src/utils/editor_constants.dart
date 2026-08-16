@@ -106,6 +106,7 @@ const double _defaultTileCornerRadius = 10;
 const double _defaultClipLabelFontSize = 16;
 const double _defaultClipLabelPadding = 6;
 const bool _defaultIncludeClipLabelsInOutput = true;
+const bool _defaultPreferAiMetadataForClipLabels = true;
 const ClipLabelDisplayMode _defaultClipLabelDisplayMode =
     ClipLabelDisplayMode.labelOnly;
 const ClipLabelAlignment _defaultClipLabelAlignment =

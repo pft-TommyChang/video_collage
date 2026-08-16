@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -978,6 +979,51 @@ void main() {
       findsNothing,
     );
     expect(find.textContaining('1 loaded • capacity'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('preview media uses grab and grabbing cursors for move mode', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    mockPendingMediaFiles(tester, <String>[appIconPath(32)]);
+
+    await tester.pumpWidget(buildTestApp());
+    await pumpUntilFound(tester, find.textContaining('Auto layout picked'));
+
+    final moveCursor = find.byKey(
+      const ValueKey<String>('preview-move-cursor-0'),
+    );
+    final mouse = await tester.createGesture(
+      pointer: 101,
+      kind: PointerDeviceKind.mouse,
+    );
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(moveCursor));
+    await tester.pump();
+
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.grab,
+    );
+
+    await mouse.down(tester.getCenter(moveCursor));
+    await tester.pump(const Duration(milliseconds: 221));
+
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.grabbing,
+    );
+
+    await mouse.up();
+    await tester.pump();
+
+    expect(
+      RendererBinding.instance.mouseTracker.debugDeviceActiveCursor(1),
+      SystemMouseCursors.grab,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();

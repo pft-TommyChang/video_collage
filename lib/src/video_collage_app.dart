@@ -175,6 +175,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   double _clipLabelFontSize = _defaultClipLabelFontSize;
   double _clipLabelPadding = _defaultClipLabelPadding;
   bool _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
+  bool _preferAiMetadataForClipLabels = _defaultPreferAiMetadataForClipLabels;
   ClipLabelDisplayMode _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
   ClipLabelAlignment _clipLabelAlignment = _defaultClipLabelAlignment;
   ClipLabelVisualStyle _clipLabelVisualStyle = _defaultClipLabelVisualStyle;

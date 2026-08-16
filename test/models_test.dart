@@ -5,6 +5,15 @@ import 'package:video_collage_mac/src/models.dart';
 import 'package:video_collage_mac/src/services/editor_settings_store.dart';
 
 void main() {
+  test('short media types use canonical labels instead of extensions', () {
+    expect(shortMediaTypeLabel('/media/photo.jpg', MediaKind.photo), 'JPG');
+    expect(shortMediaTypeLabel('/media/photo.JPEG', MediaKind.photo), 'JPG');
+    expect(shortMediaTypeLabel('/media/video.mp4', MediaKind.video), 'MP4');
+    expect(shortMediaTypeLabel('/media/video.M4V', MediaKind.video), 'MP4');
+    expect(shortMediaTypeLabel('/media/photo.raw', MediaKind.photo), 'IMAGE');
+    expect(shortMediaTypeLabel('/media/video.xyz', MediaKind.video), 'VIDEO');
+  });
+
   test('persisted settings use the current clip label defaults', () {
     final settings = PersistedEditorSettings.fromJson(<String, dynamic>{});
 
@@ -14,6 +23,7 @@ void main() {
       ClipLabelVisualStyle.transparentOutline,
     );
     expect(settings.isSidePanelCollapsed, isFalse);
+    expect(settings.preferAiMetadataForClipLabels, isTrue);
   });
 
   test('persisted settings use the current layout defaults', () {
@@ -35,6 +45,15 @@ void main() {
 
     expect(settings.isSidePanelCollapsed, isTrue);
     expect(settings.toJson()['isSidePanelCollapsed'], isTrue);
+  });
+
+  test('persisted settings restore the AI metadata label preference', () {
+    final settings = PersistedEditorSettings.fromJson(<String, dynamic>{
+      'preferAiMetadataForClipLabels': false,
+    });
+
+    expect(settings.preferAiMetadataForClipLabels, isFalse);
+    expect(settings.toJson()['preferAiMetadataForClipLabels'], isFalse);
   });
 
   test('persisted settings restore merge options', () {
@@ -268,6 +287,77 @@ void main() {
       expect(
         ClipLabelSourcePreset.fileName.valueFor(clip),
         'my_generated-video',
+      );
+    },
+  );
+
+  test('default clip labels prefer model, then vendor, then file name', () {
+    const modelClip = VideoClipInfo(
+      path: '/tmp/example.mp4',
+      name: 'example',
+      duration: Duration(seconds: 4),
+      width: 1920,
+      height: 1080,
+      hasAudio: false,
+      mediaKind: MediaKind.video,
+      aiMetadata: AiMediaMetadata(vendor: 'openai', model: 'sora'),
+    );
+    final vendorClip = modelClip.copyWith(
+      aiMetadata: const AiMediaMetadata(vendor: 'runway'),
+    );
+    final fileClip = modelClip.copyWith(aiMetadata: const AiMediaMetadata());
+
+    expect(defaultClipLabelFor(modelClip, preferAiMetadata: true), 'Sora');
+    expect(defaultClipLabelFor(vendorClip, preferAiMetadata: true), 'Runway');
+    expect(defaultClipLabelFor(fileClip, preferAiMetadata: true), 'example');
+    expect(defaultClipLabelFor(modelClip, preferAiMetadata: false), 'example');
+  });
+
+  test(
+    'async AI metadata updates default labels but preserves custom labels',
+    () {
+      const defaultClip = VideoClipInfo(
+        path: '/tmp/example.png',
+        name: 'example',
+        duration: Duration.zero,
+        width: 1024,
+        height: 1024,
+        hasAudio: false,
+        mediaKind: MediaKind.photo,
+        useAiMetadataLabel: true,
+      );
+      final customClip = defaultClip.copyWith(
+        name: 'My label',
+        hasCustomLabel: true,
+      );
+      const metadata = AiMediaMetadata(
+        vendor: 'openai',
+        model: 'gpt-image 2.0',
+      );
+
+      expect(
+        applyAiMetadataToClipLabel(defaultClip, metadata).name,
+        'Gpt-image 2.0',
+      );
+      expect(applyAiMetadataToClipLabel(customClip, metadata).name, 'My label');
+      expect(
+        applyAiMetadataToClipLabel(
+          defaultClip.copyWith(useAiMetadataLabel: false),
+          metadata,
+        ).name,
+        'example',
+      );
+      expect(
+        applyAiMetadataLabelPreference(defaultClip, false).name,
+        'example',
+      );
+      expect(
+        applyAiMetadataLabelPreference(customClip, false).name,
+        'My label',
+      );
+      expect(
+        applyAiMetadataLabelPreference(customClip, false).useAiMetadataLabel,
+        isFalse,
       );
     },
   );

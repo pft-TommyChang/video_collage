@@ -241,6 +241,7 @@
 				33CC110E2044A8840003C045 /* Bundle Framework */,
 				3399D490228B24CF009A79C7 /* ShellScript */,
 				1BC024C5D295DFE00219E863 /* [CP] Embed Pods Frameworks */,
+				C2A0000126A1000000000001 /* Embed c2patool */,
 				A1B2C3D4E5F60718293A4B5C /* Sanitize Embedded Frameworks */,
 			);
 			buildRules = (
@@ -361,6 +362,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		C2A0000126A1000000000001 /* Embed c2patool */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(PROJECT_DIR)/../scripts/embed_c2patool_macos.sh",
+				"$(PROJECT_DIR)/Runner/C2paTool.entitlements",
+			);
+			name = "Embed c2patool";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "\"$PROJECT_DIR/../scripts/embed_c2patool_macos.sh\" \"$TARGET_BUILD_DIR/$WRAPPER_NAME\" \"${EXPANDED_CODE_SIGN_IDENTITY:-}\"\n";
 			showEnvVarsInLog = 0;
 		};
 		A1B2C3D4E5F60718293A4B5C /* Sanitize Embedded Frameworks */ = {

@@ -49,6 +49,7 @@ class PersistedEditorSettings {
     required this.clipLabelVisualStyle,
     required this.clipLabelPadding,
     required this.includeClipLabelsInOutput,
+    required this.preferAiMetadataForClipLabels,
     required this.clipLabelDisplayMode,
     required this.fitMode,
     required this.outputWidth,
@@ -82,6 +83,7 @@ class PersistedEditorSettings {
   final ClipLabelVisualStyle clipLabelVisualStyle;
   final double clipLabelPadding;
   final bool includeClipLabelsInOutput;
+  final bool preferAiMetadataForClipLabels;
   final ClipLabelDisplayMode clipLabelDisplayMode;
   final String fitMode;
   final int outputWidth;
@@ -115,6 +117,7 @@ class PersistedEditorSettings {
       'clipLabelVisualStyle': clipLabelVisualStyle.name,
       'clipLabelPadding': clipLabelPadding,
       'includeClipLabelsInOutput': includeClipLabelsInOutput,
+      'preferAiMetadataForClipLabels': preferAiMetadataForClipLabels,
       'clipLabelDisplayMode': clipLabelDisplayMode.name,
       'fitMode': fitMode,
       'outputWidth': outputWidth,
@@ -180,6 +183,8 @@ class PersistedEditorSettings {
       clipLabelPadding: (json['clipLabelPadding'] as num?)?.toDouble() ?? 6,
       includeClipLabelsInOutput:
           json['includeClipLabelsInOutput'] as bool? ?? false,
+      preferAiMetadataForClipLabels:
+          json['preferAiMetadataForClipLabels'] as bool? ?? true,
       clipLabelDisplayMode: clipLabelDisplayMode,
       fitMode: json['fitMode'] as String? ?? 'cropCenter',
       outputWidth: (json['outputWidth'] as num?)?.toInt() ?? 1080,

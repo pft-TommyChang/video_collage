@@ -396,16 +396,9 @@ class _PreviewTile extends StatelessWidget {
 
     final dragFeedbackSize = _dragFeedbackSize();
 
-    return LongPressDraggable<int>(
+    return _PreviewMoveDraggable(
       data: dragData!,
-      delay: const Duration(milliseconds: 220),
-      dragAnchorStrategy:
-          (Draggable<Object> draggable, BuildContext context, Offset position) {
-            return Offset(
-              dragFeedbackSize.width / 2,
-              dragFeedbackSize.height / 2,
-            );
-          },
+      feedbackSize: dragFeedbackSize,
       feedback: Transform.scale(
         scale: 1.04,
         child: SizedBox(
@@ -441,6 +434,65 @@ class _PreviewTile extends StatelessWidget {
       ),
       childWhenDragging: Opacity(opacity: 0.30, child: focusedTile),
       child: focusedTile,
+    );
+  }
+}
+
+class _PreviewMoveDraggable extends StatefulWidget {
+  const _PreviewMoveDraggable({
+    required this.data,
+    required this.feedbackSize,
+    required this.feedback,
+    required this.childWhenDragging,
+    required this.child,
+  });
+
+  final int data;
+  final Size feedbackSize;
+  final Widget feedback;
+  final Widget childWhenDragging;
+  final Widget child;
+
+  @override
+  State<_PreviewMoveDraggable> createState() => _PreviewMoveDraggableState();
+}
+
+class _PreviewMoveDraggableState extends State<_PreviewMoveDraggable> {
+  bool _isDragging = false;
+
+  void _setDragging(bool value) {
+    if (_isDragging != value) {
+      setState(() => _isDragging = value);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      key: ValueKey<String>('preview-move-cursor-${widget.data}'),
+      cursor: _isDragging
+          ? SystemMouseCursors.grabbing
+          : SystemMouseCursors.grab,
+      child: LongPressDraggable<int>(
+        data: widget.data,
+        delay: const Duration(milliseconds: 220),
+        dragAnchorStrategy:
+            (
+              Draggable<Object> draggable,
+              BuildContext context,
+              Offset position,
+            ) {
+              return Offset(
+                widget.feedbackSize.width / 2,
+                widget.feedbackSize.height / 2,
+              );
+            },
+        onDragStarted: () => _setDragging(true),
+        onDragEnd: (_) => _setDragging(false),
+        feedback: widget.feedback,
+        childWhenDragging: widget.childWhenDragging,
+        child: widget.child,
+      ),
     );
   }
 }
@@ -566,7 +618,7 @@ class _ViewportControlsState extends State<_ViewportControls> {
           ? _pressedViewportPointers.isNotEmpty
                 ? SystemMouseCursors.grabbing
                 : SystemMouseCursors.grab
-          : SystemMouseCursors.basic,
+          : MouseCursor.defer,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: LayoutBuilder(
@@ -862,6 +914,9 @@ class _PreviewTileBody extends StatelessWidget {
             color: backgroundColor,
             child: InkWell(
               onTap: onTap,
+              mouseCursor: onTap == null
+                  ? MouseCursor.defer
+                  : SystemMouseCursors.click,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final emptyTileIconSize =
