@@ -44,6 +44,12 @@ try {
     throw "c2patool failed to install the official C2PA trust list"
   }
   $C2paTrustListMetadataUrl = 'https://raw.githubusercontent.com/c2pa-org/conformance-public/refs/heads/main/trust-list/C2PA-TRUST-LIST.json'
+  $CaiTrustAnchorsUrl = 'https://verify.contentauthenticity.org/trust/anchors.pem'
+  $CaiAllowedListUrl = 'https://verify.contentauthenticity.org/trust/allowed.sha256.txt'
+  $CaiTrustConfigUrl = 'https://verify.contentauthenticity.org/trust/store.cfg'
+  Invoke-WebRequest -Uri $CaiTrustAnchorsUrl -OutFile (Join-Path $BundleDir 'c2pa-trust-list-legacy.pem')
+  Invoke-WebRequest -Uri $CaiAllowedListUrl -OutFile (Join-Path $BundleDir 'c2pa-trust-allowed.sha256.txt')
+  Invoke-WebRequest -Uri $CaiTrustConfigUrl -OutFile (Join-Path $BundleDir 'c2pa-trust-store.cfg')
   Invoke-WebRequest -Uri $C2paTrustListMetadataUrl -OutFile (Join-Path $BundleDir 'c2pa-trust-list.json')
 }
 finally {

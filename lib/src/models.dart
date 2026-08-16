@@ -53,7 +53,14 @@ String shortMediaTypeLabel(String path, MediaKind mediaKind) {
   };
 }
 
-enum C2paStatus { unknown, absent, untrusted, trusted, invalid }
+enum C2paStatus {
+  unknown,
+  absent,
+  untrusted,
+  legacyTrusted,
+  conformant,
+  invalid,
+}
 
 class AiMediaMetadata {
   const AiMediaMetadata({
@@ -67,7 +74,10 @@ class AiMediaMetadata {
   final String? model;
 
   bool get hasC2pa => switch (c2paStatus) {
-    C2paStatus.untrusted || C2paStatus.trusted || C2paStatus.invalid => true,
+    C2paStatus.untrusted ||
+    C2paStatus.legacyTrusted ||
+    C2paStatus.conformant ||
+    C2paStatus.invalid => true,
     C2paStatus.unknown || C2paStatus.absent => false,
   };
 

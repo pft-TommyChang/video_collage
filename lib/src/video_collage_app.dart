@@ -214,7 +214,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     if (widget.refreshC2paTrustListOnLaunch) {
       unawaited(_refreshC2paTrustListInBackground());
       _c2paTrustListRefreshTimer = Timer.periodic(
-        const Duration(hours: 24),
+        C2paTrustListService.defaultUpdateInterval,
         (_) => unawaited(_refreshC2paTrustListInBackground()),
       );
     }

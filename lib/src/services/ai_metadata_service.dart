@@ -52,11 +52,11 @@ class AiMetadataService {
     }
 
     try {
-      final settingsPath = await trustListService.settingsPathFor(executable);
-      final result = await Process.run(
+      final plan = await trustListService.verificationPlanFor(
         executable,
-        _c2paArguments(filePath, settingsPath),
+        filePath,
       );
+      final result = await Process.run(executable, plan.officialArguments);
       if (result.exitCode != 0) {
         final message = '${result.stdout}\n${result.stderr}'.toLowerCase();
         return AiMediaMetadata(
@@ -65,19 +65,34 @@ class AiMetadataService {
               : C2paStatus.invalid,
         );
       }
-      return parseC2paJson(result.stdout as String);
+      final official = parseC2paJson(result.stdout as String);
+      if (official.c2paStatus != C2paStatus.untrusted ||
+          plan.legacyArguments == null) {
+        return official;
+      }
+
+      // Content Authenticity Verify checks its legacy store only when the
+      // credential is not in the official C2PA conformance trust list.
+      final legacyResult = await Process.run(executable, plan.legacyArguments!);
+      if (legacyResult.exitCode != 0) {
+        return official;
+      }
+      try {
+        final legacy = parseC2paJson(
+          legacyResult.stdout as String,
+          trustedStatus: C2paStatus.legacyTrusted,
+        );
+        return legacy.c2paStatus == C2paStatus.legacyTrusted
+            ? legacy
+            : official;
+      } on FormatException {
+        return official;
+      }
     } on FormatException {
       return const AiMediaMetadata(c2paStatus: C2paStatus.invalid);
     } on ProcessException {
       return const AiMediaMetadata();
     }
-  }
-
-  List<String> _c2paArguments(String filePath, String? settingsPath) {
-    if (settingsPath == null) {
-      return <String>[filePath];
-    }
-    return <String>['--settings', settingsPath, filePath];
   }
 
   String? _findC2paTool() {
@@ -121,7 +136,10 @@ class AiMetadataService {
     }
   }
 
-  static AiMediaMetadata parseC2paJson(String source) {
+  static AiMediaMetadata parseC2paJson(
+    String source, {
+    C2paStatus trustedStatus = C2paStatus.conformant,
+  }) {
     final root = jsonDecode(source);
     if (root is! Map<String, dynamic>) {
       throw const FormatException('C2PA output is not an object.');
@@ -222,7 +240,7 @@ class AiMetadataService {
     final status = hasValidationFailure
         ? C2paStatus.invalid
         : hasTrustedCredential
-        ? C2paStatus.trusted
+        ? trustedStatus
         : hasUntrustedCredential || hasValidSignature
         ? C2paStatus.untrusted
         : C2paStatus.invalid;

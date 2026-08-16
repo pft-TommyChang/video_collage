@@ -5,7 +5,7 @@ import 'package:video_collage_mac/src/models.dart';
 import 'package:video_collage_mac/src/services/ai_metadata_service.dart';
 
 void main() {
-  test('parses vendor, model, and trusted state from C2PA', () {
+  test('parses vendor, model, and conformant state from C2PA', () {
     final source = jsonEncode(<String, Object>{
       'active_manifest': 'manifest-1',
       'manifests': <String, Object>{
@@ -39,7 +39,7 @@ void main() {
 
     final metadata = AiMetadataService.parseC2paJson(source);
 
-    expect(metadata.c2paStatus, C2paStatus.trusted);
+    expect(metadata.c2paStatus, C2paStatus.conformant);
     expect(metadata.vendor, 'BytePlus');
     expect(metadata.model, 'dreamina-seedance-2-5');
   });
@@ -67,6 +67,59 @@ void main() {
     final metadata = AiMetadataService.parseC2paJson(source);
 
     expect(metadata.c2paStatus, C2paStatus.untrusted);
+  });
+
+  test('does not confuse an untrusted timestamp with an untrusted signer', () {
+    final source = jsonEncode(<String, Object>{
+      'active_manifest': 'manifest-1',
+      'manifests': <String, Object>{
+        'manifest-1': <String, Object>{
+          'signature_info': <String, Object>{'issuer': 'OpenAI Media Service'},
+        },
+      },
+      'validation_results': <String, Object>{
+        'activeManifest': <String, Object>{
+          'success': <Object>[
+            <String, Object>{'code': 'claimSignature.validated'},
+            <String, Object>{'code': 'signingCredential.trusted'},
+          ],
+          'informational': <Object>[
+            <String, Object>{'code': 'timeStamp.untrusted'},
+          ],
+        },
+      },
+    });
+
+    final metadata = AiMetadataService.parseC2paJson(source);
+
+    expect(metadata.c2paStatus, C2paStatus.conformant);
+    expect(metadata.vendor, 'OpenAI');
+  });
+
+  test('labels a credential trusted only by the legacy pass separately', () {
+    final source = jsonEncode(<String, Object>{
+      'active_manifest': 'manifest-1',
+      'manifests': <String, Object>{
+        'manifest-1': <String, Object>{
+          'signature_info': <String, Object>{'issuer': 'Legacy signer'},
+        },
+      },
+      'validation_results': <String, Object>{
+        'activeManifest': <String, Object>{
+          'success': <Object>[
+            <String, Object>{'code': 'claimSignature.validated'},
+            <String, Object>{'code': 'signingCredential.trusted'},
+          ],
+        },
+      },
+    });
+
+    final metadata = AiMetadataService.parseC2paJson(
+      source,
+      trustedStatus: C2paStatus.legacyTrusted,
+    );
+
+    expect(metadata.c2paStatus, C2paStatus.legacyTrusted);
   });
 
   test('marks a mismatched C2PA claim invalid', () {
