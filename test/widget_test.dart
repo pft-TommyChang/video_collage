@@ -111,6 +111,12 @@ void main() {
       findsNothing,
     );
     expect(find.byTooltip('Auto Layout'), findsOneWidget);
+    final disabledDurationFinder = find.text('0:00 / 0:00');
+    final disabledDuration = tester.widget<Text>(disabledDurationFinder);
+    expect(
+      disabledDuration.style?.color,
+      Theme.of(tester.element(disabledDurationFinder)).disabledColor,
+    );
     expect(find.text('Add Media'), findsNothing);
     expect(find.byTooltip('Add media'), findsOneWidget);
     expect(
@@ -131,8 +137,46 @@ void main() {
     );
     expect(find.byTooltip('Merge videos'), findsOneWidget);
     expect(
+      find.descendant(
+        of: find.byTooltip('Reset media'),
+        matching: find.byIcon(Icons.refresh),
+      ),
+      findsOneWidget,
+    );
+    expect(
       tester.getCenter(find.byTooltip('Merge videos')).dx,
       lessThan(tester.getCenter(find.byTooltip('Reset media')).dx),
+    );
+  });
+
+  testWidgets('enter applies custom width and height', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    await tester.pumpWidget(buildTestApp());
+    await tester.pumpAndSettle();
+
+    Finder resolutionField(String label) => find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.decoration?.labelText == label,
+    );
+
+    await scrollSettingsIntoView(tester, resolutionField('Width'));
+    await tester.enterText(resolutionField('Width'), '1201');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(resolutionField('Width')).controller?.text,
+      '1202',
+    );
+
+    await tester.enterText(resolutionField('Height'), '721');
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(resolutionField('Height')).controller?.text,
+      '722',
     );
   });
 
@@ -923,6 +967,18 @@ void main() {
 
     expect(find.text('2 loaded • capacity 2'), findsOneWidget);
     expect(find.text('Auto layout picked 1×2 • 16:9.'), findsOneWidget);
+    final muteButton = find.ancestor(
+      of: find.byTooltip('Mute preview'),
+      matching: find.byType(IconButton),
+    );
+    expect(tester.widget<IconButton>(muteButton).onPressed, isNull);
+    final photoDuration = find.byKey(
+      const ValueKey<String>('preview-duration'),
+    );
+    expect(
+      tester.widget<Text>(photoDuration).style?.color,
+      Theme.of(tester.element(photoDuration)).disabledColor,
+    );
     expect(
       tester
           .getSize(find.byKey(const ValueKey<String>('ai-metadata-row-clip-1')))

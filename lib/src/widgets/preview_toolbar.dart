@@ -137,7 +137,7 @@ class _PreviewToolbar extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     _PreviewPlaybackButton(
-                      onPressed: hasClips ? onToggleMute : null,
+                      onPressed: hasPreviewMotion ? onToggleMute : null,
                       tooltip: isPreviewMuted
                           ? 'Unmute preview'
                           : 'Mute preview',
@@ -151,8 +151,12 @@ class _PreviewToolbar extends StatelessWidget {
                     if (showDuration) ...<Widget>[
                       const SizedBox(width: 8),
                       Text(
+                        key: const ValueKey<String>('preview-duration'),
                         '${formatDuration(previewPosition)} / ${formatDuration(previewDuration)}',
-                        style: _durationStyle(context),
+                        style: _durationStyle(
+                          context,
+                          enabled: hasPreviewMotion,
+                        ),
                       ),
                       const SizedBox(width: 8),
                     ],
@@ -166,9 +170,10 @@ class _PreviewToolbar extends StatelessWidget {
     );
   }
 
-  TextStyle? _durationStyle(BuildContext context) {
+  TextStyle? _durationStyle(BuildContext context, {required bool enabled}) {
     final baseStyle = Theme.of(context).textTheme.bodyMedium;
     return baseStyle?.copyWith(
+      color: enabled ? baseStyle.color : Theme.of(context).disabledColor,
       fontSize: (baseStyle.fontSize ?? 14) * 1.17,
       fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
     );

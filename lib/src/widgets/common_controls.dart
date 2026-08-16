@@ -635,7 +635,7 @@ class _EmptyListState extends StatelessWidget {
                         Text(
                           isLoading
                               ? 'Opening media picker…'
-                              : 'Drag & drop videos or photos here',
+                              : 'Drop videos or photos',
                           style: Theme.of(context).textTheme.titleSmall
                               ?.copyWith(
                                 color: const Color(0xFF171A21),
@@ -646,7 +646,7 @@ class _EmptyListState extends StatelessWidget {
                         Text(
                           isLoading
                               ? 'Select one or more files to continue.'
-                              : 'or click this area to browse.',
+                              : 'here or into a grid cell, or click to browse.',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: const Color(0xFF697180)),
                         ),

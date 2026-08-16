@@ -231,7 +231,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                         tooltip: 'Reset media',
                                         style: _sectionHeaderIconButtonStyle(),
                                         icon: const Icon(
-                                          Icons.cleaning_services_outlined,
+                                          Icons.refresh,
                                           size: 18,
                                         ),
                                       ),
@@ -659,6 +659,13 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                               controller: _widthController,
                                               onChanged: (_) =>
                                                   _updateState(() {}),
+                                              onSubmitted:
+                                                  _canApplyCustomResolution
+                                                  ? (_) =>
+                                                        _applyCustomResolution()
+                                                  : null,
+                                              textInputAction:
+                                                  TextInputAction.done,
                                               keyboardType:
                                                   TextInputType.number,
                                               inputFormatters:
@@ -678,6 +685,13 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                               controller: _heightController,
                                               onChanged: (_) =>
                                                   _updateState(() {}),
+                                              onSubmitted:
+                                                  _canApplyCustomResolution
+                                                  ? (_) =>
+                                                        _applyCustomResolution()
+                                                  : null,
+                                              textInputAction:
+                                                  TextInputAction.done,
                                               keyboardType:
                                                   TextInputType.number,
                                               inputFormatters:
