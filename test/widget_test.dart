@@ -111,6 +111,24 @@ void main() {
       findsNothing,
     );
     expect(find.byTooltip('Auto Layout'), findsOneWidget);
+    expect(find.text('Add Media'), findsNothing);
+    expect(find.byTooltip('Add media'), findsOneWidget);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(const ValueKey<String>('add-media-header-button')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    expect(
+      tester
+          .widget<InkWell>(
+            find.byKey(const ValueKey<String>('empty-media-add-target')),
+          )
+          .onTap,
+      isNotNull,
+    );
     expect(find.byTooltip('Merge videos'), findsOneWidget);
     expect(
       tester.getCenter(find.byTooltip('Merge videos')).dx,

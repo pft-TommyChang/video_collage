@@ -197,6 +197,21 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                     mainAxisSize: MainAxisSize.min,
                                     children: <Widget>[
                                       IconButton.outlined(
+                                        key: const ValueKey<String>(
+                                          'add-media-header-button',
+                                        ),
+                                        onPressed: _isImporting
+                                            ? null
+                                            : _pickMedia,
+                                        tooltip: 'Add media',
+                                        style: _sectionHeaderIconButtonStyle(),
+                                        icon: const Icon(
+                                          Icons.add_rounded,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton.outlined(
                                         onPressed: _isExporting || _isImporting
                                             ? null
                                             : () => unawaited(
@@ -226,31 +241,13 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: <Widget>[
-                                      Row(
-                                        children: <Widget>[
-                                          Expanded(
-                                            child: Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: FilledButton.icon(
-                                                onPressed: _isImporting
-                                                    ? null
-                                                    : _pickMedia,
-                                                icon: const Icon(
-                                                  Icons.video_library_outlined,
-                                                ),
-                                                label: Text(
-                                                  _isImporting
-                                                      ? 'Loading...'
-                                                      : 'Add Media',
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 16),
                                       if (_clips.isEmpty)
-                                        const _EmptyListState()
+                                        _EmptyListState(
+                                          isLoading: _isImporting,
+                                          onTap: _isImporting
+                                              ? null
+                                              : _pickMedia,
+                                        )
                                       else
                                         ..._clips.asMap().entries.map((entry) {
                                           final clip = entry.value;

@@ -215,6 +215,9 @@ class _ColorSelector extends StatelessWidget {
         ? _transparentColor
         : null;
     final hasOverride = overrideChoice != null;
+    const dropdownBackground = Color(0xFFFFFFFF);
+    const dropdownSelectedColor = Color(0xFFF3EFE7);
+    final dropdownBorderRadius = BorderRadius.circular(18);
     final choices = <ColorChoice>[..._colorChoices, ?overrideChoice];
     final selectedChoice =
         overrideChoice ??
@@ -254,86 +257,108 @@ class _ColorSelector extends StatelessWidget {
               child: Stack(
                 alignment: Alignment.centerRight,
                 children: <Widget>[
-                  DropdownButtonFormField<ColorChoice>(
-                    key: ValueKey(
-                      '$label-${selected.color.toARGB32()}-$hasOverride',
-                    ),
-                    initialValue: selectedChoice,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: hasOverride
-                          ? const Color(0xFFF1EEE9)
-                          : Colors.white,
-                      contentPadding: const EdgeInsets.fromLTRB(14, 12, 44, 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF171A21),
-                          width: 2,
+                  Theme(
+                    data: Theme.of(
+                      context,
+                    ).copyWith(focusColor: dropdownSelectedColor),
+                    child: ButtonTheme.fromButtonThemeData(
+                      data: ButtonTheme.of(
+                        context,
+                      ).copyWith(alignedDropdown: true),
+                      child: DropdownButtonFormField<ColorChoice>(
+                        key: ValueKey(
+                          '$label-${selected.color.toARGB32()}-$hasOverride',
                         ),
-                      ),
-                    ),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                    items: choices.map((choice) {
-                      final isImageChoice = identical(choice, imageChoice);
-                      return DropdownMenuItem<ColorChoice>(
-                        value: choice,
-                        child: Row(
-                          children: <Widget>[
-                            if (isImageChoice)
-                              const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: Icon(Icons.image, size: 19),
-                              )
-                            else if (choice.isTransparent)
-                              const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: Icon(
-                                  Icons.layers_clear_outlined,
-                                  size: 19,
-                                ),
-                              )
-                            else
-                              Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: choice.color,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: const Color(0xFFD7CEC2),
+                        initialValue: selectedChoice,
+                        isExpanded: true,
+                        elevation: 4,
+                        dropdownColor: dropdownBackground,
+                        borderRadius: dropdownBorderRadius,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: hasOverride
+                              ? const Color(0xFFF1EEE9)
+                              : dropdownBackground,
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            14,
+                            12,
+                            44,
+                            12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: dropdownBorderRadius,
+                            borderSide: const BorderSide(
+                              color: Color(0xFFD7CEC2),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: dropdownBorderRadius,
+                            borderSide: const BorderSide(
+                              color: Color(0xFFD7CEC2),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: dropdownBorderRadius,
+                            borderSide: const BorderSide(
+                              color: Color(0xFF171A21),
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                        items: choices.map((choice) {
+                          final isImageChoice = identical(choice, imageChoice);
+                          return DropdownMenuItem<ColorChoice>(
+                            value: choice,
+                            child: Row(
+                              children: <Widget>[
+                                if (isImageChoice)
+                                  const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: Icon(Icons.image, size: 19),
+                                  )
+                                else if (choice.isTransparent)
+                                  const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: Icon(
+                                      Icons.layers_clear_outlined,
+                                      size: 19,
+                                    ),
+                                  )
+                                else
+                                  Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: choice.color,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: const Color(0xFFD7CEC2),
+                                      ),
+                                    ),
+                                  ),
+                                const SizedBox(width: 10),
+                                Flexible(
+                                  child: Text(
+                                    choice.label,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                              ),
-                            const SizedBox(width: 10),
-                            Flexible(
-                              child: Text(
-                                choice.label,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              ],
                             ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: hasOverride
-                        ? null
-                        : (choice) {
-                            if (choice != null) {
-                              onSelected(choice);
-                            }
-                          },
+                          );
+                        }).toList(),
+                        onChanged: hasOverride
+                            ? null
+                            : (choice) {
+                                if (choice != null) {
+                                  onSelected(choice);
+                                }
+                              },
+                      ),
+                    ),
                   ),
                   Positioned(
                     right: 40,
@@ -550,23 +575,89 @@ class _StepperRow extends StatelessWidget {
 }
 
 class _EmptyListState extends StatelessWidget {
-  const _EmptyListState();
+  const _EmptyListState({required this.isLoading, required this.onTap});
+
+  final bool isLoading;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9F6F1),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE7DED1)),
-      ),
-      child: Text(
-        'Import videos or photos to start your collage.',
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF697180)),
+    final borderRadius = BorderRadius.circular(18);
+
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: isLoading ? 'Opening media picker' : 'Browse for media',
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: borderRadius,
+        child: Ink(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9F6F1),
+            borderRadius: borderRadius,
+            border: Border.all(color: const Color(0xFFE7DED1)),
+          ),
+          child: InkWell(
+            key: const ValueKey<String>('empty-media-add-target'),
+            onTap: onTap,
+            borderRadius: borderRadius,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFE7DE),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    alignment: Alignment.center,
+                    child: isLoading
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2.2),
+                          )
+                        : const Icon(
+                            Icons.file_upload_outlined,
+                            color: Color(0xFFC94F32),
+                            size: 23,
+                          ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          isLoading
+                              ? 'Opening media picker…'
+                              : 'Drag & drop videos or photos here',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                color: const Color(0xFF171A21),
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isLoading
+                              ? 'Select one or more files to continue.'
+                              : 'or click this area to browse.',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: const Color(0xFF697180)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -19,54 +19,71 @@ class _SelectionDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const dropdownBackground = Color(0xFFFFFFFF);
+    const dropdownSelectedColor = Color(0xFFF3EFE7);
+    final dropdownBorderRadius = BorderRadius.circular(18);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(label, style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 10),
-        DropdownButtonFormField<T>(
-          key: ValueKey<String>(itemLabel(selected)),
-          initialValue: selected,
-          isExpanded: true,
-          selectedItemBuilder: itemBuilder == null
-              ? null
-              : (context) => options
-                    .map((option) => itemBuilder!(option))
-                    .toList(growable: false),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFF171A21), width: 2),
+        Theme(
+          data: Theme.of(context).copyWith(focusColor: dropdownSelectedColor),
+          child: ButtonTheme.fromButtonThemeData(
+            data: ButtonTheme.of(context).copyWith(alignedDropdown: true),
+            child: DropdownButtonFormField<T>(
+              key: ValueKey<String>(itemLabel(selected)),
+              initialValue: selected,
+              isExpanded: true,
+              elevation: 4,
+              dropdownColor: dropdownBackground,
+              borderRadius: dropdownBorderRadius,
+              selectedItemBuilder: itemBuilder == null
+                  ? null
+                  : (context) => options
+                        .map((option) => itemBuilder!(option))
+                        .toList(growable: false),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: dropdownBackground,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: dropdownBorderRadius,
+                  borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: dropdownBorderRadius,
+                  borderSide: const BorderSide(color: Color(0xFFD7CEC2)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: dropdownBorderRadius,
+                  borderSide: const BorderSide(
+                    color: Color(0xFF171A21),
+                    width: 2,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              items: options
+                  .map(
+                    (option) => DropdownMenuItem<T>(
+                      value: option,
+                      child:
+                          itemBuilder?.call(option) ?? Text(itemLabel(option)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  onSelected(value);
+                }
+              },
             ),
           ),
-          icon: const Icon(Icons.keyboard_arrow_down_rounded),
-          items: options
-              .map(
-                (option) => DropdownMenuItem<T>(
-                  value: option,
-                  child: itemBuilder?.call(option) ?? Text(itemLabel(option)),
-                ),
-              )
-              .toList(),
-          onChanged: (value) {
-            if (value != null) {
-              onSelected(value);
-            }
-          },
         ),
       ],
     );
