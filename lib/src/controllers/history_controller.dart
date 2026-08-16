@@ -163,39 +163,17 @@ extension _HistoryController on _VideoCollageScreenState {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            IconButton(
-                              tooltip: 'Open folder',
-                              onPressed: !exists
-                                  ? null
-                                  : () {
-                                      Navigator.of(dialogContext).pop();
-                                      unawaited(
-                                        _showExportHistoryEntryInFolder(entry),
-                                      );
-                                    },
-                              icon: const Icon(Icons.folder_open_outlined),
-                            ),
-                            IconButton(
-                              tooltip: 'Open file',
-                              onPressed: !exists
-                                  ? null
-                                  : () {
-                                      Navigator.of(dialogContext).pop();
-                                      unawaited(_openExportHistoryEntry(entry));
-                                    },
-                              icon: const Icon(Icons.open_in_new_rounded),
-                            ),
-                          ],
+                        trailing: IconButton(
+                          tooltip: 'Open folder',
+                          onPressed: !exists
+                              ? null
+                              : () {
+                                  unawaited(
+                                    _showExportHistoryEntryInFolder(entry),
+                                  );
+                                },
+                          icon: const Icon(Icons.folder_open_outlined),
                         ),
-                        onTap: !exists
-                            ? null
-                            : () {
-                                Navigator.of(dialogContext).pop();
-                                unawaited(_openExportHistoryEntry(entry));
-                              },
                       );
                     },
                   ),
