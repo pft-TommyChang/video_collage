@@ -53,6 +53,9 @@ extension _SettingsController on _VideoCollageScreenState {
     } finally {
       if (widget.deferFirstFrameUntilSettingsRestored) {
         WidgetsBinding.instance.allowFirstFrame();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_dismissNativeStartupView());
+        });
       }
     }
   }

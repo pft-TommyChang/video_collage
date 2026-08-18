@@ -103,6 +103,9 @@ class VideoCollageScreen extends StatefulWidget {
 }
 
 class _VideoCollageScreenState extends State<VideoCollageScreen> {
+  static const MethodChannel _startupChannel = MethodChannel(
+    'video_collage/startup',
+  );
   static const MethodChannel _mediaOpenChannel = MethodChannel(
     'video_collage/media_open',
   );
@@ -252,4 +255,12 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   Widget build(BuildContext context) => _buildScreen(context);
 
   void _updateState(VoidCallback update) => setState(update);
+
+  Future<void> _dismissNativeStartupView() async {
+    try {
+      await _startupChannel.invokeMethod<void>('dismiss');
+    } on MissingPluginException {
+      // Only the macOS runner installs this native startup view.
+    }
+  }
 }
