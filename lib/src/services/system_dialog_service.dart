@@ -106,6 +106,21 @@ class SystemDialogService {
     return location?.path;
   }
 
+  Future<String?> pickAudioSavePath({
+    required String suggestedName,
+    String? initialDirectory,
+  }) async {
+    final location = await getSaveLocation(
+      acceptedTypeGroups: const <XTypeGroup>[
+        XTypeGroup(label: 'M4A Audio', extensions: <String>['m4a']),
+      ],
+      initialDirectory: initialDirectory,
+      suggestedName: suggestedName,
+      confirmButtonText: 'Export',
+    );
+    return location?.path;
+  }
+
   PickedMediaFile _pickedMediaFromMap(Map<Object?, Object?> map) {
     final path = map['path'] as String;
     final width = map['width'];

@@ -240,6 +240,77 @@ class VideoExportService {
     reportProgress(progress: 1, processedMilliseconds: totalMilliseconds);
   }
 
+  Future<void> exportTrimmedAudio({
+    required String filePath,
+    required Duration start,
+    required Duration duration,
+    required String outputPath,
+    void Function(VideoExportProgress progress)? onProgress,
+  }) async {
+    final totalMilliseconds = math.max(1, duration.inMilliseconds);
+    var lastProgress = 0.0;
+
+    void reportProgress({
+      required double progress,
+      required int processedMilliseconds,
+      double? speed,
+    }) {
+      if (onProgress == null) {
+        return;
+      }
+      final normalized = progress.clamp(0.0, 1.0);
+      if (normalized < lastProgress) {
+        return;
+      }
+      lastProgress = normalized;
+      onProgress(
+        VideoExportProgress(
+          progress: normalized,
+          processed: Duration(milliseconds: processedMilliseconds),
+          total: duration,
+          speed: speed,
+        ),
+      );
+    }
+
+    final arguments = <String>[
+      '-y',
+      '-threads',
+      _decoderThreadCount,
+      '-i',
+      filePath,
+      '-ss',
+      _durationSeconds(start),
+      '-t',
+      _durationSeconds(duration),
+      '-map',
+      '0:a:0',
+      '-vn',
+      '-af',
+      'asetpts=PTS-STARTPTS',
+      ..._aacAudioEncodingArguments(),
+      '-movflags',
+      '+faststart',
+      outputPath,
+    ];
+    reportProgress(progress: 0, processedMilliseconds: 0);
+    await _runFfmpegCommand(
+      arguments: arguments,
+      onStatistics: (statistics) {
+        final processedMilliseconds = statistics.getTime().round().clamp(
+          0,
+          totalMilliseconds,
+        );
+        reportProgress(
+          progress: processedMilliseconds / totalMilliseconds,
+          processedMilliseconds: processedMilliseconds,
+          speed: statistics.getSpeed(),
+        );
+      },
+    );
+    reportProgress(progress: 1, processedMilliseconds: totalMilliseconds);
+  }
+
   Future<VideoClipInfo> probeMedia(String filePath) async {
     return _isPhotoPath(filePath)
         ? _probePhoto(filePath)

@@ -953,6 +953,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('Trim video'), findsOneWidget);
+    expect(find.text('Export video'), findsOneWidget);
+    expect(find.text('Export audio'), findsOneWidget);
+    expect(
+      find.byTooltip('This video does not contain an audio track'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

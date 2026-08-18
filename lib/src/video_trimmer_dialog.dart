@@ -21,6 +21,8 @@ enum _TimelineDragTarget { trimStart, trimEnd, selection, playhead }
 
 enum _TrimExportAction { openFile, openFolder }
 
+enum _TrimExportKind { video, audio }
+
 enum _TrimExportResolution {
   original('Original', null),
   p720('720p', 720),
@@ -61,10 +63,12 @@ class VideoTrimmerDialog extends StatefulWidget {
     super.key,
     required this.clip,
     required this.exportService,
+    this.dialogService = const SystemDialogService(),
   });
 
   final VideoClipInfo clip;
   final VideoExportService exportService;
+  final SystemDialogService dialogService;
 
   @override
   State<VideoTrimmerDialog> createState() => _VideoTrimmerDialogState();
@@ -82,8 +86,6 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
   static const double _minimumDialogContentHeight = 250;
   static const double _maximumDialogContentHeight = 532;
   static const double _maximumPreviewHeight = 420;
-  static const SystemDialogService _dialogService = SystemDialogService();
-
   VideoPlayerController? _controller;
   Timer? _exportCompletionTimer;
   Timer? _toastTimer;
@@ -98,6 +100,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
   bool _showExportComplete = false;
   double _exportProgress = 0;
   String? _lastExportPath;
+  _TrimExportKind? _activeExportKind;
+  _TrimExportKind? _completedExportKind;
   _TrimExportResolution _exportResolution = _TrimExportResolution.original;
   _TrimExportFrameRate _exportFrameRate = _TrimExportFrameRate.original;
   _TimelineDragTarget? _activeDragTarget;
@@ -184,7 +188,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
     if (_isExporting) {
       return;
     }
-    final outputPath = await _dialogService.pickSavePath(
+    final outputPath = await widget.dialogService.pickSavePath(
       format: ExportFormat.mp4,
       suggestedName:
           '${p.basenameWithoutExtension(widget.clip.path)}_trimmed.mp4',
@@ -202,6 +206,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       _isExporting = true;
       _showExportComplete = false;
       _exportProgress = 0;
+      _activeExportKind = _TrimExportKind.video;
+      _completedExportKind = null;
     });
     try {
       await widget.exportService.exportTrimmedVideo(
@@ -228,12 +234,15 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
         _showExportComplete = true;
         _exportProgress = 1;
         _lastExportPath = outputPath;
+        _activeExportKind = null;
+        _completedExportKind = _TrimExportKind.video;
       });
       _exportCompletionTimer = Timer(const Duration(milliseconds: 1800), () {
         if (mounted) {
           setState(() {
             _showExportComplete = false;
             _exportProgress = 0;
+            _completedExportKind = null;
           });
         }
       });
@@ -246,6 +255,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
         _isExporting = false;
         _showExportComplete = false;
         _exportProgress = 0;
+        _activeExportKind = null;
       });
       final message =
           error is VideoExportException && error.message == 'Export cancelled.'
@@ -273,6 +283,91 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       _exportFrameRate = settings.frameRate;
     });
     await _exportTrimmedVideo();
+  }
+
+  Future<void> _handleAudioExportButtonPressed() async {
+    if (_isExporting) {
+      if (_activeExportKind == _TrimExportKind.audio) {
+        await widget.exportService.cancelActiveExport();
+      }
+      return;
+    }
+    if (!widget.clip.hasAudio) {
+      _showToast('This video does not contain an audio track.');
+      return;
+    }
+    await _controller?.pause();
+    if (!mounted) {
+      return;
+    }
+    final outputPath = await widget.dialogService.pickAudioSavePath(
+      suggestedName:
+          '${p.basenameWithoutExtension(widget.clip.path)}_trimmed_audio.m4a',
+    );
+    if (outputPath == null || !mounted) {
+      return;
+    }
+
+    final selectedDuration = Duration(
+      milliseconds: (_selection.end - _selection.start).round(),
+    );
+    setState(() {
+      _exportCompletionTimer?.cancel();
+      _isExporting = true;
+      _showExportComplete = false;
+      _exportProgress = 0;
+      _activeExportKind = _TrimExportKind.audio;
+      _completedExportKind = null;
+    });
+    try {
+      await widget.exportService.exportTrimmedAudio(
+        filePath: widget.clip.path,
+        start: Duration(milliseconds: _selection.start.round()),
+        duration: selectedDuration,
+        outputPath: outputPath,
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() => _exportProgress = progress.progress);
+          }
+        },
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isExporting = false;
+        _showExportComplete = true;
+        _exportProgress = 1;
+        _lastExportPath = outputPath;
+        _activeExportKind = null;
+        _completedExportKind = _TrimExportKind.audio;
+      });
+      _exportCompletionTimer = Timer(const Duration(milliseconds: 1800), () {
+        if (mounted) {
+          setState(() {
+            _showExportComplete = false;
+            _exportProgress = 0;
+            _completedExportKind = null;
+          });
+        }
+      });
+      _showToast('Exported ${p.basename(outputPath)}');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isExporting = false;
+        _showExportComplete = false;
+        _exportProgress = 0;
+        _activeExportKind = null;
+      });
+      final message =
+          error is VideoExportException && error.message == 'Export cancelled.'
+          ? error.message
+          : 'Unable to export trimmed audio: $error';
+      _showToast(message);
+    }
   }
 
   Future<_TrimExportSettings?> _showExportSettings() {
@@ -766,12 +861,43 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
           child: Row(
             children: <Widget>[
               _TrimExportButton(
-                onPressed: _controller == null
+                onPressed:
+                    _controller == null ||
+                        (_isExporting &&
+                            _activeExportKind != _TrimExportKind.video)
                     ? null
                     : () => unawaited(_handleExportButtonPressed()),
-                isExporting: _isExporting,
-                showCompleted: _showExportComplete,
+                label: 'Export video',
+                isExporting:
+                    _isExporting && _activeExportKind == _TrimExportKind.video,
+                showCompleted:
+                    _showExportComplete &&
+                    _completedExportKind == _TrimExportKind.video,
                 progress: _exportProgress,
+              ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: widget.clip.hasAudio
+                    ? 'Export the selected audio as M4A'
+                    : 'This video does not contain an audio track',
+                child: _TrimExportButton(
+                  onPressed:
+                      _controller == null ||
+                          !widget.clip.hasAudio ||
+                          (_isExporting &&
+                              _activeExportKind != _TrimExportKind.audio)
+                      ? null
+                      : () => unawaited(_handleAudioExportButtonPressed()),
+                  label: 'Export audio',
+                  icon: Icons.audio_file_outlined,
+                  isExporting:
+                      _isExporting &&
+                      _activeExportKind == _TrimExportKind.audio,
+                  showCompleted:
+                      _showExportComplete &&
+                      _completedExportKind == _TrimExportKind.audio,
+                  progress: _exportProgress,
+                ),
               ),
               if (_lastExportPath != null) ...<Widget>[
                 const SizedBox(width: 8),
@@ -1101,20 +1227,24 @@ class _TrimExportChoiceSection<T> extends StatelessWidget {
 class _TrimExportButton extends StatelessWidget {
   const _TrimExportButton({
     required this.onPressed,
+    required this.label,
     required this.isExporting,
     required this.showCompleted,
     required this.progress,
+    this.icon = Icons.file_upload_outlined,
   });
 
   final VoidCallback? onPressed;
+  final String label;
   final bool isExporting;
   final bool showCompleted;
   final double progress;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     const radius = Radius.circular(16);
-    const buttonWidth = 124.0;
+    const buttonWidth = 142.0;
     // Matches the compact desktop height used by the adjacent Material
     // TextButton and FilledButton controls.
     const buttonHeight = 32.0;
@@ -1124,12 +1254,12 @@ class _TrimExportButton extends StatelessWidget {
     final displayProgress = showCompleted
         ? 1.0
         : (isExporting ? clampedProgress : 0.0);
-    final icon = showCompleted
+    final displayIcon = showCompleted
         ? Icons.check_rounded
         : isExporting
         ? Icons.stop_rounded
-        : Icons.file_upload_outlined;
-    final label = isExporting ? 'Exporting' : 'Export';
+        : icon;
+    final displayLabel = isExporting ? 'Exporting' : label;
 
     return SizedBox(
       width: buttonWidth,
@@ -1177,8 +1307,8 @@ class _TrimExportButton extends StatelessWidget {
                       ),
                       Center(
                         child: _TrimExportButtonContent(
-                          icon: icon,
-                          label: label,
+                          icon: displayIcon,
+                          label: displayLabel,
                           color: sharedButtonColor,
                         ),
                       ),
@@ -1189,8 +1319,8 @@ class _TrimExportButton extends StatelessWidget {
                             widthFactor: displayProgress,
                             child: Center(
                               child: _TrimExportButtonContent(
-                                icon: icon,
-                                label: label,
+                                icon: displayIcon,
+                                label: displayLabel,
                                 color: Colors.white,
                               ),
                             ),
