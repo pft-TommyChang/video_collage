@@ -288,6 +288,23 @@ void main() {
       tester.getCenter(find.text('Merge & Save')).dx,
       lessThan(tester.getCenter(find.text('Cancel')).dx),
     );
+    expect(
+      find.ancestor(
+        of: find.text('Cancel'),
+        matching: find.byType(OutlinedButton),
+      ),
+      findsOneWidget,
+    );
+    final mergeCancelButton = tester.widget<OutlinedButton>(
+      find.ancestor(
+        of: find.text('Cancel'),
+        matching: find.byType(OutlinedButton),
+      ),
+    );
+    expect(
+      mergeCancelButton.style?.side?.resolve(<WidgetState>{})?.color,
+      Theme.of(tester.element(find.text('Cancel'))).colorScheme.primary,
+    );
   });
 
   testWidgets('merge tool starts with supplied media and thumbnails', (
@@ -954,11 +971,83 @@ void main() {
 
     expect(find.text('Trim video'), findsOneWidget);
     expect(find.text('Export video'), findsOneWidget);
-    expect(find.text('Export audio'), findsOneWidget);
+    expect(find.text('Export audio'), findsNothing);
     expect(
-      find.byTooltip('This video does not contain an audio track'),
+      tester.getCenter(find.text('Apply trim')).dx,
+      lessThan(tester.getCenter(find.text('Cancel')).dx),
+    );
+    expect(
+      find.ancestor(
+        of: find.text('Cancel'),
+        matching: find.byType(OutlinedButton),
+      ),
       findsOneWidget,
     );
+    final trimCancelButton = tester.widget<OutlinedButton>(
+      find.ancestor(
+        of: find.text('Cancel'),
+        matching: find.byType(OutlinedButton),
+      ),
+    );
+    expect(
+      trimCancelButton.style?.side?.resolve(<WidgetState>{})?.color,
+      Theme.of(tester.element(find.text('Cancel'))).colorScheme.primary,
+    );
+    await tester.tap(find.byTooltip('Export options'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Export video'), findsWidgets);
+    expect(find.text('Export audio'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is PopupMenuItem && !widget.enabled,
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('trim export split button switches export type', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(800, 640));
+
+    const clip = VideoClipInfo(
+      path: '/missing-test-video-with-audio.mp4',
+      name: 'Test clip',
+      duration: Duration(seconds: 8),
+      width: 1280,
+      height: 720,
+      hasAudio: true,
+      mediaKind: MediaKind.video,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (context) => VideoTrimmerDialog(
+                clip: clip,
+                exportService: VideoExportService(),
+              ),
+            ),
+            child: const Text('Open trimmer'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open trimmer'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byTooltip('Export options'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.text('Export audio'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Export audio'), findsOneWidget);
+    expect(find.text('Export video'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

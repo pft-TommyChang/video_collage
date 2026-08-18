@@ -434,7 +434,13 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                     ),
                   ],
                   const Spacer(),
-                  TextButton(
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.primary,
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
                     onPressed: _isMerging
                         ? null
                         : () =>

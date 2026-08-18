@@ -21,7 +21,20 @@ enum _TimelineDragTarget { trimStart, trimEnd, selection, playhead }
 
 enum _TrimExportAction { openFile, openFolder }
 
-enum _TrimExportKind { video, audio }
+enum _TrimExportKind {
+  video,
+  audio;
+
+  String get label => switch (this) {
+    _TrimExportKind.video => 'Export video',
+    _TrimExportKind.audio => 'Export audio',
+  };
+
+  IconData get icon => switch (this) {
+    _TrimExportKind.video => Icons.file_upload_outlined,
+    _TrimExportKind.audio => Icons.audio_file_outlined,
+  };
+}
 
 enum _TrimExportResolution {
   original('Original', null),
@@ -100,6 +113,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
   bool _showExportComplete = false;
   double _exportProgress = 0;
   String? _lastExportPath;
+  _TrimExportKind _selectedExportKind = _TrimExportKind.video;
   _TrimExportKind? _activeExportKind;
   _TrimExportKind? _completedExportKind;
   _TrimExportResolution _exportResolution = _TrimExportResolution.original;
@@ -367,6 +381,15 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
           ? error.message
           : 'Unable to export trimmed audio: $error';
       _showToast(message);
+    }
+  }
+
+  Future<void> _handleSelectedExportButtonPressed() async {
+    switch (_selectedExportKind) {
+      case _TrimExportKind.video:
+        await _handleExportButtonPressed();
+      case _TrimExportKind.audio:
+        await _handleAudioExportButtonPressed();
     }
   }
 
@@ -863,41 +886,21 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
               _TrimExportButton(
                 onPressed:
                     _controller == null ||
-                        (_isExporting &&
-                            _activeExportKind != _TrimExportKind.video)
+                        (_selectedExportKind == _TrimExportKind.audio &&
+                            !widget.clip.hasAudio)
                     ? null
-                    : () => unawaited(_handleExportButtonPressed()),
-                label: 'Export video',
-                isExporting:
-                    _isExporting && _activeExportKind == _TrimExportKind.video,
+                    : () => unawaited(_handleSelectedExportButtonPressed()),
+                selectedKind: _selectedExportKind,
+                onKindSelected: (kind) {
+                  setState(() => _selectedExportKind = kind);
+                },
+                audioEnabled: widget.clip.hasAudio,
+                menuEnabled: !_isExporting,
+                isExporting: _isExporting,
                 showCompleted:
                     _showExportComplete &&
-                    _completedExportKind == _TrimExportKind.video,
+                    _completedExportKind == _selectedExportKind,
                 progress: _exportProgress,
-              ),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: widget.clip.hasAudio
-                    ? 'Export the selected audio as M4A'
-                    : 'This video does not contain an audio track',
-                child: _TrimExportButton(
-                  onPressed:
-                      _controller == null ||
-                          !widget.clip.hasAudio ||
-                          (_isExporting &&
-                              _activeExportKind != _TrimExportKind.audio)
-                      ? null
-                      : () => unawaited(_handleAudioExportButtonPressed()),
-                  label: 'Export audio',
-                  icon: Icons.audio_file_outlined,
-                  isExporting:
-                      _isExporting &&
-                      _activeExportKind == _TrimExportKind.audio,
-                  showCompleted:
-                      _showExportComplete &&
-                      _completedExportKind == _TrimExportKind.audio,
-                  progress: _exportProgress,
-                ),
               ),
               if (_lastExportPath != null) ...<Widget>[
                 const SizedBox(width: 8),
@@ -922,13 +925,6 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                 ),
               ],
               const Spacer(),
-              TextButton(
-                onPressed: _isExporting
-                    ? null
-                    : () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: _controller == null || _isExporting
                     ? null
@@ -942,6 +938,19 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                       ),
                 icon: const Icon(Icons.check_rounded),
                 label: const Text('Apply trim'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                onPressed: _isExporting
+                    ? null
+                    : () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
               ),
             ],
           ),
@@ -1227,24 +1236,29 @@ class _TrimExportChoiceSection<T> extends StatelessWidget {
 class _TrimExportButton extends StatelessWidget {
   const _TrimExportButton({
     required this.onPressed,
-    required this.label,
+    required this.selectedKind,
+    required this.onKindSelected,
+    required this.audioEnabled,
+    required this.menuEnabled,
     required this.isExporting,
     required this.showCompleted,
     required this.progress,
-    this.icon = Icons.file_upload_outlined,
   });
 
   final VoidCallback? onPressed;
-  final String label;
+  final _TrimExportKind selectedKind;
+  final ValueChanged<_TrimExportKind> onKindSelected;
+  final bool audioEnabled;
+  final bool menuEnabled;
   final bool isExporting;
   final bool showCompleted;
   final double progress;
-  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     const radius = Radius.circular(16);
-    const buttonWidth = 142.0;
+    const buttonWidth = 196.0;
+    const menuWidth = 34.0;
     // Matches the compact desktop height used by the adjacent Material
     // TextButton and FilledButton controls.
     const buttonHeight = 32.0;
@@ -1258,10 +1272,30 @@ class _TrimExportButton extends StatelessWidget {
         ? Icons.check_rounded
         : isExporting
         ? Icons.stop_rounded
-        : icon;
-    final displayLabel = isExporting ? 'Exporting' : label;
+        : selectedKind.icon;
+    final displayLabel = isExporting ? 'Exporting' : selectedKind.label;
+
+    Widget visualContent(Color color) => Row(
+      children: <Widget>[
+        Expanded(
+          child: Center(
+            child: _TrimExportButtonContent(
+              icon: displayIcon,
+              label: displayLabel,
+              color: color,
+            ),
+          ),
+        ),
+        Container(width: 1, height: 20, color: color.withValues(alpha: 0.55)),
+        SizedBox(
+          width: menuWidth,
+          child: Icon(Icons.arrow_drop_down_rounded, color: color, size: 20),
+        ),
+      ],
+    );
 
     return SizedBox(
+      key: const ValueKey<String>('trim-export-split-button'),
       width: buttonWidth,
       height: buttonHeight,
       child: ClipRRect(
@@ -1270,66 +1304,137 @@ class _TrimExportButton extends StatelessWidget {
           color: isExporting
               ? colorScheme.primaryContainer
               : Colors.transparent,
-          child: InkWell(
-            onTap: onPressed,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border.all(color: sharedButtonColor),
-                borderRadius: const BorderRadius.all(radius),
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final fillWidth = constraints.maxWidth * displayProgress;
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: AnimatedContainer(
-                          // Animate progress only while exporting. Completion
-                          // resets directly to the outline state so the fill
-                          // never appears to run backwards.
-                          duration: isExporting
-                              ? const Duration(milliseconds: 240)
-                              : Duration.zero,
-                          curve: Curves.easeOutCubic,
-                          width: fillWidth,
-                          decoration: BoxDecoration(
-                            color: sharedButtonColor,
-                            borderRadius: BorderRadius.horizontal(
-                              left: radius,
-                              right: displayProgress >= 0.999
-                                  ? radius
-                                  : Radius.zero,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Center(
-                        child: _TrimExportButtonContent(
-                          icon: displayIcon,
-                          label: displayLabel,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.all(color: sharedButtonColor),
+              borderRadius: const BorderRadius.all(radius),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final fillWidth = constraints.maxWidth * displayProgress;
+                return Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: AnimatedContainer(
+                        duration: isExporting
+                            ? const Duration(milliseconds: 240)
+                            : Duration.zero,
+                        curve: Curves.easeOutCubic,
+                        width: fillWidth,
+                        decoration: BoxDecoration(
                           color: sharedButtonColor,
+                          borderRadius: BorderRadius.horizontal(
+                            left: radius,
+                            right: displayProgress >= 0.999
+                                ? radius
+                                : Radius.zero,
+                          ),
                         ),
                       ),
-                      if (displayProgress > 0)
-                        ClipRect(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: displayProgress,
-                            child: Center(
-                              child: _TrimExportButtonContent(
-                                icon: displayIcon,
-                                label: displayLabel,
-                                color: Colors.white,
-                              ),
+                    ),
+                    IgnorePointer(child: visualContent(sharedButtonColor)),
+                    if (displayProgress > 0)
+                      ClipRect(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: displayProgress,
+                          child: SizedBox(
+                            width: constraints.maxWidth,
+                            child: IgnorePointer(
+                              child: visualContent(Colors.white),
                             ),
                           ),
                         ),
-                    ],
-                  );
-                },
-              ),
+                      ),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: InkWell(
+                            onTap: onPressed,
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                        SizedBox(
+                          width: menuWidth,
+                          child: PopupMenuButton<_TrimExportKind>(
+                            tooltip: 'Export options',
+                            enabled: menuEnabled,
+                            position: PopupMenuPosition.over,
+                            offset: const Offset(
+                              -(buttonWidth - menuWidth),
+                              -112,
+                            ),
+                            padding: EdgeInsets.zero,
+                            menuPadding: const EdgeInsets.symmetric(
+                              vertical: 4,
+                            ),
+                            constraints: const BoxConstraints.tightFor(
+                              width: buttonWidth,
+                            ),
+                            color: colorScheme.surfaceContainerHigh,
+                            surfaceTintColor: Colors.transparent,
+                            elevation: 3,
+                            shadowColor: sharedButtonColor.withValues(
+                              alpha: 0.18,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              side: BorderSide(
+                                color: sharedButtonColor.withValues(
+                                  alpha: 0.65,
+                                ),
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            icon: const Icon(
+                              Icons.arrow_drop_down_rounded,
+                              color: Colors.transparent,
+                            ),
+                            onSelected: onKindSelected,
+                            itemBuilder: (context) =>
+                                <PopupMenuEntry<_TrimExportKind>>[
+                                  for (final kind in _TrimExportKind.values)
+                                    PopupMenuItem<_TrimExportKind>(
+                                      value: kind,
+                                      height: 48,
+                                      padding: EdgeInsets.zero,
+                                      enabled:
+                                          kind != _TrimExportKind.audio ||
+                                          audioEnabled,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
+                                        ),
+                                        child: Row(
+                                          children: <Widget>[
+                                            Icon(kind.icon, size: 18),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                kind.label,
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.labelLarge,
+                                              ),
+                                            ),
+                                            if (kind == selectedKind)
+                                              const Icon(
+                                                Icons.check_rounded,
+                                                size: 18,
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -1356,9 +1461,15 @@ class _TrimExportButtonContent extends StatelessWidget {
       children: <Widget>[
         Icon(icon, color: color, size: 18),
         const SizedBox(width: 8),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: color),
+          ),
         ),
       ],
     );
