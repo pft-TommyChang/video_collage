@@ -35,9 +35,18 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
     return Scaffold(
       body: SafeArea(
         child: DropTarget(
+          onDragEntered: (_) {
+            if (_isVideoMergeDialogOpen || _isExternalDragActive) {
+              return;
+            }
+            _updateState(() {
+              _isExternalDragActive = true;
+            });
+          },
           onDragExited: (_) {
-            if (_externalDropHoverSlotIndex != null) {
+            if (_isExternalDragActive || _externalDropHoverSlotIndex != null) {
               _updateState(() {
+                _isExternalDragActive = false;
                 _externalDropHoverSlotIndex = null;
               });
             }
@@ -45,6 +54,11 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
           onDragDone: (details) {
             if (_isVideoMergeDialogOpen) {
               return;
+            }
+            if (_isExternalDragActive) {
+              _updateState(() {
+                _isExternalDragActive = false;
+              });
             }
             unawaited(
               _handleExternalDrop(
@@ -190,52 +204,17 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                 _SectionCard(
                                   title: 'Media',
                                   subtitle:
-                                      '${_clips.length} loaded • capacity $_gridCapacity',
+                                      '${_clips.length} loaded • $_gridCapacity collage slots',
                                   isCollapsed: _isMediaSectionCollapsed,
                                   onToggle: _toggleMediaSection,
-                                  action: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: <Widget>[
-                                      IconButton.outlined(
-                                        key: const ValueKey<String>(
-                                          'add-media-header-button',
-                                        ),
-                                        onPressed: _isImporting
-                                            ? null
-                                            : _pickMedia,
-                                        tooltip: 'Add media',
-                                        style: _sectionHeaderIconButtonStyle(),
-                                        icon: const Icon(
-                                          Icons.add_rounded,
-                                          size: 20,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      IconButton.outlined(
-                                        onPressed: _isExporting || _isImporting
-                                            ? null
-                                            : () => unawaited(
-                                                _showVideoMergeTool(),
-                                              ),
-                                        tooltip: 'Merge videos',
-                                        style: _sectionHeaderIconButtonStyle(),
-                                        icon: const Icon(Icons.merge, size: 18),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      IconButton.outlined(
-                                        onPressed: _clips.isEmpty
-                                            ? null
-                                            : () => unawaited(
-                                                _confirmClearClips(),
-                                              ),
-                                        tooltip: 'Reset media',
-                                        style: _sectionHeaderIconButtonStyle(),
-                                        icon: const Icon(
-                                          Icons.refresh,
-                                          size: 18,
-                                        ),
-                                      ),
-                                    ],
+                                  action: TextButton(
+                                    key: const ValueKey<String>(
+                                      'media-reset-button',
+                                    ),
+                                    onPressed: _clips.isEmpty || _isImporting
+                                        ? null
+                                        : () => unawaited(_confirmClearClips()),
+                                    child: const Text('Reset'),
                                   ),
                                   child: Column(
                                     crossAxisAlignment:
@@ -288,6 +267,17 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                             ),
                                           );
                                         }),
+                                      const SizedBox(height: 12),
+                                      _MediaActionButtons(
+                                        onMergeVideos: _isImporting
+                                            ? null
+                                            : () => unawaited(
+                                                _showVideoMergeTool(),
+                                              ),
+                                        onAddMedia: _isImporting
+                                            ? null
+                                            : _pickMedia,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -298,11 +288,12 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                       'Aspect ratio, rows, columns, and styling',
                                   isCollapsed: _isLayoutSectionCollapsed,
                                   onToggle: _toggleLayoutSection,
-                                  action: IconButton.outlined(
+                                  action: TextButton(
+                                    key: const ValueKey<String>(
+                                      'layout-reset-button',
+                                    ),
                                     onPressed: _resetLayoutDefaults,
-                                    tooltip: 'Reset layout defaults',
-                                    style: _sectionHeaderIconButtonStyle(),
-                                    icon: const Icon(Icons.refresh, size: 18),
+                                    child: const Text('Reset'),
                                   ),
                                   child: Column(
                                     children: <Widget>[
@@ -340,103 +331,108 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                         ),
                                       ),
                                       const SizedBox(height: 12),
-                                      Row(
+                                      _AdvancedSettingsGroup(
                                         children: <Widget>[
-                                          Expanded(
-                                            child: Text(
-                                              'Border thickness',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.titleSmall,
-                                            ),
+                                          Row(
+                                            children: <Widget>[
+                                              Expanded(
+                                                child: Text(
+                                                  'Border thickness',
+                                                  style: Theme.of(
+                                                    context,
+                                                  ).textTheme.titleSmall,
+                                                ),
+                                              ),
+                                              Text(
+                                                '${_borderThickness.round()} px',
+                                              ),
+                                            ],
                                           ),
-                                          Text(
-                                            '${_borderThickness.round()} px',
+                                          Slider(
+                                            value: _borderThickness,
+                                            min: 0,
+                                            max: _maxBorderThickness,
+                                            divisions: 50,
+                                            onChanged: (value) {
+                                              _setStateAndSave(() {
+                                                _borderThickness = value;
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Row(
+                                            children: <Widget>[
+                                              Expanded(
+                                                child: Text(
+                                                  'Tile corner radius',
+                                                  style: Theme.of(
+                                                    context,
+                                                  ).textTheme.titleSmall,
+                                                ),
+                                              ),
+                                              Text(
+                                                '${_tileCornerRadius.round()} px',
+                                              ),
+                                            ],
+                                          ),
+                                          Slider(
+                                            value: _tileCornerRadius,
+                                            min: 0,
+                                            max: _maxTileCornerRadius,
+                                            divisions: 50,
+                                            onChanged: (value) {
+                                              _setStateAndSave(() {
+                                                _tileCornerRadius = value;
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(height: 6),
+                                          _ColorSelector(
+                                            label: 'Collage background',
+                                            imagePath: _borderImagePath,
+                                            onPickImage: () =>
+                                                unawaited(_pickBorderImage()),
+                                            onClearImage: _clearBorderImage,
+                                            selected: _selectedBorderColor,
+                                            onSelected: (choice) {
+                                              _setStateAndSave(() {
+                                                _selectedBorderColor = choice;
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(height: 12),
+                                          _ColorSelector(
+                                            label: 'Tile background',
+                                            allowTransparent: true,
+                                            selected: _selectedBackgroundColor,
+                                            onSelected: (choice) {
+                                              _setStateAndSave(() {
+                                                _selectedBackgroundColor =
+                                                    choice;
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(height: 12),
+                                          _SelectionDropdown<ClipFitMode>(
+                                            label: 'Fit mode',
+                                            selected: _selectedFitMode,
+                                            options: ClipFitMode.values,
+                                            itemLabel: (mode) => mode.label,
+                                            itemBuilder: (mode) =>
+                                                _ClipFitModeDropdownItem(
+                                                  mode: mode,
+                                                ),
+                                            onSelected: (mode) {
+                                              _setStateAndSave(() {
+                                                _selectedFitMode = mode;
+                                                if (mode !=
+                                                    ClipFitMode.cropCenter) {
+                                                  _editingViewportClipId = null;
+                                                }
+                                              });
+                                            },
                                           ),
                                         ],
-                                      ),
-                                      Slider(
-                                        value: _borderThickness,
-                                        min: 0,
-                                        max: _maxBorderThickness,
-                                        divisions: 50,
-                                        onChanged: (value) {
-                                          _setStateAndSave(() {
-                                            _borderThickness = value;
-                                          });
-                                        },
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        children: <Widget>[
-                                          Expanded(
-                                            child: Text(
-                                              'Tile corner radius',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.titleSmall,
-                                            ),
-                                          ),
-                                          Text(
-                                            '${_tileCornerRadius.round()} px',
-                                          ),
-                                        ],
-                                      ),
-                                      Slider(
-                                        value: _tileCornerRadius,
-                                        min: 0,
-                                        max: _maxTileCornerRadius,
-                                        divisions: 50,
-                                        onChanged: (value) {
-                                          _setStateAndSave(() {
-                                            _tileCornerRadius = value;
-                                          });
-                                        },
-                                      ),
-                                      const SizedBox(height: 6),
-                                      _ColorSelector(
-                                        label: 'Canvas',
-                                        imagePath: _borderImagePath,
-                                        onPickImage: () =>
-                                            unawaited(_pickBorderImage()),
-                                        onClearImage: _clearBorderImage,
-                                        selected: _selectedBorderColor,
-                                        onSelected: (choice) {
-                                          _setStateAndSave(() {
-                                            _selectedBorderColor = choice;
-                                          });
-                                        },
-                                      ),
-                                      const SizedBox(height: 12),
-                                      _ColorSelector(
-                                        label: 'Tile background',
-                                        allowTransparent: true,
-                                        selected: _selectedBackgroundColor,
-                                        onSelected: (choice) {
-                                          _setStateAndSave(() {
-                                            _selectedBackgroundColor = choice;
-                                          });
-                                        },
-                                      ),
-                                      const SizedBox(height: 12),
-                                      _SelectionDropdown<ClipFitMode>(
-                                        label: 'Fit mode',
-                                        selected: _selectedFitMode,
-                                        options: ClipFitMode.values,
-                                        itemLabel: (mode) => mode.label,
-                                        itemBuilder: (mode) =>
-                                            _ClipFitModeDropdownItem(
-                                              mode: mode,
-                                            ),
-                                        onSelected: (mode) {
-                                          _setStateAndSave(() {
-                                            _selectedFitMode = mode;
-                                            if (mode !=
-                                                ClipFitMode.cropCenter) {
-                                              _editingViewportClipId = null;
-                                            }
-                                          });
-                                        },
                                       ),
                                     ],
                                   ),
@@ -444,14 +440,14 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                 const SizedBox(height: 16),
                                 _SectionCard(
                                   title: 'Label',
-                                  subtitle: 'Label display settings',
+                                  subtitle: _includeClipLabelsInOutput
+                                      ? 'Shown on exported media'
+                                      : 'Labels are off',
                                   isCollapsed: _isLabelSectionCollapsed,
                                   onToggle: _toggleLabelSection,
-                                  action: IconButton.outlined(
+                                  action: TextButton(
                                     onPressed: _resetLabelDefaults,
-                                    tooltip: 'Reset label defaults',
-                                    style: _sectionHeaderIconButtonStyle(),
-                                    icon: const Icon(Icons.refresh, size: 18),
+                                    child: const Text('Reset'),
                                   ),
                                   child: Column(
                                     children: <Widget>[
@@ -579,15 +575,14 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                 const SizedBox(height: 16),
                                 _SectionCard(
                                   title: 'Output',
-                                  subtitle: '$playModeLabel mode',
+                                  subtitle:
+                                      '${resolvedExportFormat?.label ?? 'JPG / MP4'} • ${_selectedResolution.label} • $playModeLabel',
                                   isCollapsed: _isOutputSectionCollapsed,
                                   onToggle: _toggleOutputSection,
-                                  action: IconButton.outlined(
+                                  action: TextButton(
                                     onPressed: () =>
                                         unawaited(_resetOutputDefaults()),
-                                    tooltip: 'Reset output defaults',
-                                    style: _sectionHeaderIconButtonStyle(),
-                                    icon: const Icon(Icons.refresh, size: 18),
+                                    child: const Text('Reset'),
                                   ),
                                   child: Column(
                                     crossAxisAlignment:
@@ -778,9 +773,11 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                   SizedBox(
                                     width: 220,
                                     child: _ExportButton(
-                                      onPressed: () => unawaited(
-                                        _handleExportButtonPressed(),
-                                      ),
+                                      onPressed: slotClips.isEmpty
+                                          ? null
+                                          : () => unawaited(
+                                              _handleExportButtonPressed(),
+                                            ),
                                       isExporting: _isExporting,
                                       showCompleted: _showExportComplete,
                                       progress: _exportProgress,
@@ -905,262 +902,278 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                             previewConstraints.maxHeight /
                                                 previewCanvasHeight,
                                           );
-                                          return Center(
-                                            child: FittedBox(
-                                              fit: BoxFit.contain,
-                                              child: SizedBox(
-                                                width: previewCanvasWidth,
-                                                height: previewCanvasHeight,
-                                                child: DecoratedBox(
-                                                  decoration: BoxDecoration(
-                                                    color: _selectedBorderColor
-                                                        .color,
-                                                    image:
-                                                        _borderImagePath == null
-                                                        ? null
-                                                        : DecorationImage(
-                                                            image: FileImage(
-                                                              File(
-                                                                _borderImagePath!,
+                                          return Stack(
+                                            key: const ValueKey<String>(
+                                              'preview-operation-area',
+                                            ),
+                                            alignment: Alignment.center,
+                                            children: <Widget>[
+                                              Center(
+                                                child: FittedBox(
+                                                  fit: BoxFit.contain,
+                                                  child: SizedBox(
+                                                    width: previewCanvasWidth,
+                                                    height: previewCanvasHeight,
+                                                    child: DecoratedBox(
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            _selectedBorderColor
+                                                                .color,
+                                                        image:
+                                                            _borderImagePath ==
+                                                                null
+                                                            ? null
+                                                            : DecorationImage(
+                                                                image: FileImage(
+                                                                  File(
+                                                                    _borderImagePath!,
+                                                                  ),
+                                                                ),
+                                                                fit: BoxFit
+                                                                    .cover,
+                                                                alignment:
+                                                                    Alignment
+                                                                        .center,
                                                               ),
-                                                            ),
-                                                            fit: BoxFit.cover,
-                                                            alignment: Alignment
-                                                                .center,
-                                                          ),
-                                                    boxShadow:
-                                                        const <BoxShadow>[
-                                                          BoxShadow(
-                                                            color: Color(
-                                                              0x2A000000,
-                                                            ),
-                                                            blurRadius: 28,
-                                                            offset: Offset(
-                                                              0,
-                                                              18,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                  ),
-                                                  child: Padding(
-                                                    padding: EdgeInsets.all(
-                                                      scaledBorderThickness,
-                                                    ),
-                                                    child: SizedBox.expand(
-                                                      key: _previewGridKey,
-                                                      child: GridView.builder(
-                                                        physics:
-                                                            const NeverScrollableScrollPhysics(),
-                                                        itemCount:
-                                                            _gridCapacity,
-                                                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                                          crossAxisCount:
-                                                              _columns,
-                                                          crossAxisSpacing:
-                                                              scaledBorderThickness,
-                                                          mainAxisSpacing:
-                                                              scaledBorderThickness,
-                                                          childAspectRatio:
-                                                              previewCellAspectRatio,
+                                                        boxShadow:
+                                                            const <BoxShadow>[
+                                                              BoxShadow(
+                                                                color: Color(
+                                                                  0x2A000000,
+                                                                ),
+                                                                blurRadius: 28,
+                                                                offset: Offset(
+                                                                  0,
+                                                                  18,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                      ),
+                                                      child: Padding(
+                                                        padding: EdgeInsets.all(
+                                                          scaledBorderThickness,
                                                         ),
-                                                        itemBuilder: (context, index) {
-                                                          final clip =
-                                                              _clipForSlot(
-                                                                index,
-                                                              );
-                                                          return DragTarget<
-                                                            int
-                                                          >(
-                                                            onWillAcceptWithDetails:
-                                                                (details) =>
-                                                                    details
-                                                                        .data !=
-                                                                    index,
-                                                            onAcceptWithDetails:
-                                                                (details) {
-                                                                  _moveOrSwapPreviewSlot(
-                                                                    details
-                                                                        .data,
+                                                        child: SizedBox.expand(
+                                                          key: _previewGridKey,
+                                                          child: GridView.builder(
+                                                            physics:
+                                                                const NeverScrollableScrollPhysics(),
+                                                            itemCount:
+                                                                _gridCapacity,
+                                                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                                              crossAxisCount:
+                                                                  _columns,
+                                                              crossAxisSpacing:
+                                                                  scaledBorderThickness,
+                                                              mainAxisSpacing:
+                                                                  scaledBorderThickness,
+                                                              childAspectRatio:
+                                                                  previewCellAspectRatio,
+                                                            ),
+                                                            itemBuilder: (context, index) {
+                                                              final clip =
+                                                                  _clipForSlot(
                                                                     index,
                                                                   );
-                                                                },
-                                                            builder:
-                                                                (
-                                                                  context,
-                                                                  candidateData,
-                                                                  rejectedData,
-                                                                ) {
-                                                                  return DropTarget(
-                                                                    onDragEntered: (_) {
-                                                                      if (_externalDropHoverSlotIndex !=
-                                                                          index) {
-                                                                        _updateState(() {
-                                                                          _externalDropHoverSlotIndex =
-                                                                              index;
-                                                                        });
-                                                                      }
+                                                              return DragTarget<
+                                                                int
+                                                              >(
+                                                                onWillAcceptWithDetails:
+                                                                    (details) =>
+                                                                        details
+                                                                            .data !=
+                                                                        index,
+                                                                onAcceptWithDetails:
+                                                                    (details) {
+                                                                      _moveOrSwapPreviewSlot(
+                                                                        details
+                                                                            .data,
+                                                                        index,
+                                                                      );
                                                                     },
-                                                                    onDragExited: (_) {
-                                                                      if (_externalDropHoverSlotIndex ==
-                                                                          index) {
-                                                                        _updateState(() {
-                                                                          _externalDropHoverSlotIndex =
-                                                                              null;
-                                                                        });
-                                                                      }
-                                                                    },
-                                                                    child: _PreviewTile(
-                                                                      key: ValueKey(
-                                                                        'preview-slot-$index',
-                                                                      ),
-                                                                      clip:
-                                                                          clip,
-                                                                      controller:
-                                                                          clip ==
-                                                                              null
-                                                                          ? null
-                                                                          : _controllers[clip.id],
-                                                                      cornerRadius:
-                                                                          scaledTileCornerRadius,
-                                                                      isLoading:
-                                                                          clip !=
-                                                                              null &&
-                                                                          _loadingClipIds.contains(
-                                                                            clip.id,
+                                                                builder:
+                                                                    (
+                                                                      context,
+                                                                      candidateData,
+                                                                      rejectedData,
+                                                                    ) {
+                                                                      return DropTarget(
+                                                                        onDragEntered: (_) {
+                                                                          if (_externalDropHoverSlotIndex !=
+                                                                              index) {
+                                                                            _updateState(() {
+                                                                              _externalDropHoverSlotIndex = index;
+                                                                            });
+                                                                          }
+                                                                        },
+                                                                        onDragExited: (_) {
+                                                                          if (_externalDropHoverSlotIndex ==
+                                                                              index) {
+                                                                            _updateState(() {
+                                                                              _externalDropHoverSlotIndex = null;
+                                                                            });
+                                                                          }
+                                                                        },
+                                                                        child: _PreviewTile(
+                                                                          key: ValueKey(
+                                                                            'preview-slot-$index',
                                                                           ),
-                                                                      errorMessage:
-                                                                          clip ==
-                                                                              null
-                                                                          ? null
-                                                                          : _clipErrors[clip.id],
-                                                                      onPickMedia:
-                                                                          clip ==
-                                                                              null
-                                                                          ? () => _pickMediaForSlot(
-                                                                              index,
-                                                                            )
-                                                                          : null,
-                                                                      index:
-                                                                          index,
-                                                                      backgroundColor:
-                                                                          _selectedBackgroundColor
-                                                                              .color,
-                                                                      dragData:
-                                                                          clip ==
-                                                                              null
-                                                                          ? null
-                                                                          : index,
-                                                                      showLabel:
-                                                                          _includeClipLabelsInOutput,
-                                                                      labelDisplayMode:
-                                                                          _clipLabelDisplayMode,
-                                                                      onEditLabel:
-                                                                          clip ==
-                                                                              null
-                                                                          ? null
-                                                                          : () => unawaited(
-                                                                              _editClipTitle(
-                                                                                clip,
-                                                                              ),
-                                                                            ),
-                                                                      isActiveLabel:
-                                                                          _isSequentialPlayMode &&
-                                                                          _isPreviewPlaying &&
-                                                                          _activeSequentialClipId ==
-                                                                              clip?.id,
-                                                                      clipLabelFontSize:
-                                                                          _clipLabelFontSize,
-                                                                      clipLabelAlignment:
-                                                                          _clipLabelAlignment,
-                                                                      clipLabelVisualStyle:
-                                                                          _clipLabelVisualStyle,
-                                                                      clipLabelPadding:
-                                                                          _clipLabelPadding,
-                                                                      fitMode:
-                                                                          _selectedFitMode,
-                                                                      viewport:
-                                                                          clip ==
-                                                                              null
-                                                                          ? const ClipViewport()
-                                                                          : _clipViewports[clip.id] ??
-                                                                                const ClipViewport(),
-                                                                      isEditingViewport:
-                                                                          clip !=
-                                                                              null &&
-                                                                          _editingViewportClipId ==
-                                                                              clip.id,
-                                                                      isVeiled:
-                                                                          _editingViewportClipId !=
-                                                                              null &&
-                                                                          clip?.id !=
-                                                                              _editingViewportClipId,
-                                                                      onVeilTap:
-                                                                          _finishViewportEditing,
-                                                                      onEditViewport:
-                                                                          clip ==
-                                                                              null
-                                                                          ? null
-                                                                          : () => _startViewportEditing(
+                                                                          clip:
                                                                               clip,
-                                                                            ),
-                                                                      onTrim:
-                                                                          clip?.isVideo ==
-                                                                              true
-                                                                          ? () => unawaited(
-                                                                              _openVideoTrimmer(
-                                                                                clip!,
+                                                                          controller:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? null
+                                                                              : _controllers[clip.id],
+                                                                          cornerRadius:
+                                                                              scaledTileCornerRadius,
+                                                                          isLoading:
+                                                                              clip !=
+                                                                                  null &&
+                                                                              _loadingClipIds.contains(
+                                                                                clip.id,
                                                                               ),
-                                                                            )
-                                                                          : null,
-                                                                      onRemove:
-                                                                          clip ==
-                                                                              null
-                                                                          ? null
-                                                                          : () => _removeClip(
-                                                                              clip,
-                                                                            ),
-                                                                      onViewportChanged:
-                                                                          clip ==
-                                                                              null
-                                                                          ? null
-                                                                          : (
-                                                                              viewport,
-                                                                            ) => _updateClipViewport(
-                                                                              clip.id,
-                                                                              viewport,
-                                                                            ),
-                                                                      onResetViewport:
-                                                                          clip ==
-                                                                              null
-                                                                          ? null
-                                                                          : () => _resetClipViewport(
-                                                                              clip.id,
-                                                                            ),
-                                                                      onFinishViewport:
-                                                                          clip ==
-                                                                              null
-                                                                          ? null
-                                                                          : _finishViewportEditing,
-                                                                      isDragTarget:
-                                                                          candidateData
-                                                                              .isNotEmpty ||
-                                                                          _externalDropHoverSlotIndex ==
+                                                                          errorMessage:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? null
+                                                                              : _clipErrors[clip.id],
+                                                                          onPickMedia:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? () => _pickMediaForSlot(
+                                                                                  index,
+                                                                                )
+                                                                              : null,
+                                                                          index:
                                                                               index,
-                                                                      overlayLabelScale:
-                                                                          overlayLabelScale,
-                                                                      previewDisplayScale:
-                                                                          previewDisplayScale,
-                                                                    ),
-                                                                  );
-                                                                },
-                                                          );
-                                                        },
+                                                                          backgroundColor:
+                                                                              _selectedBackgroundColor.color,
+                                                                          dragData:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? null
+                                                                              : index,
+                                                                          showLabel:
+                                                                              _includeClipLabelsInOutput,
+                                                                          labelDisplayMode:
+                                                                              _clipLabelDisplayMode,
+                                                                          onEditLabel:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? null
+                                                                              : () => unawaited(
+                                                                                  _editClipTitle(
+                                                                                    clip,
+                                                                                  ),
+                                                                                ),
+                                                                          isActiveLabel:
+                                                                              _isSequentialPlayMode &&
+                                                                              _isPreviewPlaying &&
+                                                                              _activeSequentialClipId ==
+                                                                                  clip?.id,
+                                                                          clipLabelFontSize:
+                                                                              _clipLabelFontSize,
+                                                                          clipLabelAlignment:
+                                                                              _clipLabelAlignment,
+                                                                          clipLabelVisualStyle:
+                                                                              _clipLabelVisualStyle,
+                                                                          clipLabelPadding:
+                                                                              _clipLabelPadding,
+                                                                          fitMode:
+                                                                              _selectedFitMode,
+                                                                          viewport:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? const ClipViewport()
+                                                                              : _clipViewports[clip.id] ??
+                                                                                    const ClipViewport(),
+                                                                          isEditingViewport:
+                                                                              clip !=
+                                                                                  null &&
+                                                                              _editingViewportClipId ==
+                                                                                  clip.id,
+                                                                          isVeiled:
+                                                                              _editingViewportClipId !=
+                                                                                  null &&
+                                                                              clip?.id !=
+                                                                                  _editingViewportClipId,
+                                                                          onVeilTap:
+                                                                              _finishViewportEditing,
+                                                                          onEditViewport:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? null
+                                                                              : () => _startViewportEditing(
+                                                                                  clip,
+                                                                                ),
+                                                                          onTrim:
+                                                                              clip?.isVideo ==
+                                                                                  true
+                                                                              ? () => unawaited(
+                                                                                  _openVideoTrimmer(
+                                                                                    clip!,
+                                                                                  ),
+                                                                                )
+                                                                              : null,
+                                                                          onRemove:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? null
+                                                                              : () => _removeClip(
+                                                                                  clip,
+                                                                                ),
+                                                                          onViewportChanged:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? null
+                                                                              : (
+                                                                                  viewport,
+                                                                                ) => _updateClipViewport(
+                                                                                  clip.id,
+                                                                                  viewport,
+                                                                                ),
+                                                                          onResetViewport:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? null
+                                                                              : () => _resetClipViewport(
+                                                                                  clip.id,
+                                                                                ),
+                                                                          onFinishViewport:
+                                                                              clip ==
+                                                                                  null
+                                                                              ? null
+                                                                              : _finishViewportEditing,
+                                                                          isDragTarget:
+                                                                              candidateData.isNotEmpty ||
+                                                                              _externalDropHoverSlotIndex ==
+                                                                                  index,
+                                                                          overlayLabelScale:
+                                                                              overlayLabelScale,
+                                                                          previewDisplayScale:
+                                                                              previewDisplayScale,
+                                                                        ),
+                                                                      );
+                                                                    },
+                                                              );
+                                                            },
+                                                          ),
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
+                                              if (_clips.isEmpty &&
+                                                  !_isExternalDragActive)
+                                                Positioned.fill(
+                                                  child:
+                                                      _EmptyPreviewOnboarding(
+                                                        onAddMedia: _pickMedia,
+                                                      ),
+                                                ),
+                                            ],
                                           );
                                         },
                                       ),
@@ -1179,9 +1192,11 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                               )
                                             else
                                               _CompactExportButton(
-                                                onPressed: () => unawaited(
-                                                  _handleExportButtonPressed(),
-                                                ),
+                                                onPressed: slotClips.isEmpty
+                                                    ? null
+                                                    : () => unawaited(
+                                                        _handleExportButtonPressed(),
+                                                      ),
                                                 isExporting: false,
                                                 showCompleted:
                                                     _showExportComplete,
@@ -1199,69 +1214,11 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                             const SizedBox(width: 10),
                                           ],
                                           Expanded(
-                                            child: MouseRegion(
-                                              cursor: SystemMouseCursors.click,
-                                              child: Material(
-                                                color: Colors.transparent,
-                                                child: InkWell(
-                                                  borderRadius:
-                                                      BorderRadius.circular(14),
-                                                  onTap: () {
-                                                    final message =
-                                                        _statusMessage ??
-                                                        'Ready';
-                                                    Clipboard.setData(
-                                                      ClipboardData(
-                                                        text: message,
-                                                      ),
-                                                    );
-                                                    _showToast(
-                                                      'Copied to clipboard',
-                                                    );
-                                                  },
-                                                  child: Container(
-                                                    key: const ValueKey<String>(
-                                                      'status-message',
-                                                    ),
-                                                    width: double.infinity,
-                                                    height: double.infinity,
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 14,
-                                                          vertical: 10,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.white
-                                                          .withValues(
-                                                            alpha: 0.64,
-                                                          ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            14,
-                                                          ),
-                                                      border: Border.all(
-                                                        color: const Color(
-                                                          0xFFD8D0C4,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      _statusMessage ?? 'Ready',
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                            color: const Color(
-                                                              0xFF364152,
-                                                            ),
-                                                          ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
+                                            child: _PreviewStatusBar(
+                                              message: _statusMessage,
+                                              onCopy: _statusMessage == null
+                                                  ? null
+                                                  : _copyStatusMessage,
                                             ),
                                           ),
                                         ],
@@ -1303,6 +1260,15 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
         ? ''
         : ' • C2PA TL ${trustListVersion.label}';
     return 'Version $_appVersion$trustListLabel';
+  }
+
+  void _copyStatusMessage() {
+    final message = _statusMessage;
+    if (message == null) {
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: message));
+    _showToast('Copied to clipboard');
   }
 
   void _collapseSidePanel() {

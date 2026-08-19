@@ -1,5 +1,48 @@
 part of '../video_collage_app.dart';
 
+class _MediaActionButtons extends StatelessWidget {
+  const _MediaActionButtons({
+    required this.onMergeVideos,
+    required this.onAddMedia,
+  });
+
+  final VoidCallback? onMergeVideos;
+  final VoidCallback? onAddMedia;
+
+  @override
+  Widget build(BuildContext context) {
+    const padding = EdgeInsets.symmetric(horizontal: 12);
+    return Row(
+      children: <Widget>[
+        Expanded(
+          flex: 3,
+          child: OutlinedButton.icon(
+            key: const ValueKey<String>('merge-videos-button'),
+            onPressed: onMergeVideos,
+            style: _secondaryOutlinedButtonStyle(padding: padding),
+            icon: const Icon(Icons.merge, size: 18),
+            label: const Text('Merge videos', maxLines: 1, softWrap: false),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: Tooltip(
+            message: 'Add media',
+            child: OutlinedButton.icon(
+              key: const ValueKey<String>('add-media-button'),
+              onPressed: onAddMedia,
+              style: _secondaryOutlinedButtonStyle(padding: padding),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add'),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ClipListTile extends StatelessWidget {
   const _ClipListTile({
     required this.clip,
@@ -40,57 +83,54 @@ class _ClipListTile extends StatelessWidget {
       ),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 4, 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: <Widget>[
-                _buildThumbnail(),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: _buildHeader(context),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 4, 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              _buildThumbnail(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: _buildHeader(context),
+                    ),
+                    const SizedBox(height: 3),
+                    _singleLineText(
+                      _clipDetails,
+                      Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 11,
+                        color: errorMessage == null
+                            ? const Color(0xFF697180)
+                            : const Color(0xFFB42318),
                       ),
+                    ),
+                    const SizedBox(height: 4),
+                    SizedBox(
+                      key: ValueKey<String>('ai-metadata-row-${clip.id}'),
+                      height: _aiMetadataRowHeight,
+                      child: clip.aiMetadata.hasDisplayableInfo
+                          ? _buildAiMetadataRow(context)
+                          : null,
+                    ),
+                    if (errorMessage != null) ...<Widget>[
                       const SizedBox(height: 4),
-                      _singleLineText(
-                        _clipDetails,
-                        Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 11,
-                          color: errorMessage == null
-                              ? const Color(0xFF697180)
-                              : const Color(0xFFB42318),
+                      Text(
+                        errorMessage!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFFB42318),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      SizedBox(
-                        key: ValueKey<String>('ai-metadata-row-${clip.id}'),
-                        height: _aiMetadataRowHeight,
-                        child: clip.aiMetadata.hasDisplayableInfo
-                            ? _buildAiMetadataRow(context)
-                            : null,
-                      ),
-                      if (errorMessage != null) ...<Widget>[
-                        const SizedBox(height: 4),
-                        Text(
-                          errorMessage!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: const Color(0xFFB42318)),
-                        ),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -116,7 +156,7 @@ class _ClipListTile extends StatelessWidget {
                 tooltip: 'Edit clip label',
                 onPressed: onEditLabel,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 visualDensity: VisualDensity.compact,
                 iconSize: 15,
                 splashRadius: 14,
@@ -125,6 +165,23 @@ class _ClipListTile extends StatelessWidget {
             ],
           ),
         ),
+        IconButton(
+          key: ValueKey<String>('toggle-media-${clip.id}'),
+          tooltip: isUsed ? 'Remove from collage' : 'Add to collage',
+          onPressed: onTap,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+          visualDensity: VisualDensity.compact,
+          iconSize: 20,
+          splashRadius: 16,
+          color: isUsed ? const Color(0xFFD95C3E) : const Color(0xFF697180),
+          icon: Icon(
+            isUsed
+                ? Icons.check_circle_rounded
+                : Icons.add_circle_outline_rounded,
+          ),
+        ),
+        const SizedBox(width: 2),
         IconButton(
           key: ValueKey<String>('remove-media-${clip.id}'),
           tooltip: 'Remove',
@@ -283,7 +340,10 @@ class _ClipListTile extends StatelessWidget {
                       color: const Color(0xD9000000),
                       borderRadius: BorderRadius.circular(2),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 3,
+                      vertical: 1,
+                    ),
                     child: Text(
                       _clipMediaType,
                       textAlign: TextAlign.center,

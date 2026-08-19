@@ -1,5 +1,107 @@
 part of '../video_collage_app.dart';
 
+class _EmptyPreviewOnboarding extends StatelessWidget {
+  const _EmptyPreviewOnboarding({required this.onAddMedia});
+
+  final VoidCallback onAddMedia;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).height < 700;
+    return Semantics(
+      key: const ValueKey<String>('empty-preview-onboarding'),
+      container: true,
+      label: 'Start a collage by adding photos or videos',
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: Material(
+            key: const ValueKey<String>('empty-preview-onboarding-card'),
+            color: Colors.white.withValues(alpha: 0.96),
+            elevation: 3,
+            shadowColor: Colors.black26,
+            borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Container(
+                    width: 58,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFE5DC),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Icon(
+                      Icons.add_photo_alternate_outlined,
+                      color: Color(0xFFD95C3E),
+                      size: 30,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Start your collage',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add photos or videos, arrange the layout, then export.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF697180),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    key: const ValueKey<String>('empty-preview-add-media'),
+                    onPressed: onAddMedia,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Add photos or videos'),
+                  ),
+                  if (!isCompact) ...<Widget>[
+                    const SizedBox(height: 14),
+                    Text(
+                      'You can also drop files anywhere in this window',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF697180),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const _EmptyPreviewSteps(),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyPreviewSteps extends StatelessWidget {
+  const _EmptyPreviewSteps();
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: const Color(0xFF536070),
+      fontWeight: FontWeight.w600,
+    );
+    return Text(
+      '1  Add media   •   2  Choose layout   •   3  Export',
+      textAlign: TextAlign.center,
+      maxLines: 2,
+      style: style,
+    );
+  }
+}
+
 const double _viewportActionIconDisplaySize = 18;
 const double _viewportActionButtonDisplaySize = 20;
 const double _viewportActionGapDisplaySize = 4;
@@ -1025,6 +1127,7 @@ class _PreviewTileBody extends StatelessWidget {
                         ),
                       if (isDragTarget)
                         Positioned.fill(
+                          key: const ValueKey<String>('preview-drop-hover'),
                           child: IgnorePointer(
                             child: DecoratedBox(
                               decoration: BoxDecoration(

@@ -9,7 +9,7 @@ class _CompactExportButton extends StatelessWidget {
     this.onSecondaryTapDown,
   });
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final bool isExporting;
   final bool showCompleted;
   final double progress;
@@ -23,7 +23,9 @@ class _CompactExportButton extends StatelessWidget {
         : isExporting
         ? Icons.stop_rounded
         : Icons.file_download_outlined;
-    final tooltip = showCompleted
+    final tooltip = onPressed == null
+        ? 'Add media to export'
+        : showCompleted
         ? 'Export complete'
         : isExporting
         ? 'Stop export'
@@ -62,6 +64,47 @@ class _CompactExportButton extends StatelessWidget {
   }
 }
 
+class _PreviewStatusBar extends StatelessWidget {
+  const _PreviewStatusBar({required this.message, this.onCopy});
+
+  final String? message;
+  final VoidCallback? onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = BorderRadius.all(Radius.circular(14));
+    return MouseRegion(
+      cursor: onCopy == null ? MouseCursor.defer : SystemMouseCursors.click,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: onCopy,
+          child: Container(
+            key: const ValueKey<String>('status-message'),
+            width: double.infinity,
+            height: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.64),
+              borderRadius: radius,
+              border: Border.all(color: const Color(0xFFD8D0C4)),
+            ),
+            child: Text(
+              message ?? 'Ready.',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF364152)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ExportButton extends StatelessWidget {
   const _ExportButton({
     required this.onPressed,
@@ -82,6 +125,9 @@ class _ExportButton extends StatelessWidget {
     const radius = Radius.circular(999);
     final sharedButtonColor = Theme.of(context).colorScheme.primary;
     const exportingBackground = Color(0xFFE7D6BF);
+    const disabledBackground = Color(0xFFE5DED4);
+    const disabledForeground = Color(0xFF817970);
+    final isEnabled = onPressed != null;
     final clampedProgress = progress.clamp(0.0, 1.0);
     final percent = (clampedProgress * 100).round().clamp(0, 100);
     final displayProgress = showCompleted
@@ -99,7 +145,9 @@ class _ExportButton extends StatelessWidget {
         : isExporting
         ? Icons.stop_rounded
         : Icons.file_download_outlined;
-    final backgroundColor = showCompleted
+    final backgroundColor = !isEnabled
+        ? disabledBackground
+        : showCompleted
         ? sharedButtonColor
         : isExporting
         ? exportingBackground
@@ -115,7 +163,7 @@ class _ExportButton extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: backgroundColor,
-                border: isExporting && !showCompleted
+                border: !isEnabled || isExporting && !showCompleted
                     ? null
                     : Border.all(color: sharedButtonColor),
                 borderRadius: const BorderRadius.all(radius),
@@ -154,7 +202,7 @@ class _ExportButton extends StatelessWidget {
                         child: _ExportButtonContent(
                           icon: icon,
                           label: label,
-                          color: Colors.white,
+                          color: isEnabled ? Colors.white : disabledForeground,
                         ),
                       ),
                       if (displayProgress > 0)
@@ -196,22 +244,28 @@ class _ExportButtonContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        if (icon != null) ...<Widget>[
-          Icon(icon, color: color),
-          const SizedBox(width: 12),
-        ],
-        Text(
-          label,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.1,
-          ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (icon != null) ...<Widget>[
+              Icon(icon, color: color),
+              const SizedBox(width: 12),
+            ],
+            Text(
+              label,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

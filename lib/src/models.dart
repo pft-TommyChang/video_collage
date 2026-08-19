@@ -103,8 +103,8 @@ enum PlayMode {
   sequential;
 
   String get label => switch (this) {
-    PlayMode.parallel => 'Together',
-    PlayMode.sequential => 'One by one',
+    PlayMode.parallel => 'Play together',
+    PlayMode.sequential => 'Play one by one',
   };
 }
 
@@ -138,8 +138,8 @@ enum ClipFitMode {
   centerInside;
 
   String get label => switch (this) {
-    ClipFitMode.cropCenter => 'Crop',
-    ClipFitMode.centerInside => 'Inside',
+    ClipFitMode.cropCenter => 'Fill & crop',
+    ClipFitMode.centerInside => 'Fit inside',
   };
 
   BoxFit get previewFit => switch (this) {

@@ -86,6 +86,32 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> expandLayoutAdvancedSettings(WidgetTester tester) async {
+    final advanced = find.text('More styling options');
+    await scrollSettingsIntoView(tester, advanced);
+    await tester.tap(advanced);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> choosePreviewAutoLayout(
+    WidgetTester tester,
+    String option,
+  ) async {
+    await tester.tap(
+      find.byKey(const ValueKey<String>('preview-auto-layout-menu')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(option));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> openResetAllDialog(WidgetTester tester) async {
+    await tester.tap(
+      find.byKey(const ValueKey<String>('preview-reset-button')),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+  }
+
   testWidgets('renders app shell', (WidgetTester tester) async {
     useTestWindow(tester, const Size(1600, 1000));
 
@@ -110,19 +136,17 @@ void main() {
       find.byKey(const ValueKey<String>('update-available-indicator')),
       findsNothing,
     );
-    expect(find.byTooltip('Auto Layout'), findsOneWidget);
-    final disabledDurationFinder = find.text('0:00 / 0:00');
-    final disabledDuration = tester.widget<Text>(disabledDurationFinder);
     expect(
-      disabledDuration.style?.color,
-      Theme.of(tester.element(disabledDurationFinder)).disabledColor,
+      find.byKey(const ValueKey<String>('preview-auto-layout-menu')),
+      findsOneWidget,
     );
-    expect(find.text('Add Media'), findsNothing);
-    expect(find.byTooltip('Add media'), findsOneWidget);
+    expect(find.text('0:00 / 0:00'), findsNothing);
+    expect(find.text('Start your collage'), findsOneWidget);
+    expect(find.text('Add photos or videos'), findsOneWidget);
     expect(
       tester
-          .widget<IconButton>(
-            find.byKey(const ValueKey<String>('add-media-header-button')),
+          .widget<OutlinedButton>(
+            find.byKey(const ValueKey<String>('add-media-button')),
           )
           .onPressed,
       isNotNull,
@@ -135,17 +159,177 @@ void main() {
           .onTap,
       isNotNull,
     );
-    expect(find.byTooltip('Merge videos'), findsOneWidget);
+    expect(find.byTooltip('Add media'), findsOneWidget);
     expect(
-      find.descendant(
-        of: find.byTooltip('Reset media'),
-        matching: find.byIcon(Icons.refresh),
-      ),
+      find.byKey(const ValueKey<String>('media-reset-button')),
       findsOneWidget,
     );
     expect(
-      tester.getCenter(find.byTooltip('Merge videos')).dx,
-      lessThan(tester.getCenter(find.byTooltip('Reset media')).dx),
+      tester
+          .widget<TextButton>(
+            find.byKey(const ValueKey<String>('media-reset-button')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('merge-videos-button')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getCenter(find.byKey(const ValueKey<String>('merge-videos-button')))
+          .dx,
+      lessThan(
+        tester
+            .getCenter(find.byKey(const ValueKey<String>('add-media-button')))
+            .dx,
+      ),
+    );
+    final mergeLabel = tester.widget<Text>(find.text('Merge videos'));
+    expect(mergeLabel.maxLines, 1);
+    expect(mergeLabel.softWrap, isFalse);
+    expect(find.byTooltip('Media actions'), findsNothing);
+    expect(find.text('Export'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('status-message')),
+      findsOneWidget,
+    );
+    expect(find.text('Ready.'), findsOneWidget);
+  });
+
+  testWidgets('external drag reveals slot hover behind onboarding', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    await tester.pumpWidget(buildTestApp());
+    await tester.pumpAndSettle();
+
+    final details = DropEventDetails(
+      localPosition: Offset(900, 500),
+      globalPosition: Offset(900, 500),
+    );
+    final rootDropTarget = tester.widget<DropTarget>(
+      find.byType(DropTarget).first,
+    );
+    final slotDropTarget = tester.widget<DropTarget>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is DropTarget &&
+            widget.child.key == const ValueKey<String>('preview-slot-0'),
+      ),
+    );
+
+    rootDropTarget.onDragEntered?.call(details);
+    slotDropTarget.onDragEntered?.call(details);
+    await tester.pump(const Duration(milliseconds: 160));
+
+    expect(
+      find.byKey(const ValueKey<String>('empty-preview-onboarding')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('preview-drop-hover')),
+      findsOneWidget,
+    );
+
+    slotDropTarget.onDragExited?.call(details);
+    rootDropTarget.onDragExited?.call(details);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('empty-preview-onboarding')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('preview-drop-hover')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('empty preview uses the real grid and centers onboarding', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    await tester.pumpWidget(buildTestApp());
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('preview-slot-3')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('preview-slot-4')), findsNothing);
+    final operationArea = find.byKey(
+      const ValueKey<String>('preview-operation-area'),
+    );
+    final onboardingCard = find.byKey(
+      const ValueKey<String>('empty-preview-onboarding-card'),
+    );
+    expect(
+      tester.getCenter(onboardingCard).dx,
+      closeTo(tester.getCenter(operationArea).dx, 0.1),
+    );
+    expect(
+      tester.getCenter(onboardingCard).dy,
+      closeTo(tester.getCenter(operationArea).dy, 0.1),
+    );
+
+    final rowsStepper = find
+        .ancestor(of: find.text('Rows'), matching: find.byType(Row))
+        .first;
+    final addRowButton = find.descendant(
+      of: rowsStepper,
+      matching: find.widgetWithIcon(IconButton, Icons.add_circle_outline),
+    );
+    await tester.tap(addRowButton);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('preview-slot-5')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('preview-slot-6')), findsNothing);
+  });
+
+  testWidgets('advanced styling expansion has no borders or tap background', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    await tester.pumpWidget(buildTestApp());
+    await tester.pumpAndSettle();
+
+    final tile = tester.widget<ExpansionTile>(
+      find.byKey(const PageStorageKey<String>('layout-advanced-settings')),
+    );
+    expect(tile.shape, const Border());
+    expect(tile.collapsedShape, const Border());
+    expect(tile.backgroundColor, Colors.transparent);
+    expect(tile.collapsedBackgroundColor, Colors.transparent);
+
+    final tileTheme = Theme.of(
+      tester.element(
+        find.byKey(const PageStorageKey<String>('layout-advanced-settings')),
+      ),
+    );
+    expect(tileTheme.hoverColor, Colors.transparent);
+    expect(tileTheme.highlightColor, Colors.transparent);
+    expect(tileTheme.splashColor, Colors.transparent);
+    expect(tileTheme.splashFactory, NoSplash.splashFactory);
+  });
+
+  testWidgets('section reset stays visible when its content is collapsed', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1600, 1000));
+    await tester.pumpWidget(buildTestApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Media'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('media-reset-button')),
+      findsOneWidget,
     );
   });
 
@@ -230,7 +414,7 @@ void main() {
 
     await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Merge videos'));
+    await tester.tap(find.byKey(const ValueKey<String>('merge-videos-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('Merge Videos'), findsOneWidget);
@@ -835,9 +1019,10 @@ void main() {
       findsNothing,
     );
     expect(
-      tester.getCenter(find.byTooltip('Reset all')).dx,
-      greaterThan(tester.getCenter(find.byTooltip('Horizontal Auto')).dx),
+      find.byKey(const ValueKey<String>('preview-reset-button')),
+      findsOneWidget,
     );
+    expect(find.text('Reset all'), findsNothing);
 
     await tester.tap(find.byTooltip('Collapse panel'));
     await tester.pump();
@@ -866,29 +1051,17 @@ void main() {
     expect(collapsedExportGesture.onSecondaryTapDown, isNull);
     expect(
       tester.getCenter(find.byTooltip('Expand panel')).dx,
-      lessThan(tester.getCenter(find.byTooltip('Auto Layout')).dx),
-    );
-    expect(
-      tester
-          .getCenter(
-            find.byKey(const ValueKey<String>('collapsed-export-button')),
-          )
-          .dx,
       lessThan(
         tester
-            .getCenter(find.byKey(const ValueKey<String>('status-message')))
+            .getCenter(
+              find.byKey(const ValueKey<String>('preview-auto-layout-menu')),
+            )
             .dx,
       ),
     );
     expect(
-      tester
-          .getSize(
-            find.byKey(const ValueKey<String>('collapsed-export-button')),
-          )
-          .height,
-      tester
-          .getSize(find.byKey(const ValueKey<String>('status-message')))
-          .height,
+      find.byKey(const ValueKey<String>('status-message')),
+      findsOneWidget,
     );
 
     await tester.tap(find.byTooltip('Expand panel'));
@@ -924,7 +1097,7 @@ void main() {
     expect(lastExportButton.onPressed, isNull);
   });
 
-  testWidgets('compact preview header keeps duration without overflowing', (
+  testWidgets('compact photo preview hides playback without overflowing', (
     WidgetTester tester,
   ) async {
     useTestWindow(tester, const Size(800, 640));
@@ -932,7 +1105,9 @@ void main() {
     await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('0:00 / 0:00'), findsOneWidget);
+    expect(find.text('0:00 / 0:00'), findsNothing);
+    expect(find.text('Start your collage'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('trim dialog fits the minimum window height', (
@@ -1060,19 +1235,12 @@ void main() {
     await tester.pumpWidget(buildTestApp());
     await pumpUntilFound(tester, find.text('Auto layout picked 1×2 • 16:9.'));
 
-    expect(find.text('2 loaded • capacity 2'), findsOneWidget);
+    expect(find.text('2 loaded • 2 collage slots'), findsOneWidget);
     expect(find.text('Auto layout picked 1×2 • 16:9.'), findsOneWidget);
-    final muteButton = find.ancestor(
-      of: find.byTooltip('Mute preview'),
-      matching: find.byType(IconButton),
-    );
-    expect(tester.widget<IconButton>(muteButton).onPressed, isNull);
-    final photoDuration = find.byKey(
-      const ValueKey<String>('preview-duration'),
-    );
+    expect(find.byTooltip('Mute preview'), findsNothing);
     expect(
-      tester.widget<Text>(photoDuration).style?.color,
-      Theme.of(tester.element(photoDuration)).disabledColor,
+      find.byKey(const ValueKey<String>('preview-duration')),
+      findsNothing,
     );
     expect(
       tester
@@ -1095,19 +1263,14 @@ void main() {
           .dx,
     );
 
-    expect(find.byTooltip('Vertical Auto'), findsOneWidget);
-    expect(find.byTooltip('Horizontal Auto'), findsOneWidget);
+    await choosePreviewAutoLayout(tester, 'Vertical layout');
 
-    await tester.tap(find.byTooltip('Vertical Auto'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('2 loaded • capacity 2'), findsOneWidget);
+    expect(find.text('2 loaded • 2 collage slots'), findsOneWidget);
     expect(find.text('Vertical Auto picked 2×1 • 9:16.'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Horizontal Auto'));
-    await tester.pumpAndSettle();
+    await choosePreviewAutoLayout(tester, 'Horizontal layout');
 
-    expect(find.text('2 loaded • capacity 2'), findsOneWidget);
+    expect(find.text('2 loaded • 2 collage slots'), findsOneWidget);
     expect(find.text('Horizontal Auto picked 1×2 • 16:9.'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -1147,7 +1310,7 @@ void main() {
       find.descendant(of: firstSlot, matching: find.text('app_icon_32')),
       findsNothing,
     );
-    expect(find.textContaining('1 loaded • capacity'), findsOneWidget);
+    expect(find.textContaining('1 loaded •'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -1231,7 +1394,7 @@ void main() {
       find.descendant(of: firstSlot, matching: find.text('My custom label')),
     );
 
-    expect(find.textContaining('1 loaded • capacity'), findsOneWidget);
+    expect(find.textContaining('1 loaded •'), findsOneWidget);
     expect(
       find.descendant(of: firstSlot, matching: find.text('app_icon_64')),
       findsNothing,
@@ -1252,7 +1415,7 @@ void main() {
     ]);
 
     await tester.pumpWidget(buildTestApp());
-    await pumpUntilFound(tester, find.text('3 loaded • capacity 3'));
+    await pumpUntilFound(tester, find.text('3 loaded • 3 collage slots'));
 
     final firstSlot = find.byKey(const ValueKey<String>('preview-slot-0'));
     final secondSlot = find.byKey(const ValueKey<String>('preview-slot-1'));
@@ -1271,7 +1434,7 @@ void main() {
       ),
     );
 
-    await pumpUntilFound(tester, find.text('4 loaded • capacity 3'));
+    await pumpUntilFound(tester, find.text('4 loaded • 3 collage slots'));
 
     expect(
       find.descendant(of: secondSlot, matching: find.text('app_icon_256')),
@@ -1305,7 +1468,7 @@ void main() {
     ]);
 
     await tester.pumpWidget(buildTestApp());
-    await pumpUntilFound(tester, find.text('3 loaded • capacity 3'));
+    await pumpUntilFound(tester, find.text('3 loaded • 3 collage slots'));
 
     tester.widget<DropTarget>(find.byType(DropTarget).first).onDragDone!(
       DropDoneDetails(
@@ -1338,7 +1501,7 @@ void main() {
       find.descendant(of: thirdSlot, matching: find.text('app_icon_128')),
       findsWidgets,
     );
-    expect(find.text('3 loaded • capacity 3'), findsOneWidget);
+    expect(find.text('3 loaded • 3 collage slots'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -1438,7 +1601,7 @@ void main() {
     mockPendingMediaFiles(tester, <String>[repeatedPath, repeatedPath]);
 
     await tester.pumpWidget(buildTestApp());
-    await pumpUntilFound(tester, find.text('2 loaded • capacity 2'));
+    await pumpUntilFound(tester, find.text('2 loaded • 2 collage slots'));
 
     final firstSlot = find.byKey(const ValueKey<String>('preview-slot-0'));
     final secondSlot = find.byKey(const ValueKey<String>('preview-slot-1'));
@@ -1460,7 +1623,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.text('1 loaded • capacity 2'), findsOneWidget);
+    expect(find.text('1 loaded • 2 collage slots'), findsOneWidget);
     expect(
       find.descendant(of: secondSlot, matching: find.byType(Image)),
       findsOneWidget,
@@ -1481,7 +1644,7 @@ void main() {
     ]);
 
     await tester.pumpWidget(buildTestApp());
-    await pumpUntilFound(tester, find.text('3 loaded • capacity 3'));
+    await pumpUntilFound(tester, find.text('3 loaded • 3 collage slots'));
 
     final middleSlot = find.byKey(const ValueKey<String>('preview-slot-1'));
     final rightSlot = find.byKey(const ValueKey<String>('preview-slot-2'));
@@ -1529,8 +1692,7 @@ void main() {
     await tester.pumpWidget(buildTestApp());
     await pumpUntilFound(tester, find.textContaining('1 loaded'));
 
-    await tester.tap(find.byTooltip('Reset all'));
-    await tester.pump(const Duration(milliseconds: 500));
+    await openResetAllDialog(tester);
 
     expect(find.text('What would you like to reset?'), findsOneWidget);
     expect(
@@ -1543,15 +1705,14 @@ void main() {
     await tester.tap(find.text('Reset Settings Only'));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('1 loaded • capacity 4'), findsOneWidget);
+    expect(find.text('1 loaded • 4 collage slots'), findsOneWidget);
     expect(find.text('Settings reset. Loaded media kept.'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Reset all'));
-    await tester.pump(const Duration(milliseconds: 500));
+    await openResetAllDialog(tester);
     await tester.tap(find.text('Reset Settings + Media'));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('0 loaded • capacity 4'), findsOneWidget);
+    expect(find.text('0 loaded • 4 collage slots'), findsOneWidget);
     expect(find.text('Settings reset and all media removed.'), findsOneWidget);
   });
 
@@ -1609,6 +1770,7 @@ void main() {
     await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
 
+    await expandLayoutAdvancedSettings(tester);
     await scrollSettingsIntoView(
       tester,
       find.byWidgetPredicate((widget) {
@@ -1622,8 +1784,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Crop'), findsWidgets);
-    expect(find.text('Inside'), findsWidgets);
+    expect(find.text('Fill & crop'), findsWidgets);
+    expect(find.text('Fit inside'), findsWidgets);
   });
 
   testWidgets('palette selection updates the canvas color', (
@@ -1633,7 +1795,8 @@ void main() {
 
     await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
-    await scrollSettingsIntoView(tester, find.text('Canvas'));
+    await expandLayoutAdvancedSettings(tester);
+    await scrollSettingsIntoView(tester, find.text('Collage background'));
 
     await tester.tap(find.byTooltip('Open color palette').first);
     await tester.pumpAndSettle();

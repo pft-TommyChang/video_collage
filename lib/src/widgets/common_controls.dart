@@ -48,7 +48,7 @@ class _SectionCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (!isCollapsed && action != null) ...<Widget>[
+                if (action != null) ...<Widget>[
                   const SizedBox(width: 12),
                   action!,
                 ],
@@ -405,6 +405,38 @@ class _ColorSelector extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _AdvancedSettingsGroup extends StatelessWidget {
+  const _AdvancedSettingsGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        hoverColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        splashFactory: NoSplash.splashFactory,
+      ),
+      child: ExpansionTile(
+        key: const PageStorageKey<String>('layout-advanced-settings'),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        backgroundColor: Colors.transparent,
+        collapsedBackgroundColor: Colors.transparent,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        initiallyExpanded: false,
+        leading: const Icon(Icons.tune_rounded, size: 20),
+        title: const Text('More styling options'),
+        subtitle: const Text('Borders, colors, corners, and fit'),
+        children: children,
+      ),
     );
   }
 }

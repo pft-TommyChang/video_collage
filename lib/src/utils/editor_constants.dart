@@ -94,6 +94,23 @@ ButtonStyle _sectionHeaderIconButtonStyle() {
   );
 }
 
+ButtonStyle _secondaryOutlinedButtonStyle({EdgeInsetsGeometry? padding}) {
+  return OutlinedButton.styleFrom(
+    foregroundColor: const Color(0xFF9D4F3C),
+    disabledForegroundColor: const Color(0xFFA9A19A),
+    padding: padding,
+  ).copyWith(
+    side: WidgetStateProperty.resolveWith<BorderSide>((states) {
+      return BorderSide(
+        color: states.contains(WidgetState.disabled)
+            ? const Color(0xFFE2D8CA)
+            : const Color(0xFFD7A08E),
+        width: 1.2,
+      );
+    }),
+  );
+}
+
 final ColorChoice _defaultBorderColor = _colorChoices[0];
 final ColorChoice _defaultBackgroundColor = _colorChoices[1];
 

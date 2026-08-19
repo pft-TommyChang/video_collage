@@ -141,6 +141,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   bool _isSyncingSequentialPreview = false;
   bool _isConsumingOpenedMedia = false;
   bool _isVideoMergeDialogOpen = false;
+  bool _isExternalDragActive = false;
   bool _isCheckingForUpdates = false;
   GitHubRelease? _availableUpdate;
   bool _shouldConsumeOpenedMediaAgain = false;
@@ -170,7 +171,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
   int _columns = _defaultColumns;
   bool _isMediaSectionCollapsed = false;
   bool _isLayoutSectionCollapsed = false;
-  bool _isLabelSectionCollapsed = false;
+  bool _isLabelSectionCollapsed = true;
   bool _isOutputSectionCollapsed = false;
   bool _isSidePanelCollapsed = false;
   double _borderThickness = _defaultBorderThickness;
