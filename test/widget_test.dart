@@ -97,11 +97,7 @@ void main() {
     WidgetTester tester,
     String option,
   ) async {
-    await tester.tap(
-      find.byKey(const ValueKey<String>('preview-auto-layout-menu')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(option));
+    await tester.tap(find.byTooltip(option));
     await tester.pumpAndSettle();
   }
 
@@ -136,10 +132,10 @@ void main() {
       find.byKey(const ValueKey<String>('update-available-indicator')),
       findsNothing,
     );
-    expect(
-      find.byKey(const ValueKey<String>('preview-auto-layout-menu')),
-      findsOneWidget,
-    );
+    expect(find.byTooltip('Smart layout'), findsOneWidget);
+    expect(find.byTooltip('Vertical layout'), findsOneWidget);
+    expect(find.byTooltip('Horizontal layout'), findsOneWidget);
+    expect(find.text('Auto layout'), findsNothing);
     expect(find.text('0:00 / 0:00'), findsNothing);
     expect(find.text('Start Your Collage'), findsOneWidget);
     expect(find.text('Add photos or videos'), findsOneWidget);
@@ -158,6 +154,13 @@ void main() {
           )
           .onTap,
       isNotNull,
+    );
+    expect(find.text('Drop videos or photos'), findsOneWidget);
+    final emptyMediaHint = tester.widget<Text>(find.text('or click to browse'));
+    expect(emptyMediaHint.textAlign, TextAlign.center);
+    expect(
+      find.text('here or into a grid cell, or click to browse.'),
+      findsNothing,
     );
     expect(find.byTooltip('Add media'), findsOneWidget);
     expect(
@@ -1082,7 +1085,7 @@ void main() {
       lessThan(
         tester
             .getCenter(
-              find.byKey(const ValueKey<String>('preview-auto-layout-menu')),
+              find.byKey(const ValueKey<String>('preview-smart-layout-button')),
             )
             .dx,
       ),
@@ -1091,15 +1094,15 @@ void main() {
       of: find.byKey(const ValueKey<String>('preview-expand-panel')),
       matching: find.byType(IconButton),
     );
-    final autoLayoutButtonBorder = find.descendant(
-      of: find.byKey(const ValueKey<String>('preview-auto-layout-menu')),
-      matching: find.byType(OutlinedButton),
+    final smartLayoutButtonBorder = find.descendant(
+      of: find.byKey(const ValueKey<String>('preview-smart-layout-button')),
+      matching: find.byType(IconButton),
     );
     expect(
       tester.getSize(expandButtonBorder).height,
-      tester.getSize(autoLayoutButtonBorder).height,
+      tester.getSize(smartLayoutButtonBorder).height,
     );
-    expect(tester.getSize(expandButtonBorder).height, 40);
+    expect(tester.getSize(expandButtonBorder).height, 32);
     expect(
       find.byKey(const ValueKey<String>('status-message')),
       findsOneWidget,

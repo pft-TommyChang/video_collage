@@ -1,7 +1,5 @@
 part of '../video_collage_app.dart';
 
-enum _PreviewAutoLayoutAction { smart, vertical, horizontal }
-
 const double _previewToolbarButtonHeight = 40;
 
 ButtonStyle _previewToolbarOutlinedButtonStyle() {
@@ -83,59 +81,36 @@ class _PreviewToolbar extends StatelessWidget {
                           ),
                           const SizedBox(width: 6),
                         ],
-                        PopupMenuButton<_PreviewAutoLayoutAction>(
+                        _PreviewLayoutButton(
                           key: const ValueKey<String>(
-                            'preview-auto-layout-menu',
+                            'preview-smart-layout-button',
                           ),
-                          enabled: hasClips,
-                          tooltip: 'Auto layout',
-                          onSelected: (action) {
-                            switch (action) {
-                              case _PreviewAutoLayoutAction.smart:
-                                onAutoLayout();
-                              case _PreviewAutoLayoutAction.vertical:
-                                onVerticalAutoLayout();
-                              case _PreviewAutoLayoutAction.horizontal:
-                                onHorizontalAutoLayout();
-                            }
-                          },
-                          itemBuilder: (context) =>
-                              const <PopupMenuEntry<_PreviewAutoLayoutAction>>[
-                                PopupMenuItem<_PreviewAutoLayoutAction>(
-                                  value: _PreviewAutoLayoutAction.smart,
-                                  child: ListTile(
-                                    leading: Icon(Icons.auto_fix_high),
-                                    title: Text('Smart layout'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                PopupMenuItem<_PreviewAutoLayoutAction>(
-                                  value: _PreviewAutoLayoutAction.vertical,
-                                  child: ListTile(
-                                    leading: RotatedBox(
-                                      quarterTurns: 1,
-                                      child: Icon(Icons.view_column_outlined),
-                                    ),
-                                    title: Text('Vertical layout'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                PopupMenuItem<_PreviewAutoLayoutAction>(
-                                  value: _PreviewAutoLayoutAction.horizontal,
-                                  child: ListTile(
-                                    leading: Icon(Icons.view_column_outlined),
-                                    title: Text('Horizontal layout'),
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                              ],
-                          child: IgnorePointer(
-                            child: OutlinedButton.icon(
-                              onPressed: hasClips ? () {} : null,
-                              style: _previewToolbarOutlinedButtonStyle(),
-                              icon: const Icon(Icons.auto_fix_high, size: 18),
-                              label: const Text('Auto layout'),
-                            ),
+                          onPressed: hasClips ? onAutoLayout : null,
+                          tooltip: 'Smart layout',
+                          icon: const Icon(Icons.auto_fix_high, size: 18),
+                        ),
+                        const SizedBox(width: 6),
+                        _PreviewLayoutButton(
+                          key: const ValueKey<String>(
+                            'preview-vertical-layout-button',
+                          ),
+                          onPressed: hasClips ? onVerticalAutoLayout : null,
+                          tooltip: 'Vertical layout',
+                          icon: const RotatedBox(
+                            quarterTurns: 1,
+                            child: Icon(Icons.view_column_outlined, size: 18),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        _PreviewLayoutButton(
+                          key: const ValueKey<String>(
+                            'preview-horizontal-layout-button',
+                          ),
+                          onPressed: hasClips ? onHorizontalAutoLayout : null,
+                          tooltip: 'Horizontal layout',
+                          icon: const Icon(
+                            Icons.view_column_outlined,
+                            size: 18,
                           ),
                         ),
                         const SizedBox(width: 6),
