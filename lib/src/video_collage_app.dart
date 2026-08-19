@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -122,8 +123,10 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
       <String, VideoPlayerController>{};
   final Set<String> _loadingClipIds = <String>{};
   final Map<String, String> _clipErrors = <String, String>{};
+  final Queue<Completer<void>> _previewLoadWaiters = Queue<Completer<void>>();
   final GlobalKey _previewGridKey = GlobalKey();
   int _nextClipInstanceNumber = 1;
+  int _activePreviewLoads = 0;
 
   late final TextEditingController _widthController;
   late final TextEditingController _heightController;
@@ -235,6 +238,9 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     _sequentialPreviewTimer?.cancel();
     _exportCompletionTimer?.cancel();
     _c2paTrustListRefreshTimer?.cancel();
+    while (_previewLoadWaiters.isNotEmpty) {
+      _previewLoadWaiters.removeFirst().complete();
+    }
     _toastOverlayEntry?.remove();
     _widthController.dispose();
     _heightController.dispose();

@@ -136,6 +136,22 @@ void main() {
     expect(find.byTooltip('Vertical layout'), findsOneWidget);
     expect(find.byTooltip('Horizontal layout'), findsOneWidget);
     expect(find.text('Auto layout'), findsNothing);
+    final smartLayoutIconButton = tester.widget<IconButton>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('preview-smart-layout-button')),
+        matching: find.byType(IconButton),
+      ),
+    );
+    expect(
+      smartLayoutIconButton.style?.backgroundColor?.resolve(
+        const <WidgetState>{},
+      ),
+      Colors.white.withValues(alpha: 0.74),
+    );
+    expect(
+      smartLayoutIconButton.style?.side?.resolve(const <WidgetState>{})?.color,
+      const Color(0xFFD0C5B5),
+    );
     expect(find.text('0:00 / 0:00'), findsNothing);
     expect(find.text('Start Your Collage'), findsOneWidget);
     expect(find.text('Add photos or videos'), findsOneWidget);
@@ -157,7 +173,13 @@ void main() {
     );
     expect(find.text('Drop videos or photos'), findsOneWidget);
     final emptyMediaHint = tester.widget<Text>(find.text('or click to browse'));
-    expect(emptyMediaHint.textAlign, TextAlign.center);
+    expect(emptyMediaHint.textAlign, TextAlign.start);
+    expect(
+      tester.getSize(
+        find.byKey(const ValueKey<String>('empty-media-thumbnail')),
+      ),
+      const Size.square(64),
+    );
     expect(
       find.text('here or into a grid cell, or click to browse.'),
       findsNothing,

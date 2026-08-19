@@ -1,15 +1,16 @@
 part of '../video_collage_app.dart';
 
-const double _previewToolbarButtonHeight = 40;
-
-ButtonStyle _previewToolbarOutlinedButtonStyle() {
-  return _secondaryOutlinedButtonStyle().copyWith(
-    minimumSize: const WidgetStatePropertyAll<Size>(
-      Size(0, _previewToolbarButtonHeight),
-    ),
-    maximumSize: const WidgetStatePropertyAll<Size>(
-      Size(double.infinity, _previewToolbarButtonHeight),
-    ),
+ButtonStyle _previewToolbarIconButtonStyle(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  return IconButton.styleFrom(
+    foregroundColor: scheme.onSurfaceVariant,
+    disabledForegroundColor: scheme.onSurface.withValues(alpha: 0.38),
+    backgroundColor: Colors.white.withValues(alpha: 0.74),
+    disabledBackgroundColor: Colors.white.withValues(alpha: 0.42),
+    side: const BorderSide(color: Color(0xFFD0C5B5)),
+    minimumSize: const Size.square(32),
+    maximumSize: const Size.square(32),
+    padding: EdgeInsets.zero,
     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
   );
 }
@@ -224,14 +225,7 @@ class _PreviewLayoutButton extends StatelessWidget {
       child: IconButton.outlined(
         onPressed: onPressed,
         tooltip: tooltip,
-        style: _previewToolbarOutlinedButtonStyle().copyWith(
-          fixedSize: const WidgetStatePropertyAll<Size>(
-            Size.square(_previewToolbarButtonHeight),
-          ),
-          padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
-            EdgeInsets.zero,
-          ),
-        ),
+        style: _previewToolbarIconButtonStyle(context),
         icon: icon,
       ),
     );

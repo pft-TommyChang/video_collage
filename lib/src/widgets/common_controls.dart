@@ -635,58 +635,64 @@ class _EmptyListState extends StatelessWidget {
             onTap: onTap,
             borderRadius: borderRadius,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: <Widget>[
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFE7DE),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        alignment: Alignment.center,
-                        child: isLoading
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.file_upload_outlined,
-                                color: Color(0xFFC94F32),
-                                size: 22,
-                              ),
+                  Container(
+                    key: const ValueKey<String>('empty-media-thumbnail'),
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF1EC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFFD6DCE4),
+                        width: 1.25,
                       ),
-                      const SizedBox(width: 12),
-                      Flexible(
-                        child: Text(
+                    ),
+                    alignment: Alignment.center,
+                    child: isLoading
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2.2),
+                          )
+                        : const Icon(
+                            Icons.file_upload_outlined,
+                            color: Color(0xFFA0563D),
+                            size: 24,
+                          ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
                           isLoading
                               ? 'Opening media picker…'
                               : 'Drop videos or photos',
-                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          isLoading
+                              ? 'Select one or more files to continue.'
+                              : 'or click to browse',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.start,
+                          style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
-                                color: const Color(0xFF171A21),
-                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                                color: const Color(0xFF697180),
                               ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 7),
-                  Text(
-                    isLoading
-                        ? 'Select one or more files to continue.'
-                        : 'or click to browse',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF697180),
+                      ],
                     ),
                   ),
                 ],

@@ -149,6 +149,7 @@ const double _maxTileCornerRadius = 100;
 const double _maxClipLabelFontSize = 50;
 const double _maxClipLabelPadding = 48;
 const Duration _previewInitializationTimeout = Duration(seconds: 12);
+const int _maxConcurrentPreviewLoads = 3;
 
 String _previewErrorSummary(Object error) {
   if (error is TimeoutException) {

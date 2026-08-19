@@ -160,59 +160,10 @@ class AppDelegate: FlutterAppDelegate {
       return
     }
 
-    let metadata = panel.urls.map { url in
-      probeSelectedMedia(url: url)
-    }
-    result(metadata)
+    // Return selected paths immediately. Preview initialization and metadata
+    // probing happen asynchronously in Flutter so one slow file cannot hold up
+    // every placeholder and the first visible frame.
+    result(panel.urls.map { ["path": $0.path] })
   }
 
-  private func probeSelectedMedia(url: URL) -> [String: Any] {
-    let accessed = url.startAccessingSecurityScopedResource()
-    defer {
-      if accessed {
-        url.stopAccessingSecurityScopedResource()
-      }
-    }
-
-    if let videoMetadata = probeSelectedVideo(url: url) {
-      return videoMetadata
-    }
-
-    if let imageRep = NSImageRep(contentsOf: url) {
-      return [
-        "path": url.path,
-        "width": imageRep.pixelsWide,
-        "height": imageRep.pixelsHigh,
-        "durationMilliseconds": 0,
-        "hasAudio": false,
-        "mediaKind": "photo",
-      ]
-    }
-
-    return ["path": url.path]
-  }
-
-  private func probeSelectedVideo(url: URL) -> [String: Any]? {
-    let asset = AVURLAsset(url: url)
-    guard let videoTrack = asset.tracks(withMediaType: .video).first else {
-      return nil
-    }
-
-    let transformedSize = videoTrack.naturalSize.applying(videoTrack.preferredTransform)
-    let width = Int(abs(transformedSize.width).rounded())
-    let height = Int(abs(transformedSize.height).rounded())
-    let durationSeconds = CMTimeGetSeconds(asset.duration)
-    let hasAudio = !asset.tracks(withMediaType: .audio).isEmpty
-    let frameRate = Double(videoTrack.nominalFrameRate)
-
-    return [
-      "path": url.path,
-      "width": width,
-      "height": height,
-      "durationMilliseconds": Int((durationSeconds.isFinite ? durationSeconds : 0) * 1000),
-      "hasAudio": hasAudio,
-      "mediaKind": "video",
-      "frameRate": frameRate.isFinite ? frameRate : 0,
-    ]
-  }
 }

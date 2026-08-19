@@ -673,9 +673,9 @@ extension _MediaController on _VideoCollageScreenState {
                 '$candidateCount kept in Media.';
     });
 
-    for (final item in pending) {
-      await _loadClip(item.path, instanceId: item.id);
-    }
+    await Future.wait(<Future<void>>[
+      for (final item in pending) _loadClip(item.path, instanceId: item.id),
+    ]);
   }
 
   _PendingExternalReplacement _pendingExternalReplacement({
@@ -779,9 +779,10 @@ extension _MediaController on _VideoCollageScreenState {
                 '${pendingClips.length - assignedVisibleCount} kept in Media.';
     });
 
-    for (final pending in pendingClips) {
-      await _loadClip(pending.path, instanceId: pending.id);
-    }
+    await Future.wait(<Future<void>>[
+      for (final pending in pendingClips)
+        _loadClip(pending.path, instanceId: pending.id),
+    ]);
     return pendingClips.length;
   }
 
@@ -974,6 +975,45 @@ extension _MediaController on _VideoCollageScreenState {
     required String instanceId,
     VideoClipInfo? initialClip,
   }) async {
+    await _acquirePreviewLoadSlot();
+    try {
+      if (!mounted || !_clips.any((clip) => clip.id == instanceId)) {
+        return;
+      }
+      await _loadClipInSlot(
+        path,
+        instanceId: instanceId,
+        initialClip: initialClip,
+      );
+    } finally {
+      _releasePreviewLoadSlot();
+    }
+  }
+
+  Future<void> _acquirePreviewLoadSlot() async {
+    if (_activePreviewLoads < _maxConcurrentPreviewLoads) {
+      _activePreviewLoads += 1;
+      return;
+    }
+
+    final waiter = Completer<void>();
+    _previewLoadWaiters.addLast(waiter);
+    await waiter.future;
+  }
+
+  void _releasePreviewLoadSlot() {
+    if (_previewLoadWaiters.isNotEmpty) {
+      _previewLoadWaiters.removeFirst().complete();
+      return;
+    }
+    _activePreviewLoads = math.max(0, _activePreviewLoads - 1);
+  }
+
+  Future<void> _loadClipInSlot(
+    String path, {
+    required String instanceId,
+    VideoClipInfo? initialClip,
+  }) async {
     if (_isSupportedPhotoPath(path)) {
       try {
         final clip = await _exportService.probeMedia(path);
@@ -1013,27 +1053,10 @@ extension _MediaController on _VideoCollageScreenState {
     }
 
     VideoPlayerController? controller;
-    var probedClip = initialClip;
+    final metadataFuture = initialClip == null
+        ? _probeMediaForPreview(path)
+        : Future<VideoClipInfo?>.value(initialClip);
     try {
-      if (probedClip == null) {
-        try {
-          probedClip = await _exportService.probeMedia(path);
-          if (mounted) {
-            _updateState(() {
-              final index = _clips.indexWhere((clip) => clip.id == instanceId);
-              if (index >= 0) {
-                _clips[index] = probedClip!.copyWith(
-                  instanceId: instanceId,
-                  name: _clips[index].name,
-                  hasCustomLabel: _clips[index].hasCustomLabel,
-                  useAiMetadataLabel: _clips[index].useAiMetadataLabel,
-                );
-              }
-            });
-          }
-        } catch (_) {}
-      }
-
       controller = VideoPlayerController.file(File(path));
       await controller.initialize().timeout(_previewInitializationTimeout);
       await controller.setLooping(false);
@@ -1042,7 +1065,7 @@ extension _MediaController on _VideoCollageScreenState {
 
       final initializedController = controller;
       final clip =
-          probedClip ??
+          initialClip ??
           (() {
             final value = initializedController.value;
             return VideoClipInfo(
@@ -1087,11 +1110,18 @@ extension _MediaController on _VideoCollageScreenState {
       unawaited(_syncPreviewPlaybackMode());
       unawaited(_refreshClipAiMetadata(instanceId, path));
       controller = null;
+
+      final probedClip = await metadataFuture;
+      if (probedClip != null) {
+        _applyLoadedClipMetadata(instanceId, path, probedClip);
+      }
     } catch (error) {
       controller?.dispose();
       if (!mounted) {
         return;
       }
+
+      final probedClip = await metadataFuture;
 
       _updateState(() {
         _loadingClipIds.remove(instanceId);
@@ -1109,6 +1139,71 @@ extension _MediaController on _VideoCollageScreenState {
         unawaited(_refreshClipAiMetadata(instanceId, path));
       }
     }
+  }
+
+  Future<VideoClipInfo?> _probeMediaForPreview(String path) async {
+    try {
+      return await _exportService.probeMedia(path);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _applyLoadedClipMetadata(
+    String instanceId,
+    String path,
+    VideoClipInfo refreshed,
+  ) {
+    if (!mounted) {
+      return;
+    }
+
+    _updateState(() {
+      final currentIndex = _clips.indexWhere(
+        (clip) => clip.id == instanceId && clip.path == path,
+      );
+      if (currentIndex < 0) {
+        return;
+      }
+      final current = _clips[currentIndex];
+      final refreshedName = current.hasCustomLabel
+          ? current.name
+          : defaultClipLabelFor(
+              refreshed.copyWith(aiMetadata: current.aiMetadata),
+              preferAiMetadata: current.useAiMetadataLabel,
+            );
+      if (!current.isTrimmed) {
+        _clips[currentIndex] = refreshed.copyWith(
+          instanceId: instanceId,
+          name: refreshedName,
+          aiMetadata: current.aiMetadata,
+          hasCustomLabel: current.hasCustomLabel,
+          useAiMetadataLabel: current.useAiMetadataLabel,
+        );
+        return;
+      }
+
+      final sourceDuration = refreshed.duration;
+      final trimStart = current.trimStart < sourceDuration
+          ? current.trimStart
+          : Duration.zero;
+      final requestedEnd = current.trimEnd < sourceDuration
+          ? current.trimEnd
+          : sourceDuration;
+      final trimmedDuration = requestedEnd > trimStart
+          ? requestedEnd - trimStart
+          : sourceDuration;
+      _clips[currentIndex] = refreshed.copyWith(
+        instanceId: instanceId,
+        name: refreshedName,
+        duration: trimmedDuration,
+        sourceDuration: sourceDuration,
+        trimStart: trimStart,
+        aiMetadata: current.aiMetadata,
+        hasCustomLabel: current.hasCustomLabel,
+        useAiMetadataLabel: current.useAiMetadataLabel,
+      );
+    });
   }
 
   Future<void> _refreshClipAiMetadata(String instanceId, String path) async {
