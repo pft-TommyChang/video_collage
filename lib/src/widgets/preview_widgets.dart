@@ -1,68 +1,72 @@
 part of '../video_collage_app.dart';
 
 class _EmptyPreviewOnboarding extends StatelessWidget {
-  const _EmptyPreviewOnboarding({required this.onAddMedia});
+  const _EmptyPreviewOnboarding({required this.onAddMedia, this.onExpandPanel});
 
   final VoidCallback onAddMedia;
+  final VoidCallback? onExpandPanel;
 
   @override
   Widget build(BuildContext context) {
-    final isCompact = MediaQuery.sizeOf(context).height < 700;
     return Semantics(
       key: const ValueKey<String>('empty-preview-onboarding'),
       container: true,
       label: 'Start a collage by adding photos or videos',
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 430),
-          child: Material(
-            key: const ValueKey<String>('empty-preview-onboarding-card'),
-            color: Colors.white.withValues(alpha: 0.96),
-            elevation: 3,
-            shadowColor: Colors.black26,
-            borderRadius: BorderRadius.circular(24),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFE5DC),
-                      borderRadius: BorderRadius.circular(18),
+      child: Stack(
+        children: <Widget>[
+          const Positioned.fill(
+            child: ColoredBox(
+              key: ValueKey<String>('empty-preview-onboarding-overlay'),
+              color: Color(0xD9FFF8EE),
+            ),
+          ),
+          Center(
+            child: ConstrainedBox(
+              key: const ValueKey<String>('empty-preview-onboarding-content'),
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 22,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE5DC),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: const Icon(
+                        Icons.add_photo_alternate_outlined,
+                        color: Color(0xFFD95C3E),
+                        size: 30,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.add_photo_alternate_outlined,
-                      color: Color(0xFFD95C3E),
-                      size: 30,
+                    const SizedBox(height: 18),
+                    Text(
+                      'Start Your Collage',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Start your collage',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+                    const SizedBox(height: 8),
+                    Text(
+                      'Add photos or videos, arrange the layout, then export.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF697180),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Add photos or videos, arrange the layout, then export.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF697180),
+                    const SizedBox(height: 20),
+                    FilledButton.icon(
+                      key: const ValueKey<String>('empty-preview-add-media'),
+                      onPressed: onAddMedia,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Add photos or videos'),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  FilledButton.icon(
-                    key: const ValueKey<String>('empty-preview-add-media'),
-                    onPressed: onAddMedia,
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('Add photos or videos'),
-                  ),
-                  if (!isCompact) ...<Widget>[
                     const SizedBox(height: 14),
                     Text(
                       'You can also drop files anywhere in this window',
@@ -74,11 +78,25 @@ class _EmptyPreviewOnboarding extends StatelessWidget {
                     const SizedBox(height: 14),
                     const _EmptyPreviewSteps(),
                   ],
-                ],
+                ),
               ),
             ),
           ),
-        ),
+          if (onExpandPanel != null)
+            Positioned(
+              left: 28,
+              top: 28,
+              child: _PreviewLayoutButton(
+                key: const ValueKey<String>('onboarding-expand-panel'),
+                onPressed: onExpandPanel,
+                tooltip: 'Expand panel',
+                icon: const Icon(
+                  Icons.keyboard_double_arrow_right_rounded,
+                  size: 20,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

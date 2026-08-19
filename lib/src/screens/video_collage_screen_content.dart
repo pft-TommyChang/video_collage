@@ -839,6 +839,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
               ),
               Expanded(
                 child: Stack(
+                  key: const ValueKey<String>('preview-workspace'),
                   children: <Widget>[
                     Positioned.fill(
                       child: AbsorbPointer(
@@ -1165,14 +1166,6 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                                   ),
                                                 ),
                                               ),
-                                              if (_clips.isEmpty &&
-                                                  !_isExternalDragActive)
-                                                Positioned.fill(
-                                                  child:
-                                                      _EmptyPreviewOnboarding(
-                                                        onAddMedia: _pickMedia,
-                                                      ),
-                                                ),
                                             ],
                                           );
                                         },
@@ -1232,6 +1225,26 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                         ),
                       ),
                     ),
+                    if (_clips.isEmpty)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          ignoring: _isExternalDragActive,
+                          child: AnimatedOpacity(
+                            key: const ValueKey<String>(
+                              'empty-preview-onboarding-transition',
+                            ),
+                            duration: const Duration(milliseconds: 120),
+                            curve: Curves.easeOut,
+                            opacity: _isExternalDragActive ? 0 : 1,
+                            child: _EmptyPreviewOnboarding(
+                              onAddMedia: _pickMedia,
+                              onExpandPanel: _isSidePanelCollapsed
+                                  ? _expandSidePanel
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ),
                     if (_isSidePanelCollapsed && _isExporting)
                       Positioned(
                         left: 28,

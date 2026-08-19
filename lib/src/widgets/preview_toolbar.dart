@@ -2,6 +2,20 @@ part of '../video_collage_app.dart';
 
 enum _PreviewAutoLayoutAction { smart, vertical, horizontal }
 
+const double _previewToolbarButtonHeight = 40;
+
+ButtonStyle _previewToolbarOutlinedButtonStyle() {
+  return _secondaryOutlinedButtonStyle().copyWith(
+    minimumSize: const WidgetStatePropertyAll<Size>(
+      Size(0, _previewToolbarButtonHeight),
+    ),
+    maximumSize: const WidgetStatePropertyAll<Size>(
+      Size(double.infinity, _previewToolbarButtonHeight),
+    ),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+}
+
 class _PreviewToolbar extends StatelessWidget {
   const _PreviewToolbar({
     required this.hasClips,
@@ -59,11 +73,12 @@ class _PreviewToolbar extends StatelessWidget {
                       children: <Widget>[
                         if (onExpandPanel != null) ...<Widget>[
                           _PreviewLayoutButton(
+                            key: const ValueKey<String>('preview-expand-panel'),
                             onPressed: onExpandPanel,
                             tooltip: 'Expand panel',
                             icon: const Icon(
                               Icons.keyboard_double_arrow_right_rounded,
-                              size: 18,
+                              size: 20,
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -117,7 +132,7 @@ class _PreviewToolbar extends StatelessWidget {
                           child: IgnorePointer(
                             child: OutlinedButton.icon(
                               onPressed: hasClips ? () {} : null,
-                              style: _secondaryOutlinedButtonStyle(),
+                              style: _previewToolbarOutlinedButtonStyle(),
                               icon: const Icon(Icons.auto_fix_high, size: 18),
                               label: const Text('Auto layout'),
                             ),
@@ -216,6 +231,7 @@ class _PreviewToolbar extends StatelessWidget {
 
 class _PreviewLayoutButton extends StatelessWidget {
   const _PreviewLayoutButton({
+    super.key,
     required this.onPressed,
     required this.tooltip,
     required this.icon,
@@ -227,14 +243,22 @@ class _PreviewLayoutButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton.outlined(
-      onPressed: onPressed,
-      tooltip: tooltip,
-      style: IconButton.styleFrom(
-        minimumSize: const Size(34, 34),
-        maximumSize: const Size(34, 34),
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: IconButton.outlined(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        style: _previewToolbarOutlinedButtonStyle().copyWith(
+          fixedSize: const WidgetStatePropertyAll<Size>(
+            Size.square(_previewToolbarButtonHeight),
+          ),
+          padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
+            EdgeInsets.zero,
+          ),
+        ),
+        icon: icon,
       ),
-      icon: icon,
     );
   }
 }

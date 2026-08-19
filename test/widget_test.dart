@@ -141,7 +141,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('0:00 / 0:00'), findsNothing);
-    expect(find.text('Start your collage'), findsOneWidget);
+    expect(find.text('Start Your Collage'), findsOneWidget);
     expect(find.text('Add photos or videos'), findsOneWidget);
     expect(
       tester
@@ -224,9 +224,15 @@ void main() {
     slotDropTarget.onDragEntered?.call(details);
     await tester.pump(const Duration(milliseconds: 160));
 
+    final transitionFinder = find.byKey(
+      const ValueKey<String>('empty-preview-onboarding-transition'),
+    );
+    final hiddenTransition = tester.widget<AnimatedOpacity>(transitionFinder);
+    expect(hiddenTransition.opacity, 0);
+    expect(hiddenTransition.duration, const Duration(milliseconds: 120));
     expect(
       find.byKey(const ValueKey<String>('empty-preview-onboarding')),
-      findsNothing,
+      findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey<String>('preview-drop-hover')),
@@ -241,13 +247,14 @@ void main() {
       find.byKey(const ValueKey<String>('empty-preview-onboarding')),
       findsOneWidget,
     );
+    expect(tester.widget<AnimatedOpacity>(transitionFinder).opacity, 1);
     expect(
       find.byKey(const ValueKey<String>('preview-drop-hover')),
       findsNothing,
     );
   });
 
-  testWidgets('empty preview uses the real grid and centers onboarding', (
+  testWidgets('empty preview uses the real grid and covers the workspace', (
     WidgetTester tester,
   ) async {
     useTestWindow(tester, const Size(1600, 1000));
@@ -259,19 +266,21 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey<String>('preview-slot-4')), findsNothing);
-    final operationArea = find.byKey(
-      const ValueKey<String>('preview-operation-area'),
+    final workspace = find.byKey(const ValueKey<String>('preview-workspace'));
+    final onboardingOverlay = find.byKey(
+      const ValueKey<String>('empty-preview-onboarding-overlay'),
     );
-    final onboardingCard = find.byKey(
-      const ValueKey<String>('empty-preview-onboarding-card'),
+    final onboardingContent = find.byKey(
+      const ValueKey<String>('empty-preview-onboarding-content'),
+    );
+    expect(tester.getSize(onboardingOverlay), tester.getSize(workspace));
+    expect(
+      tester.getCenter(onboardingContent).dx,
+      closeTo(tester.getCenter(workspace).dx, 0.1),
     );
     expect(
-      tester.getCenter(onboardingCard).dx,
-      closeTo(tester.getCenter(operationArea).dx, 0.1),
-    );
-    expect(
-      tester.getCenter(onboardingCard).dy,
-      closeTo(tester.getCenter(operationArea).dy, 0.1),
+      tester.getCenter(onboardingContent).dy,
+      closeTo(tester.getCenter(workspace).dy, 0.1),
     );
 
     final rowsStepper = find
@@ -1040,7 +1049,24 @@ void main() {
       tester.getSize(find.byKey(const ValueKey<String>('side-panel'))).width,
       0,
     );
-    expect(find.byTooltip('Expand panel'), findsOneWidget);
+    expect(find.byTooltip('Expand panel'), findsNWidgets(2));
+    expect(
+      find.byKey(const ValueKey<String>('preview-expand-panel')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('onboarding-expand-panel')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('empty-preview-onboarding-transition'),
+        ),
+        matching: find.byKey(const ValueKey<String>('onboarding-expand-panel')),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey<String>('collapsed-export-button')),
       findsOneWidget,
@@ -1050,7 +1076,9 @@ void main() {
     );
     expect(collapsedExportGesture.onSecondaryTapDown, isNull);
     expect(
-      tester.getCenter(find.byTooltip('Expand panel')).dx,
+      tester
+          .getCenter(find.byKey(const ValueKey<String>('preview-expand-panel')))
+          .dx,
       lessThan(
         tester
             .getCenter(
@@ -1059,12 +1087,27 @@ void main() {
             .dx,
       ),
     );
+    final expandButtonBorder = find.descendant(
+      of: find.byKey(const ValueKey<String>('preview-expand-panel')),
+      matching: find.byType(IconButton),
+    );
+    final autoLayoutButtonBorder = find.descendant(
+      of: find.byKey(const ValueKey<String>('preview-auto-layout-menu')),
+      matching: find.byType(OutlinedButton),
+    );
+    expect(
+      tester.getSize(expandButtonBorder).height,
+      tester.getSize(autoLayoutButtonBorder).height,
+    );
+    expect(tester.getSize(expandButtonBorder).height, 40);
     expect(
       find.byKey(const ValueKey<String>('status-message')),
       findsOneWidget,
     );
 
-    await tester.tap(find.byTooltip('Expand panel'));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('onboarding-expand-panel')),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -1097,7 +1140,7 @@ void main() {
     expect(lastExportButton.onPressed, isNull);
   });
 
-  testWidgets('compact photo preview hides playback without overflowing', (
+  testWidgets('compact empty preview keeps onboarding copy without overflow', (
     WidgetTester tester,
   ) async {
     useTestWindow(tester, const Size(800, 640));
@@ -1106,7 +1149,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('0:00 / 0:00'), findsNothing);
-    expect(find.text('Start your collage'), findsOneWidget);
+    expect(find.text('Start Your Collage'), findsOneWidget);
+    expect(
+      find.text('You can also drop files anywhere in this window'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('1  Add media   •   2  Choose layout   •   3  Export'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
