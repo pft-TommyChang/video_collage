@@ -210,6 +210,8 @@ class _ClipListTile extends StatelessWidget {
     final metadata = clip.aiMetadata;
     final vendor = metadata.vendor;
     final model = metadata.model;
+    final camera = metadata.cameraModel ?? metadata.cameraMake;
+    final lens = metadata.lensModel;
     return Tooltip(
       message: _aiMetadataTooltip,
       child: ScrollConfiguration(
@@ -241,6 +243,17 @@ class _ClipListTile extends StatelessWidget {
               if ((metadata.hasC2pa || vendor != null) && model != null)
                 const SizedBox(width: 6),
               if (model != null) _buildAiTag(context, model),
+              if ((metadata.hasC2pa || vendor != null || model != null) &&
+                  camera != null)
+                const SizedBox(width: 6),
+              if (camera != null) _buildAiTag(context, camera),
+              if ((metadata.hasC2pa ||
+                      vendor != null ||
+                      model != null ||
+                      camera != null) &&
+                  lens != null)
+                const SizedBox(width: 6),
+              if (lens != null) _buildAiTag(context, lens),
             ],
           ),
         ),
@@ -437,6 +450,9 @@ class _ClipListTile extends StatelessWidget {
       if (metadata.c2paStatus == C2paStatus.invalid) 'Invalid',
       if (metadata.vendor != null) metadata.vendor!,
       if (metadata.model != null) metadata.model!,
+      if (metadata.cameraMake != null) metadata.cameraMake!,
+      if (metadata.cameraModel != null) metadata.cameraModel!,
+      if (metadata.lensModel != null) metadata.lensModel!,
     ];
     return parts.join(' • ');
   }

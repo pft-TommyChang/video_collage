@@ -67,11 +67,17 @@ class AiMediaMetadata {
     this.c2paStatus = C2paStatus.unknown,
     this.vendor,
     this.model,
+    this.cameraMake,
+    this.cameraModel,
+    this.lensModel,
   });
 
   final C2paStatus c2paStatus;
   final String? vendor;
   final String? model;
+  final String? cameraMake;
+  final String? cameraModel;
+  final String? lensModel;
 
   bool get hasC2pa => switch (c2paStatus) {
     C2paStatus.untrusted ||
@@ -81,7 +87,13 @@ class AiMediaMetadata {
     C2paStatus.unknown || C2paStatus.absent => false,
   };
 
-  bool get hasDisplayableInfo => hasC2pa || vendor != null || model != null;
+  bool get hasDisplayableInfo =>
+      hasC2pa ||
+      vendor != null ||
+      model != null ||
+      cameraMake != null ||
+      cameraModel != null ||
+      lensModel != null;
 }
 
 enum AudioMode {
@@ -304,15 +316,24 @@ class VideoClipInfo {
 enum ClipLabelSourcePreset {
   vendorName,
   modelName,
+  cameraMake,
+  cameraModel,
+  lensModel,
   fileName;
 
   String? valueFor(VideoClipInfo clip) {
     final vendor = _capitalizeFirst(clip.aiMetadata.vendor);
     final model = _capitalizeFirst(clip.aiMetadata.model);
+    final cameraMake = _nonEmpty(clip.aiMetadata.cameraMake);
+    final cameraModel = _nonEmpty(clip.aiMetadata.cameraModel);
+    final lensModel = _nonEmpty(clip.aiMetadata.lensModel);
 
     return switch (this) {
       ClipLabelSourcePreset.vendorName => vendor,
       ClipLabelSourcePreset.modelName => model,
+      ClipLabelSourcePreset.cameraMake => cameraMake,
+      ClipLabelSourcePreset.cameraModel => cameraModel,
+      ClipLabelSourcePreset.lensModel => lensModel,
       ClipLabelSourcePreset.fileName => _nonEmpty(
         p.basenameWithoutExtension(clip.path),
       ),

@@ -416,27 +416,13 @@ class _AdvancedSettingsGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        hoverColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        splashFactory: NoSplash.splashFactory,
-      ),
-      child: ExpansionTile(
-        key: const PageStorageKey<String>('layout-advanced-settings'),
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: EdgeInsets.zero,
-        backgroundColor: Colors.transparent,
-        collapsedBackgroundColor: Colors.transparent,
-        shape: const Border(),
-        collapsedShape: const Border(),
-        initiallyExpanded: false,
-        leading: const Icon(Icons.tune_rounded, size: 20),
-        title: const Text('More styling options'),
-        subtitle: const Text('Borders, colors, corners, and fit'),
-        children: children,
-      ),
+    return Column(
+      key: const ValueKey<String>('layout-advanced-settings'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Divider(height: 24, color: Color(0xFFE8E0D5)),
+        ...children,
+      ],
     );
   }
 }

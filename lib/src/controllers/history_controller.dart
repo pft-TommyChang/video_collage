@@ -132,58 +132,84 @@ extension _HistoryController on _VideoCollageScreenState {
     return p.normalize(p.absolute(path));
   }
 
+  Future<void> _clearExportHistory() async {
+    await _settingsStore.clearExportHistory();
+    if (!mounted) {
+      return;
+    }
+    _updateState(() {
+      _exportHistory = const <ExportHistoryEntry>[];
+      _sessionLastExportEntry = null;
+    });
+  }
+
   Future<void> _showExportHistory() async {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Recent Exports'),
-          content: SizedBox(
-            width: 520,
-            child: _exportHistory.isEmpty
-                ? const Text('No recent exports.')
-                : ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: _exportHistory.length,
-                    separatorBuilder: (context, index) =>
-                        const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final entry = _exportHistory[index];
-                      final exists = File(entry.path).existsSync();
-                      return ListTile(
-                        enabled: exists,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          p.basename(entry.path),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          '${entry.format} • ${_formatHistoryTimestamp(entry.timestampMillis)}\n${entry.path}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: IconButton(
-                          tooltip: 'Open folder',
-                          onPressed: !exists
-                              ? null
-                              : () {
-                                  unawaited(
-                                    _showExportHistoryEntryInFolder(entry),
-                                  );
-                                },
-                          icon: const Icon(Icons.folder_open_outlined),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Close'),
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Recent Exports'),
+            content: SizedBox(
+              width: 520,
+              child: _exportHistory.isEmpty
+                  ? const Text('No recent exports.')
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: _exportHistory.length,
+                      separatorBuilder: (context, index) =>
+                          const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final entry = _exportHistory[index];
+                        final exists = File(entry.path).existsSync();
+                        return ListTile(
+                          enabled: exists,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            p.basename(entry.path),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '${entry.format} • ${_formatHistoryTimestamp(entry.timestampMillis)}\n${entry.path}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: IconButton(
+                            tooltip: 'Open folder',
+                            onPressed: !exists
+                                ? null
+                                : () {
+                                    unawaited(
+                                      _showExportHistoryEntryInFolder(entry),
+                                    );
+                                  },
+                            icon: const Icon(Icons.folder_open_outlined),
+                          ),
+                        );
+                      },
+                    ),
             ),
-          ],
+            actionsAlignment: MainAxisAlignment.spaceBetween,
+            actions: <Widget>[
+              TextButton(
+                key: const ValueKey<String>('clear-export-history'),
+                onPressed: _exportHistory.isEmpty
+                    ? null
+                    : () async {
+                        await _clearExportHistory();
+                        if (dialogContext.mounted) {
+                          setDialogState(() {});
+                        }
+                      },
+                child: const Text('Clear'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
         );
       },
     );

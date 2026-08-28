@@ -823,8 +823,8 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                               Center(
                                 child: Text(
                                   exportFormat == ExportFormat.jpg
-                                      ? '${options.outputWidth}x${options.outputHeight} • ${options.rows}×${options.columns} grid • ${options.fitMode.label} • $playModeLabel'
-                                      : '${options.outputWidth}x${options.outputHeight} • ${options.rows}×${options.columns} grid • ${options.fitMode.label} • $playModeLabel • ${formatDuration(exportDuration)}',
+                                      ? '${options.outputWidth}x${options.outputHeight} • ${options.rows}×${options.columns} grid • $playModeLabel'
+                                      : '${options.outputWidth}x${options.outputHeight} • ${options.rows}×${options.columns} grid • $playModeLabel • ${formatDuration(exportDuration)}',
                                   textAlign: TextAlign.center,
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),

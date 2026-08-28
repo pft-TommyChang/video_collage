@@ -323,6 +323,17 @@ class EditorSettingsStore {
     }
   }
 
+  Future<void> clearExportHistory() async {
+    try {
+      final historyFile = await _exportHistoryFile();
+      if (await historyFile.exists()) {
+        await historyFile.delete();
+      }
+    } catch (_) {
+      // Ignore local persistence failures to keep the editor responsive.
+    }
+  }
+
   Future<File> _settingsFile() async {
     return File(p.join((await _supportDirectory()).path, _settingsFileName));
   }

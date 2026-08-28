@@ -123,8 +123,8 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
     final selectedController = selectedVideo == null
         ? null
         : _thumbnailControllers[selectedVideo.id];
-    final availableContentHeight = (MediaQuery.sizeOf(context).height - 220)
-        .clamp(430.0, 520.0);
+    final availableContentHeight = (MediaQuery.sizeOf(context).height - 208)
+        .clamp(430.0, 532.0);
     return PopScope(
       canPop: !_isMerging,
       child: DropTarget(
@@ -151,7 +151,7 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
         },
         child: AlertDialog(
           titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-          contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
           title: Row(
             children: <Widget>[
               const Icon(Icons.merge),
@@ -176,55 +176,6 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
             height: availableContentHeight,
             child: Column(
               children: <Widget>[
-                SizedBox(
-                  height: 22,
-                  child: mainVideo == null
-                      ? Text(
-                          _isDraggingOver
-                              ? 'Drop videos here'
-                              : 'No videos selected',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: _isDraggingOver
-                                    ? Theme.of(context).colorScheme.primary
-                                    : const Color(0xFF697180),
-                                fontWeight: _isDraggingOver
-                                    ? FontWeight.w600
-                                    : null,
-                              ),
-                        )
-                      : Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: Text(
-                                'Export: ${mainVideo.width}×${mainVideo.height}  •  '
-                                '${_formatMergeFrameRate(_outputFrameRate, unavailable: 'FPS loading…')}  •  '
-                                '${_formatMergeDuration(_totalDuration)} total',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: const Color(0xFF747B88)),
-                              ),
-                            ),
-                            if (selectedVideo != null) ...<Widget>[
-                              const SizedBox(width: 16),
-                              Text(
-                                'Media: ${selectedVideo.width}×${selectedVideo.height}  •  '
-                                '${_formatMergeFrameRate(_videoFrameRates[selectedVideo.id])}  •  '
-                                '${_formatMergeDuration(selectedVideo.duration)}',
-                                key: const ValueKey<String>(
-                                  'merge-selected-media-info',
-                                ),
-                                maxLines: 1,
-                                textAlign: TextAlign.right,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: const Color(0xFF747B88)),
-                              ),
-                            ],
-                          ],
-                        ),
-                ),
-                const SizedBox(height: 6),
                 Expanded(
                   child: Center(
                     child: ConstrainedBox(
@@ -383,6 +334,63 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: SizedBox(
+                    height: 22,
+                    child: mainVideo == null
+                        ? Text(
+                            _isDraggingOver
+                                ? 'Drop videos here'
+                                : 'No videos selected',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: _isDraggingOver
+                                      ? Theme.of(context).colorScheme.primary
+                                      : const Color(0xFF697180),
+                                  fontWeight: _isDraggingOver
+                                      ? FontWeight.w600
+                                      : null,
+                                ),
+                          )
+                        : Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  'Export: ${mainVideo.width}×${mainVideo.height}  •  '
+                                  '${_formatMergeFrameRate(_outputFrameRate, unavailable: 'FPS loading…')}  •  '
+                                  '${_formatMergeDuration(_totalDuration)} total',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: const Color(0xFF5F6673),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                              ),
+                              if (selectedVideo != null) ...<Widget>[
+                                const SizedBox(width: 16),
+                                Text(
+                                  'Selected: ${selectedVideo.width}×${selectedVideo.height}  •  '
+                                  '${_formatMergeFrameRate(_videoFrameRates[selectedVideo.id])}  •  '
+                                  '${_formatMergeDuration(selectedVideo.duration)}',
+                                  key: const ValueKey<String>(
+                                    'merge-selected-media-info',
+                                  ),
+                                  maxLines: 1,
+                                  textAlign: TextAlign.right,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: const Color(0xFF747B88),
+                                      ),
+                                ),
+                              ],
+                            ],
+                          ),
+                  ),
+                ),
                 if (_message != null) ...<Widget>[
                   const SizedBox(height: 10),
                   Text(
@@ -400,56 +408,60 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
           actions: <Widget>[
             SizedBox(
               width: _mergeDialogWidth,
-              child: Row(
-                children: <Widget>[
-                  _MergeSaveButton(
-                    onPressed: _isMerging
-                        ? () => unawaited(
-                            widget.exportService.cancelActiveExport(),
-                          )
-                        : _videos.length < 2 || _isAdding
-                        ? null
-                        : _merge,
-                    isMerging: _isMerging,
-                    showCompleted: _showMergeComplete,
-                    progress: _progress,
-                  ),
-                  if (_lastMergedOutputPath != null) ...<Widget>[
-                    const SizedBox(width: 8),
-                    IconButton(
-                      key: const ValueKey<String>('merge-open-result-button'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: <Widget>[
+                    _MergeSaveButton(
+                      onPressed: _isMerging
+                          ? () => unawaited(
+                              widget.exportService.cancelActiveExport(),
+                            )
+                          : _videos.length < 2 || _isAdding
+                          ? null
+                          : _merge,
+                      isMerging: _isMerging,
+                      showCompleted: _showMergeComplete,
+                      progress: _progress,
+                    ),
+                    if (_lastMergedOutputPath != null) ...<Widget>[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        key: const ValueKey<String>('merge-open-result-button'),
+                        onPressed: _isMerging
+                            ? null
+                            : () => unawaited(_openMergeResult()),
+                        tooltip: 'Open File',
+                        icon: const Icon(Icons.open_in_new_rounded),
+                        iconSize: 18,
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size.square(40),
+                          maximumSize: const Size.square(40),
+                          padding: EdgeInsets.zero,
+                          shape: const CircleBorder(),
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.primary,
+                        side: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
                       onPressed: _isMerging
                           ? null
-                          : () => unawaited(_openMergeResult()),
-                      tooltip: 'Open File',
-                      icon: const Icon(Icons.open_in_new_rounded),
-                      iconSize: 18,
-                      visualDensity: VisualDensity.compact,
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size.square(40),
-                        maximumSize: const Size.square(40),
-                        padding: EdgeInsets.zero,
-                        shape: const CircleBorder(),
+                          : () => Navigator.of(
+                              context,
+                            ).pop(_lastMergedOutputPath),
+                      child: Text(
+                        _lastMergedOutputPath == null ? 'Cancel' : 'Close',
                       ),
                     ),
                   ],
-                  const Spacer(),
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.primary,
-                      side: BorderSide(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    onPressed: _isMerging
-                        ? null
-                        : () =>
-                              Navigator.of(context).pop(_lastMergedOutputPath),
-                    child: Text(
-                      _lastMergedOutputPath == null ? 'Cancel' : 'Close',
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],

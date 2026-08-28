@@ -185,4 +185,48 @@ void main() {
 
     expect(metadata.hasDisplayableInfo, isTrue);
   });
+
+  test('parses camera make, model, and lens from EXIF tags', () {
+    final metadata = AiMetadataService.parseExifTags(<String, String>{
+      'Image Make': 'SONY',
+      'Image Model': 'ILCE-7M4',
+      'EXIF LensModel': 'FE 24-70mm F2.8 GM II',
+    });
+
+    expect(metadata.cameraMake, 'SONY');
+    expect(metadata.cameraModel, 'ILCE-7M4');
+    expect(metadata.lensModel, 'FE 24-70mm F2.8 GM II');
+    expect(metadata.hasDisplayableInfo, isTrue);
+  });
+
+  test('parses camera metadata from QuickTime container tags', () {
+    final metadata = AiMetadataService.parseContainerTags(<String, String>{
+      'com.apple.quicktime.make': 'Apple',
+      'com.apple.quicktime.model': 'iPhone 17 Pro',
+    });
+
+    expect(metadata.cameraMake, 'Apple');
+    expect(metadata.cameraModel, 'iPhone 17 Pro');
+  });
+
+  test('merges AI provenance with camera metadata', () {
+    const provenance = AiMediaMetadata(
+      c2paStatus: C2paStatus.conformant,
+      vendor: 'OpenAI',
+      model: 'Sora',
+    );
+    const camera = AiMediaMetadata(
+      cameraMake: 'Canon',
+      cameraModel: 'EOS R5',
+      lensModel: 'RF24-70mm F2.8 L IS USM',
+    );
+
+    final metadata = AiMetadataService.merge(provenance, camera);
+
+    expect(metadata.vendor, 'OpenAI');
+    expect(metadata.model, 'Sora');
+    expect(metadata.cameraMake, 'Canon');
+    expect(metadata.cameraModel, 'EOS R5');
+    expect(metadata.lensModel, 'RF24-70mm F2.8 L IS USM');
+  });
 }

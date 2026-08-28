@@ -87,10 +87,8 @@ void main() {
   }
 
   Future<void> expandLayoutAdvancedSettings(WidgetTester tester) async {
-    final advanced = find.text('More styling options');
+    final advanced = find.text('Border thickness');
     await scrollSettingsIntoView(tester, advanced);
-    await tester.tap(advanced);
-    await tester.pumpAndSettle();
   }
 
   Future<void> choosePreviewAutoLayout(
@@ -325,30 +323,22 @@ void main() {
     expect(find.byKey(const ValueKey<String>('preview-slot-6')), findsNothing);
   });
 
-  testWidgets('advanced styling expansion has no borders or tap background', (
+  testWidgets('advanced styling options are always expanded', (
     WidgetTester tester,
   ) async {
     useTestWindow(tester, const Size(1600, 1000));
     await tester.pumpWidget(buildTestApp());
     await tester.pumpAndSettle();
 
-    final tile = tester.widget<ExpansionTile>(
-      find.byKey(const PageStorageKey<String>('layout-advanced-settings')),
-    );
-    expect(tile.shape, const Border());
-    expect(tile.collapsedShape, const Border());
-    expect(tile.backgroundColor, Colors.transparent);
-    expect(tile.collapsedBackgroundColor, Colors.transparent);
+    await scrollSettingsIntoView(tester, find.text('Border thickness'));
 
-    final tileTheme = Theme.of(
-      tester.element(
-        find.byKey(const PageStorageKey<String>('layout-advanced-settings')),
-      ),
+    expect(
+      find.byKey(const ValueKey<String>('layout-advanced-settings')),
+      findsOneWidget,
     );
-    expect(tileTheme.hoverColor, Colors.transparent);
-    expect(tileTheme.highlightColor, Colors.transparent);
-    expect(tileTheme.splashColor, Colors.transparent);
-    expect(tileTheme.splashFactory, NoSplash.splashFactory);
+    expect(find.text('More styling options'), findsNothing);
+    expect(find.byType(ExpansionTile), findsNothing);
+    expect(find.text('Border thickness'), findsOneWidget);
   });
 
   testWidgets('section reset stays visible when its content is collapsed', (
@@ -566,16 +556,66 @@ void main() {
       findsNothing,
     );
     expect(
-      find.text('Media: 1920×1080  •  29.97 FPS  •  0:03'),
+      find.text('Selected: 1920×1080  •  29.97 FPS  •  0:03'),
       findsOneWidget,
     );
     expect(find.textContaining('Export: 1920×1080'), findsOneWidget);
     expect(find.textContaining('29.97 FPS'), findsWidgets);
     final mergeSubtitle = find.textContaining('Export: 1920×1080');
+    final selectedSubtitle = find.byKey(
+      const ValueKey<String>('merge-selected-media-info'),
+    );
     expect(
-      tester.getTopLeft(mergeSubtitle).dy -
-          tester.getBottomLeft(find.text('Merge Videos')).dy,
-      lessThan(24),
+      tester.widget<Text>(mergeSubtitle).style?.fontWeight,
+      FontWeight.w600,
+    );
+    expect(
+      tester.widget<Text>(selectedSubtitle).style?.fontWeight,
+      isNot(FontWeight.w600),
+    );
+    expect(
+      tester.getTopLeft(mergeSubtitle).dx,
+      greaterThan(
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey<String>('merge-list-container')),
+            )
+            .dx,
+      ),
+    );
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey<String>('merge-save-button')))
+          .dx,
+      tester.getTopLeft(mergeSubtitle).dx,
+    );
+    expect(
+      tester.getBottomRight(selectedSubtitle).dx,
+      lessThan(
+        tester
+            .getBottomRight(
+              find.byKey(const ValueKey<String>('merge-list-container')),
+            )
+            .dx,
+      ),
+    );
+    expect(
+      tester.getTopLeft(mergeSubtitle).dy,
+      greaterThan(
+        tester
+            .getBottomLeft(
+              find.byKey(const ValueKey<String>('merge-list-container')),
+            )
+            .dy,
+      ),
+    );
+    expect(
+      tester.getBottomLeft(mergeSubtitle).dy,
+      lessThan(
+        tester
+            .getTopLeft(find.byKey(const ValueKey<String>('merge-save-button')))
+            .dy,
+      ),
     );
     expect(find.textContaining('1920×1080'), findsWidgets);
     expect(find.textContaining('0:07 total'), findsOneWidget);
@@ -706,7 +746,7 @@ void main() {
       find.byKey(const ValueKey<String>('merge-preview-merge-video-2')),
       findsOneWidget,
     );
-    expect(find.text('Media: 1280×720  •  60 FPS  •  0:04'), findsOneWidget);
+    expect(find.text('Selected: 1280×720  •  60 FPS  •  0:04'), findsOneWidget);
     expect(find.textContaining('1920×1080'), findsOneWidget);
     expect(find.textContaining('Preview missing-second.mp4'), findsNothing);
     final secondVideoPreviewSize = tester.getSize(

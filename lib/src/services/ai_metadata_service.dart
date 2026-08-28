@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
 import '../models.dart';
@@ -42,6 +43,9 @@ class AiMetadataService {
       c2paStatus: c2pa.c2paStatus,
       vendor: c2pa.vendor ?? container.vendor,
       model: c2pa.model ?? container.model,
+      cameraMake: c2pa.cameraMake ?? container.cameraMake,
+      cameraModel: c2pa.cameraModel ?? container.cameraModel,
+      lensModel: c2pa.lensModel ?? container.lensModel,
     );
   }
 
@@ -121,6 +125,27 @@ class AiMetadataService {
 
   Future<AiMediaMetadata> _probeContainerMetadata(String filePath) async {
     if (_isPhotoPath(filePath)) {
+      try {
+        final extension = p.extension(filePath).toLowerCase();
+        if (extension == '.jpg' || extension == '.jpeg') {
+          final exif = img.decodeJpgExif(await File(filePath).readAsBytes());
+          if (exif != null) {
+            final lensModelTag = img.exifTagNameToID['LensModel'];
+            final metadata = parseExifTags(<String, String?>{
+              'Image Make': exif.imageIfd.make,
+              'Image Model': exif.imageIfd.model,
+              'EXIF LensModel': lensModelTag == null
+                  ? null
+                  : exif.getTag(lensModelTag)?.toString(),
+            });
+            if (metadata.hasDisplayableInfo) {
+              return metadata;
+            }
+          }
+        }
+      } catch (_) {
+        return const AiMediaMetadata();
+      }
       return const AiMediaMetadata();
     }
     try {
@@ -248,11 +273,16 @@ class AiMetadataService {
         entry.key.toString().toLowerCase(): entry.value,
     };
 
+    final cameraMetadata = _cameraMetadataFromNormalizedTags(normalized);
+
     final heygen = _decodeJsonMap(normalized['heygen-wm']);
     if (heygen != null) {
       return AiMediaMetadata(
         vendor: _nonEmptyString(heygen['provider']) ?? 'HeyGen',
         model: _nonEmptyString(heygen['model']),
+        cameraMake: cameraMetadata.cameraMake,
+        cameraModel: cameraMetadata.cameraModel,
+        lensModel: cameraMetadata.lensModel,
       );
     }
 
@@ -266,11 +296,58 @@ class AiMetadataService {
         return AiMediaMetadata(
           vendor: 'Vidu',
           model: match?.group(1) ?? 'character2video',
+          cameraMake: cameraMetadata.cameraMake,
+          cameraModel: cameraMetadata.cameraModel,
+          lensModel: cameraMetadata.lensModel,
         );
       }
     }
 
-    return const AiMediaMetadata();
+    return cameraMetadata;
+  }
+
+  static AiMediaMetadata parseExifTags(Map<dynamic, dynamic>? tags) {
+    if (tags == null) {
+      return const AiMediaMetadata();
+    }
+    final normalized = <String, dynamic>{
+      for (final entry in tags.entries)
+        entry.key.toString().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), ''):
+            entry.value,
+    };
+    return _cameraMetadataFromNormalizedTags(normalized);
+  }
+
+  static AiMediaMetadata _cameraMetadataFromNormalizedTags(
+    Map<String, dynamic> tags,
+  ) {
+    String? firstValue(Iterable<String> keys) {
+      for (final key in keys) {
+        final value = _nonEmptyString(tags[key]);
+        if (value != null) return value;
+      }
+      return null;
+    }
+
+    return AiMediaMetadata(
+      cameraMake: firstValue(const <String>[
+        'imagemake',
+        'make',
+        'manufacturer',
+        'com.apple.quicktime.make',
+      ]),
+      cameraModel: firstValue(const <String>[
+        'imagemodel',
+        'model',
+        'cameramodelname',
+        'com.apple.quicktime.model',
+      ]),
+      lensModel: firstValue(const <String>[
+        'exiflensmodel',
+        'lensmodel',
+        'lens',
+      ]),
+    );
   }
 
   static Map<String, dynamic>? _decodeJsonMap(dynamic value) {

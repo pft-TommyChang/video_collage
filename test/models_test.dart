@@ -279,11 +279,23 @@ void main() {
         height: 1080,
         hasAudio: false,
         mediaKind: MediaKind.video,
-        aiMetadata: AiMediaMetadata(vendor: 'openai', model: 'flux'),
+        aiMetadata: AiMediaMetadata(
+          vendor: 'openai',
+          model: 'flux',
+          cameraMake: 'SONY',
+          cameraModel: 'ILCE-7M4',
+          lensModel: 'FE 24-70mm F2.8 GM II',
+        ),
       );
 
       expect(ClipLabelSourcePreset.vendorName.valueFor(clip), 'Openai');
       expect(ClipLabelSourcePreset.modelName.valueFor(clip), 'Flux');
+      expect(ClipLabelSourcePreset.cameraMake.valueFor(clip), 'SONY');
+      expect(ClipLabelSourcePreset.cameraModel.valueFor(clip), 'ILCE-7M4');
+      expect(
+        ClipLabelSourcePreset.lensModel.valueFor(clip),
+        'FE 24-70mm F2.8 GM II',
+      );
       expect(
         ClipLabelSourcePreset.fileName.valueFor(clip),
         'my_generated-video',
@@ -377,6 +389,9 @@ void main() {
 
       expect(ClipLabelSourcePreset.vendorName.valueFor(clip), isNull);
       expect(ClipLabelSourcePreset.modelName.valueFor(clip), isNull);
+      expect(ClipLabelSourcePreset.cameraMake.valueFor(clip), isNull);
+      expect(ClipLabelSourcePreset.cameraModel.valueFor(clip), isNull);
+      expect(ClipLabelSourcePreset.lensModel.valueFor(clip), isNull);
       expect(ClipLabelSourcePreset.fileName.valueFor(clip), 'example');
     },
   );
