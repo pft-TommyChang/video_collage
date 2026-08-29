@@ -23,15 +23,18 @@ enum _TrimExportAction { openFile, openFolder }
 
 enum _TrimExportKind {
   video,
+  frames,
   audio;
 
   String get label => switch (this) {
     _TrimExportKind.video => 'Export video',
+    _TrimExportKind.frames => 'Export frames',
     _TrimExportKind.audio => 'Export audio',
   };
 
   IconData get icon => switch (this) {
     _TrimExportKind.video => Icons.file_upload_outlined,
+    _TrimExportKind.frames => Icons.video_file_outlined,
     _TrimExportKind.audio => Icons.audio_file_outlined,
   };
 }
@@ -198,14 +201,15 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
     }
   }
 
-  Future<void> _exportTrimmedVideo() async {
+  Future<void> _exportTrimmedVideo(_TrimExportKind exportKind) async {
     if (_isExporting) {
       return;
     }
     final outputPath = await widget.dialogService.pickSavePath(
       format: ExportFormat.mp4,
-      suggestedName:
-          '${p.basenameWithoutExtension(widget.clip.path)}_trimmed.mp4',
+      suggestedName: exportKind == _TrimExportKind.frames
+          ? '${p.basenameWithoutExtension(widget.clip.path)}_trimmed_frames.mp4'
+          : '${p.basenameWithoutExtension(widget.clip.path)}_trimmed.mp4',
     );
     if (outputPath == null || !mounted) {
       return;
@@ -220,7 +224,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       _isExporting = true;
       _showExportComplete = false;
       _exportProgress = 0;
-      _activeExportKind = _TrimExportKind.video;
+      _activeExportKind = exportKind;
       _completedExportKind = null;
     });
     try {
@@ -229,7 +233,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
         start: Duration(milliseconds: _selection.start.round()),
         duration: selectedDuration,
         outputPath: outputPath,
-        hasAudio: widget.clip.hasAudio,
+        includeAudio:
+            exportKind == _TrimExportKind.video && widget.clip.hasAudio,
         outputSize: outputSize,
         frameRate: _exportFrameRate.framesPerSecond,
         onProgress: (progress) {
@@ -249,7 +254,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
         _exportProgress = 1;
         _lastExportPath = outputPath;
         _activeExportKind = null;
-        _completedExportKind = _TrimExportKind.video;
+        _completedExportKind = exportKind;
       });
       _exportCompletionTimer = Timer(const Duration(milliseconds: 1800), () {
         if (mounted) {
@@ -274,6 +279,8 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       final message =
           error is VideoExportException && error.message == 'Export cancelled.'
           ? error.message
+          : exportKind == _TrimExportKind.frames
+          ? 'Unable to export trimmed frames: $error'
           : 'Unable to export trimmed video: $error';
       _showToast(message);
     }
@@ -296,7 +303,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
       _exportResolution = settings.resolution;
       _exportFrameRate = settings.frameRate;
     });
-    await _exportTrimmedVideo();
+    await _exportTrimmedVideo(_selectedExportKind);
   }
 
   Future<void> _handleAudioExportButtonPressed() async {
@@ -387,6 +394,7 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
   Future<void> _handleSelectedExportButtonPressed() async {
     switch (_selectedExportKind) {
       case _TrimExportKind.video:
+      case _TrimExportKind.frames:
         await _handleExportButtonPressed();
       case _TrimExportKind.audio:
         await _handleAudioExportButtonPressed();
@@ -795,6 +803,12 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          IconButton(
+            key: const ValueKey<String>('trim-close-button'),
+            onPressed: _isExporting ? null : () => Navigator.of(context).pop(),
+            tooltip: 'Close',
+            icon: const Icon(Icons.close_rounded),
+          ),
         ],
       ),
       content: SizedBox(
@@ -938,19 +952,6 @@ class _VideoTrimmerDialogState extends State<VideoTrimmerDialog> {
                       ),
                 icon: const Icon(Icons.check_rounded),
                 label: const Text('Apply trim'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.primary,
-                  side: BorderSide(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                onPressed: _isExporting
-                    ? null
-                    : () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
               ),
             ],
           ),
@@ -1364,7 +1365,7 @@ class _TrimExportButton extends StatelessWidget {
                             position: PopupMenuPosition.over,
                             offset: const Offset(
                               -(buttonWidth - menuWidth),
-                              -112,
+                              -160,
                             ),
                             padding: EdgeInsets.zero,
                             menuPadding: const EdgeInsets.symmetric(

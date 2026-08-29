@@ -492,26 +492,19 @@ void main() {
       ),
       findsNothing,
     );
+    expect(find.text('Cancel'), findsNothing);
+    final mergeCloseButton = find.byKey(
+      const ValueKey<String>('merge-close-button'),
+    );
+    expect(mergeCloseButton, findsOneWidget);
+    expect(find.byTooltip('Close'), findsOneWidget);
+    expect(
+      tester.getCenter(mergeCloseButton).dy,
+      lessThan(tester.getCenter(find.text('Merge & Save')).dy),
+    );
     expect(
       tester.getCenter(find.text('Merge & Save')).dx,
-      lessThan(tester.getCenter(find.text('Cancel')).dx),
-    );
-    expect(
-      find.ancestor(
-        of: find.text('Cancel'),
-        matching: find.byType(OutlinedButton),
-      ),
-      findsOneWidget,
-    );
-    final mergeCancelButton = tester.widget<OutlinedButton>(
-      find.ancestor(
-        of: find.text('Cancel'),
-        matching: find.byType(OutlinedButton),
-      ),
-    );
-    expect(
-      mergeCancelButton.style?.side?.resolve(<WidgetState>{})?.color,
-      Theme.of(tester.element(find.text('Cancel'))).colorScheme.primary,
+      greaterThan(tester.getCenter(find.byType(AlertDialog)).dx),
     );
   });
 
@@ -585,9 +578,9 @@ void main() {
     );
     expect(
       tester
-          .getTopLeft(find.byKey(const ValueKey<String>('merge-save-button')))
+          .getTopRight(find.byKey(const ValueKey<String>('merge-save-button')))
           .dx,
-      tester.getTopLeft(mergeSubtitle).dx,
+      tester.getTopRight(selectedSubtitle).dx,
     );
     expect(
       tester.getBottomRight(selectedSubtitle).dx,
@@ -1033,7 +1026,10 @@ void main() {
       openResultButton.style?.shape?.resolve(const <WidgetState>{}),
       isA<CircleBorder>(),
     );
-    expect(find.text('Close'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('merge-close-button')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('cancelled merge does not add an error message row', (
@@ -1263,30 +1259,24 @@ void main() {
     expect(find.text('Trim video'), findsOneWidget);
     expect(find.text('Export video'), findsOneWidget);
     expect(find.text('Export audio'), findsNothing);
+    expect(find.text('Cancel'), findsNothing);
+    final trimCloseButton = find.byKey(
+      const ValueKey<String>('trim-close-button'),
+    );
+    expect(trimCloseButton, findsOneWidget);
+    expect(find.byTooltip('Close'), findsOneWidget);
+    expect(
+      tester.getCenter(trimCloseButton).dy,
+      lessThan(tester.getCenter(find.text('Apply trim')).dy),
+    );
     expect(
       tester.getCenter(find.text('Apply trim')).dx,
-      lessThan(tester.getCenter(find.text('Cancel')).dx),
-    );
-    expect(
-      find.ancestor(
-        of: find.text('Cancel'),
-        matching: find.byType(OutlinedButton),
-      ),
-      findsOneWidget,
-    );
-    final trimCancelButton = tester.widget<OutlinedButton>(
-      find.ancestor(
-        of: find.text('Cancel'),
-        matching: find.byType(OutlinedButton),
-      ),
-    );
-    expect(
-      trimCancelButton.style?.side?.resolve(<WidgetState>{})?.color,
-      Theme.of(tester.element(find.text('Cancel'))).colorScheme.primary,
+      greaterThan(tester.getCenter(find.byType(AlertDialog)).dx),
     );
     await tester.tap(find.byTooltip('Export options'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Export video'), findsWidgets);
+    expect(find.text('Export frames'), findsOneWidget);
     expect(find.text('Export audio'), findsOneWidget);
     expect(
       find.byWidgetPredicate(
@@ -1330,6 +1320,16 @@ void main() {
 
     await tester.tap(find.text('Open trimmer'));
     await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byTooltip('Export options'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.text('Export frames'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Export frames'), findsOneWidget);
+    expect(find.text('Export video'), findsNothing);
+
     await tester.tap(find.byTooltip('Export options'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));

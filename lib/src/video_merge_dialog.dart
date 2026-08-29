@@ -169,6 +169,15 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                 value: _frameRateMode == VideoMergeFrameRateMode.highest,
                 onChanged: _isMerging ? null : _setHighestFrameRate,
               ),
+              const SizedBox(width: 8),
+              IconButton(
+                key: const ValueKey<String>('merge-close-button'),
+                onPressed: _isMerging
+                    ? null
+                    : () => Navigator.of(context).pop(_lastMergedOutputPath),
+                tooltip: 'Close',
+                icon: const Icon(Icons.close_rounded),
+              ),
             ],
           ),
           content: SizedBox(
@@ -412,20 +421,8 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   children: <Widget>[
-                    _MergeSaveButton(
-                      onPressed: _isMerging
-                          ? () => unawaited(
-                              widget.exportService.cancelActiveExport(),
-                            )
-                          : _videos.length < 2 || _isAdding
-                          ? null
-                          : _merge,
-                      isMerging: _isMerging,
-                      showCompleted: _showMergeComplete,
-                      progress: _progress,
-                    ),
+                    const Spacer(),
                     if (_lastMergedOutputPath != null) ...<Widget>[
-                      const SizedBox(width: 8),
                       IconButton(
                         key: const ValueKey<String>('merge-open-result-button'),
                         onPressed: _isMerging
@@ -442,23 +439,19 @@ class _VideoMergeDialogState extends State<VideoMergeDialog> {
                           shape: const CircleBorder(),
                         ),
                       ),
+                      const SizedBox(width: 8),
                     ],
-                    const Spacer(),
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Theme.of(context).colorScheme.primary,
-                        side: BorderSide(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
+                    _MergeSaveButton(
                       onPressed: _isMerging
+                          ? () => unawaited(
+                              widget.exportService.cancelActiveExport(),
+                            )
+                          : _videos.length < 2 || _isAdding
                           ? null
-                          : () => Navigator.of(
-                              context,
-                            ).pop(_lastMergedOutputPath),
-                      child: Text(
-                        _lastMergedOutputPath == null ? 'Cancel' : 'Close',
-                      ),
+                          : _merge,
+                      isMerging: _isMerging,
+                      showCompleted: _showMergeComplete,
+                      progress: _progress,
                     ),
                   ],
                 ),
