@@ -26,6 +26,12 @@ enum _TrimExportKind {
   frames,
   audio;
 
+  String get menuLabel => switch (this) {
+    _TrimExportKind.video => 'Video',
+    _TrimExportKind.frames => 'Frames',
+    _TrimExportKind.audio => 'Audio',
+  };
+
   String get label => switch (this) {
     _TrimExportKind.video => 'Export video',
     _TrimExportKind.frames => 'Export frames',
@@ -1259,7 +1265,7 @@ class _TrimExportButton extends StatelessWidget {
   Widget build(BuildContext context) {
     const radius = Radius.circular(16);
     const buttonWidth = 196.0;
-    const menuWidth = 34.0;
+    const menuWidth = 42.0;
     // Matches the compact desktop height used by the adjacent Material
     // TextButton and FilledButton controls.
     const buttonHeight = 32.0;
@@ -1360,12 +1366,12 @@ class _TrimExportButton extends StatelessWidget {
                         SizedBox(
                           width: menuWidth,
                           child: PopupMenuButton<_TrimExportKind>(
-                            tooltip: 'Export options',
+                            tooltip: 'Choose export type',
                             enabled: menuEnabled,
                             position: PopupMenuPosition.over,
                             offset: const Offset(
                               -(buttonWidth - menuWidth),
-                              -160,
+                              -192,
                             ),
                             padding: EdgeInsets.zero,
                             menuPadding: const EdgeInsets.symmetric(
@@ -1395,6 +1401,24 @@ class _TrimExportButton extends StatelessWidget {
                             onSelected: onKindSelected,
                             itemBuilder: (context) =>
                                 <PopupMenuEntry<_TrimExportKind>>[
+                                  PopupMenuItem<_TrimExportKind>(
+                                    enabled: false,
+                                    height: 32,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                    ),
+                                    child: Text(
+                                      'EXPORT AS',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.8,
+                                          ),
+                                    ),
+                                  ),
                                   for (final kind in _TrimExportKind.values)
                                     PopupMenuItem<_TrimExportKind>(
                                       value: kind,
@@ -1413,7 +1437,7 @@ class _TrimExportButton extends StatelessWidget {
                                             const SizedBox(width: 10),
                                             Expanded(
                                               child: Text(
-                                                kind.label,
+                                                kind.menuLabel,
                                                 style: Theme.of(
                                                   context,
                                                 ).textTheme.labelLarge,

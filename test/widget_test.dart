@@ -1273,16 +1273,18 @@ void main() {
       tester.getCenter(find.text('Apply trim')).dx,
       greaterThan(tester.getCenter(find.byType(AlertDialog)).dx),
     );
-    await tester.tap(find.byTooltip('Export options'));
+    await tester.tap(find.byTooltip('Choose export type'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Export video'), findsWidgets);
-    expect(find.text('Export frames'), findsOneWidget);
-    expect(find.text('Export audio'), findsOneWidget);
+    expect(find.text('EXPORT AS'), findsOneWidget);
+    expect(find.text('Video'), findsOneWidget);
+    expect(find.text('Frames'), findsOneWidget);
+    expect(find.text('Audio'), findsOneWidget);
     expect(
       find.byWidgetPredicate(
         (widget) => widget is PopupMenuItem && !widget.enabled,
       ),
-      findsOneWidget,
+      findsNWidgets(2),
     );
     expect(tester.takeException(), isNull);
   });
@@ -1320,20 +1322,20 @@ void main() {
 
     await tester.tap(find.text('Open trimmer'));
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.byTooltip('Export options'));
+    await tester.tap(find.byTooltip('Choose export type'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    await tester.tap(find.text('Export frames'));
+    await tester.tap(find.text('Frames'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
     expect(find.text('Export frames'), findsOneWidget);
     expect(find.text('Export video'), findsNothing);
 
-    await tester.tap(find.byTooltip('Export options'));
+    await tester.tap(find.byTooltip('Choose export type'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    await tester.tap(find.text('Export audio'));
+    await tester.tap(find.text('Audio'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
