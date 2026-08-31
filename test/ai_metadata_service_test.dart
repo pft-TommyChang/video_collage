@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:video_collage_mac/src/models.dart';
@@ -42,6 +43,130 @@ void main() {
     expect(metadata.c2paStatus, C2paStatus.conformant);
     expect(metadata.vendor, 'Byteplus Pte. Ltd.');
     expect(metadata.model, 'dreamina-seedance-2-5');
+  });
+
+  test('retains manifest history, actions, ingredients, and checks', () {
+    final source = jsonEncode(<String, Object>{
+      'active_manifest': 'active',
+      'manifests': <String, Object>{
+        'active': <String, Object>{
+          'title': 'collage.mp4',
+          'format': 'video/mp4',
+          'claim_generator': 'Perfect Collage/1.7.0',
+          'signature_info': <String, Object>{
+            'issuer': 'Example Studio',
+            'alg': 'PS256',
+            'time': '2026-08-31T10:00:00Z',
+          },
+          'ingredients': <Object>[
+            <String, Object>{
+              'title': 'source.png',
+              'format': 'image/png',
+              'relationship': 'parentOf',
+              'active_manifest': 'source',
+            },
+          ],
+          'assertions': <Object>[
+            <String, Object>{
+              'label': 'c2pa.actions.v2',
+              'data': <String, Object>{
+                'actions': <Object>[
+                  <String, Object>{
+                    'action': 'c2pa.edited',
+                    'softwareAgent': 'Perfect Collage',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        'source': <String, Object>{
+          'title': 'source.png',
+          'signature_info': <String, Object>{'issuer': 'OpenAI'},
+        },
+      },
+      'validation_results': <String, Object>{
+        'activeManifest': <String, Object>{
+          'success': <Object>[
+            <String, Object>{'code': 'claimSignature.validated'},
+            <String, Object>{'code': 'signingCredential.trusted'},
+          ],
+          'failure': <Object>[
+            <String, Object>{
+              'code': 'ingredient.hashedURI.mismatch',
+              'explanation': 'Ingredient bytes changed.',
+            },
+          ],
+        },
+      },
+    });
+
+    final metadata = AiMetadataService.parseC2paJson(source);
+    final report = metadata.c2paReport!;
+
+    expect(report.activeManifestLabel, 'active');
+    expect(report.manifests, hasLength(2));
+    expect(report.activeManifest?.title, 'collage.mp4');
+    expect(report.activeManifest?.issuer, 'Example Studio');
+    expect(report.activeManifest?.algorithm, 'PS256');
+    expect(report.activeManifest?.actions.single.action, 'c2pa.edited');
+    expect(report.activeManifest?.ingredients.single.manifestLabel, 'source');
+    expect(report.passedCheckCount, 2);
+    expect(report.failedCheckCount, 1);
+    expect(report.rawJson, contains('ingredient.hashedURI.mismatch'));
+  });
+
+  test('resolves extracted manifest and ingredient thumbnail resources', () {
+    final resources = Directory.systemTemp.createTempSync(
+      'c2pa_thumbnail_test_',
+    );
+    addTearDown(() => resources.deleteSync(recursive: true));
+    final assertionDirectory = Directory(
+      '${resources.path}/urn_c2pa_active/c2pa.assertions',
+    )..createSync(recursive: true);
+    final claimThumbnail = File('${assertionDirectory.path}/claim-thumb')
+      ..writeAsBytesSync(<int>[1, 2, 3]);
+    final ingredientThumbnail = File(
+      '${assertionDirectory.path}/ingredient-thumb',
+    )..writeAsBytesSync(<int>[4, 5, 6]);
+    final source = jsonEncode(<String, Object>{
+      'active_manifest': 'urn:c2pa:active',
+      'manifests': <String, Object>{
+        'urn:c2pa:active': <String, Object>{
+          'thumbnail': <String, Object>{
+            'identifier':
+                'self#jumbf=/c2pa/urn:c2pa:active/c2pa.assertions/claim-thumb',
+          },
+          'ingredients': <Object>[
+            <String, Object>{
+              'thumbnail': <String, Object>{
+                'identifier':
+                    'self#jumbf=/c2pa/urn:c2pa:active/c2pa.assertions/ingredient-thumb',
+              },
+            },
+          ],
+        },
+      },
+      'validation_results': <String, Object>{
+        'activeManifest': <String, Object>{
+          'success': <Object>[
+            <String, Object>{'code': 'claimSignature.validated'},
+            <String, Object>{'code': 'signingCredential.trusted'},
+          ],
+        },
+      },
+    });
+
+    final metadata = AiMetadataService.parseC2paJson(
+      source,
+      resourceDirectory: resources.path,
+    );
+
+    expect(metadata.c2paReport?.activeManifest?.thumbnailPath, claimThumbnail.path);
+    expect(
+      metadata.c2paReport?.activeManifest?.ingredients.single.thumbnailPath,
+      ingredientThumbnail.path,
+    );
   });
 
   test('marks a valid signature with an untrusted credential untrusted', () {

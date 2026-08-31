@@ -10,8 +10,13 @@ void main() {
     final ingredient = <String, dynamic>{'title': 'source.jpg'};
     final manifest = C2paExportService.buildManifest(
       ingredients: <Map<String, dynamic>>[ingredient],
+      signingCertificatePath: '/signing/perfect_collage_cert.pem',
+      signingPrivateKeyPath: '/signing/perfect_collage_private.key',
     );
 
+    expect(manifest['alg'], 'es256');
+    expect(manifest['sign_cert'], '/signing/perfect_collage_cert.pem');
+    expect(manifest['private_key'], '/signing/perfect_collage_private.key');
     expect(manifest['claim_generator'], 'Perfect Collage');
     expect(manifest['title'], 'pfc asset');
     expect(manifest['ingredients'], <Map<String, dynamic>>[ingredient]);
@@ -127,6 +132,9 @@ void main() {
           await File(outputPath).writeAsString('thumbnail');
           return true;
         },
+        assetLoader: (assetPath) async => assetPath.endsWith('.key')
+            ? 'test private key'
+            : 'test signing certificate',
         processRunner: (executable, arguments) async {
           calls.add(arguments);
           final outputIndex = arguments.indexOf('--output');

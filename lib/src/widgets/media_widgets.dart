@@ -232,6 +232,12 @@ class _ClipListTile extends StatelessWidget {
                 _buildAiTag(
                   context,
                   'C2PA',
+                  key: ValueKey<String>('c2pa-tag-${clip.id}'),
+                  onTap: () => showC2paBrowserDialog(
+                    context,
+                    clip,
+                    controller: controller,
+                  ),
                   trailing: Icon(
                     Icons.circle,
                     size: 9,
@@ -261,32 +267,45 @@ class _ClipListTile extends StatelessWidget {
     );
   }
 
-  Widget _buildAiTag(BuildContext context, String label, {Widget? trailing}) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF7A5A50)),
+  Widget _buildAiTag(
+    BuildContext context,
+    String label, {
+    Key? key,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _singleLineText(
+            label,
+            Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: const Color(0xFF7A5A50),
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              height: 1,
+            ),
+          ),
+          if (trailing != null) ...<Widget>[const SizedBox(width: 1), trailing],
+        ],
+      ),
+    );
+    return Material(
+      key: key,
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: Color(0xFF7A5A50)),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            _singleLineText(
-              label,
-              Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: const Color(0xFF7A5A50),
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
-            ),
-            if (trailing != null) ...<Widget>[
-              const SizedBox(width: 1),
-              trailing,
-            ],
-          ],
-        ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        mouseCursor: onTap == null
+            ? MouseCursor.defer
+            : SystemMouseCursors.click,
+        child: content,
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../models.dart';
@@ -10,6 +11,7 @@ typedef C2paProcessRunner =
     Future<ProcessResult> Function(String executable, List<String> arguments);
 typedef C2paThumbnailGenerator =
     Future<bool> Function(String sourcePath, String outputPath);
+typedef C2paAssetLoader = Future<String> Function(String assetPath);
 
 class C2paExportException implements Exception {
   const C2paExportException(this.message);
@@ -33,19 +35,27 @@ class C2paSourceAsset {
 /// recorded as an ingredient, so the new claim carries both signed provenance
 /// and the complete set of inputs used to create the export.
 class C2paExportService {
+  static const _signingCertificateAsset =
+      'assets/c2pa/perfect_collage_cert.pem';
+  static const _signingPrivateKeyAsset =
+      'assets/c2pa/perfect_collage_private.key';
+
   C2paExportService({
     required AiMetadataService aiMetadataService,
     C2paProcessRunner? processRunner,
     C2paThumbnailGenerator? thumbnailGenerator,
+    C2paAssetLoader? assetLoader,
     String? Function()? toolLocator,
   }) : _aiMetadataService = aiMetadataService,
        _processRunner = processRunner ?? _runProcess,
        _thumbnailGenerator = thumbnailGenerator,
+       _assetLoader = assetLoader ?? rootBundle.loadString,
        _toolLocator = toolLocator ?? AiMetadataService.findC2paTool;
 
   final AiMetadataService _aiMetadataService;
   final C2paProcessRunner _processRunner;
   final C2paThumbnailGenerator? _thumbnailGenerator;
+  final C2paAssetLoader _assetLoader;
   final String? Function() _toolLocator;
 
   Future<bool> signExportIfNeeded({
@@ -175,6 +185,22 @@ class C2paExportService {
           'Could not create the Content Credentials thumbnail.',
         );
       }
+      final signingCertificatePath = p.join(
+        workDirectory.path,
+        'perfect_collage_cert.pem',
+      );
+      final signingPrivateKeyPath = p.join(
+        workDirectory.path,
+        'perfect_collage_private.key',
+      );
+      await Future.wait(<Future<File>>[
+        File(
+          signingCertificatePath,
+        ).writeAsString(await _assetLoader(_signingCertificateAsset)),
+        File(
+          signingPrivateKeyPath,
+        ).writeAsString(await _assetLoader(_signingPrivateKeyAsset)),
+      ]);
       final manifestFile = File(p.join(workDirectory.path, 'manifest.json'));
       await manifestFile.writeAsString(
         const JsonEncoder.withIndent('  ').convert(
@@ -184,6 +210,8 @@ class C2paExportService {
               'format': 'image/jpeg',
               'identifier': 'claim-thumbnail.jpg',
             },
+            signingCertificatePath: signingCertificatePath,
+            signingPrivateKeyPath: signingPrivateKeyPath,
           ),
         ),
       );
@@ -218,6 +246,8 @@ class C2paExportService {
   static Map<String, dynamic> buildManifest({
     required List<Map<String, dynamic>> ingredients,
     Map<String, String>? thumbnail,
+    String? signingCertificatePath,
+    String? signingPrivateKeyPath,
   }) {
     final manifest = <String, dynamic>{
       'claim_generator': 'Perfect Collage',
@@ -228,6 +258,15 @@ class C2paExportService {
       'assertions': <Object>[],
       if (ingredients.isNotEmpty) 'ingredients': ingredients,
     };
+    if (signingCertificatePath != null) {
+      manifest['sign_cert'] = signingCertificatePath;
+    }
+    if (signingPrivateKeyPath != null) {
+      manifest['private_key'] = signingPrivateKeyPath;
+    }
+    if (signingCertificatePath != null || signingPrivateKeyPath != null) {
+      manifest['alg'] = 'es256';
+    }
     if (thumbnail != null) manifest['thumbnail'] = thumbnail;
     return manifest;
   }

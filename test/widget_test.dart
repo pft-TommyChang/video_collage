@@ -1395,6 +1395,215 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('C2PA browser shows overview, provenance tree, and checks', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1200, 800));
+    final clip = VideoClipInfo(
+      instanceId: 'c2pa-test',
+      path: appIconPath(128),
+      name: 'signed-collage',
+      duration: const Duration(seconds: 1),
+      width: 128,
+      height: 128,
+      hasAudio: false,
+      mediaKind: MediaKind.photo,
+      aiMetadata: const AiMediaMetadata(
+        c2paStatus: C2paStatus.conformant,
+        vendor: 'Example Studio',
+        c2paReport: C2paReport(
+          activeManifestLabel: 'active',
+          rawJson: '{"active_manifest":"active"}',
+          validationEntries: <C2paValidationEntry>[
+            C2paValidationEntry(
+              code: 'claimSignature.validated',
+              outcome: C2paValidationOutcome.passed,
+            ),
+          ],
+          manifests: <C2paManifest>[
+            C2paManifest(
+              label: 'active',
+              title: 'collage.png',
+              issuer: 'Example Studio',
+              actions: <C2paAction>[C2paAction(action: 'c2pa.edited')],
+              ingredients: <C2paIngredient>[
+                C2paIngredient(
+                  title: 'source.png',
+                  relationship: 'parentOf',
+                  manifestLabel: 'source',
+                ),
+              ],
+            ),
+            C2paManifest(
+              label: 'source',
+              title: 'source.png',
+              issuer: 'Source Camera',
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showC2paBrowserDialog(context, clip),
+            child: const Text('Open C2PA'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open C2PA'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('c2pa-dialog-content'))),
+      const Size(1152, 752),
+    );
+    expect(find.text('Content Credentials'), findsOneWidget);
+    expect(find.text('Example Studio'), findsWidgets);
+    final previewWidth = tester
+        .getSize(find.byKey(const ValueKey<String>('c2pa-overview-preview')))
+        .width;
+    final signerWidth = tester
+        .getSize(find.byKey(const ValueKey<String>('c2pa-overview-signer')))
+        .width;
+    final manifestWidth = tester
+        .getSize(find.byKey(const ValueKey<String>('c2pa-overview-manifest')))
+        .width;
+    expect(signerWidth, closeTo(previewWidth, 0.1));
+    expect(manifestWidth, closeTo(previewWidth, 0.1));
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byIcon(Icons.account_tree_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('manifests ·'), findsNothing);
+    expect(find.text('ACTIVE MANIFEST'), findsOneWidget);
+    expect(find.text('source.png'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byIcon(Icons.fact_check_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('claimSignature.validated'), findsOneWidget);
+    expect(find.text('{"active_manifest":"active"}'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('C2PA history scrolls across a wide and deep provenance tree', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(900, 600));
+    final branchIngredients = List<C2paIngredient>.generate(
+      6,
+      (index) => C2paIngredient(
+        title: 'branch-$index.png',
+        relationship: 'componentOf',
+        manifestLabel: 'branch-$index',
+      ),
+    );
+    final manifests = <C2paManifest>[
+      C2paManifest(
+        label: 'active',
+        title: 'wide-and-deep.png',
+        issuer: 'Example Studio',
+        ingredients: branchIngredients,
+      ),
+      C2paManifest(
+        label: 'branch-0',
+        title: 'branch-0.png',
+        ingredients: const <C2paIngredient>[
+          C2paIngredient(title: 'deep-1.png', manifestLabel: 'deep-1'),
+        ],
+      ),
+      for (var index = 1; index < 6; index++)
+        C2paManifest(label: 'branch-$index', title: 'branch-$index.png'),
+      for (var index = 1; index <= 4; index++)
+        C2paManifest(
+          label: 'deep-$index',
+          title: 'deep-$index.png',
+          ingredients: index == 4
+              ? const <C2paIngredient>[]
+              : <C2paIngredient>[
+                  C2paIngredient(
+                    title: 'deep-${index + 1}.png',
+                    manifestLabel: 'deep-${index + 1}',
+                  ),
+                ],
+        ),
+    ];
+    final clip = VideoClipInfo(
+      instanceId: 'c2pa-scroll-test',
+      path: appIconPath(128),
+      name: 'wide-and-deep',
+      duration: const Duration(seconds: 1),
+      width: 128,
+      height: 128,
+      hasAudio: false,
+      mediaKind: MediaKind.photo,
+      aiMetadata: AiMediaMetadata(
+        c2paStatus: C2paStatus.conformant,
+        c2paReport: C2paReport(
+          activeManifestLabel: 'active',
+          manifests: manifests,
+          validationEntries: const <C2paValidationEntry>[],
+          rawJson: '{}',
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showC2paBrowserDialog(context, clip),
+            child: const Text('Open wide tree'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open wide tree'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.account_tree_outlined));
+    await tester.pumpAndSettle();
+
+    final thumbnails = find.byKey(
+      const ValueKey<String>('c2pa-tree-thumbnail'),
+    );
+    expect(thumbnails, findsWidgets);
+    for (var index = 0; index < thumbnails.evaluate().length; index++) {
+      final size = tester.getSize(thumbnails.at(index));
+      expect(size.width / size.height, closeTo(4 / 3, 0.01));
+    }
+
+    final horizontal = tester
+        .widget<SingleChildScrollView>(
+          find.byKey(const ValueKey<String>('c2pa-history-horizontal')),
+        )
+        .controller!;
+    final vertical = tester
+        .widget<SingleChildScrollView>(
+          find.byKey(const ValueKey<String>('c2pa-history-vertical')),
+        )
+        .controller!;
+    expect(horizontal.position.maxScrollExtent, greaterThan(0));
+    expect(vertical.position.maxScrollExtent, greaterThan(0));
+
+    final viewport = find.byKey(
+      const ValueKey<String>('c2pa-history-viewport'),
+    );
+    await tester.drag(viewport, const Offset(-220, 0));
+    await tester.pumpAndSettle();
+    expect(horizontal.offset, greaterThan(0));
+
+    await tester.drag(viewport, const Offset(0, -220));
+    await tester.pumpAndSettle();
+    expect(vertical.offset, greaterThan(0));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('dropping media onto a slot updates an unchanged label', (
     WidgetTester tester,
   ) async {

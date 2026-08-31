@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import 'models.dart';
+import 'services/ai_metadata_service.dart';
 import 'services/c2pa_trust_list_service.dart';
 import 'services/desktop_file_service.dart';
 import 'services/editor_settings_store.dart';
@@ -32,6 +33,7 @@ part 'controllers/settings_controller.dart';
 part 'screens/video_collage_screen_content.dart';
 part 'utils/editor_constants.dart';
 part 'widgets/clip_label_dialog.dart';
+part 'widgets/c2pa_browser_dialog.dart';
 part 'widgets/common_controls.dart';
 part 'widgets/export_controls.dart';
 part 'widgets/media_widgets.dart';
@@ -247,6 +249,7 @@ class _VideoCollageScreenState extends State<VideoCollageScreen> {
     for (final controller in _controllers.values) {
       controller.dispose();
     }
+    AiMetadataService.cleanupExtractedResources();
     super.dispose();
   }
 

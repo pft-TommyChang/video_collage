@@ -15,6 +15,19 @@ class AiMetadataService {
   });
 
   final C2paTrustListService trustListService;
+  static final Set<String> _temporaryResourceDirectories = <String>{};
+
+  static void cleanupExtractedResources() {
+    for (final path in _temporaryResourceDirectories.toList()) {
+      try {
+        final directory = Directory(path);
+        if (directory.existsSync()) directory.deleteSync(recursive: true);
+      } on FileSystemException {
+        // The operating system will eventually clear abandoned temp files.
+      }
+      _temporaryResourceDirectories.remove(path);
+    }
+  }
 
   Future<bool> refreshTrustListIfNeeded() {
     return trustListService.refreshIfNeeded();
@@ -46,6 +59,7 @@ class AiMetadataService {
       cameraMake: c2pa.cameraMake ?? container.cameraMake,
       cameraModel: c2pa.cameraModel ?? container.cameraModel,
       lensModel: c2pa.lensModel ?? container.lensModel,
+      c2paReport: c2pa.c2paReport,
     );
   }
 
@@ -55,13 +69,25 @@ class AiMetadataService {
       return const AiMediaMetadata();
     }
 
+    String? temporaryRootPath;
     try {
       final plan = await trustListService.verificationPlanFor(
         executable,
         filePath,
       );
-      final result = await Process.run(executable, plan.officialArguments);
+      final temporaryRoot = await Directory.systemTemp.createTemp(
+        'video_collage_c2pa_',
+      );
+      temporaryRootPath = temporaryRoot.path;
+      _temporaryResourceDirectories.add(temporaryRoot.path);
+      final resourceDirectory = p.join(temporaryRoot.path, 'report');
+      final result = await Process.run(executable, <String>[
+        '--output',
+        resourceDirectory,
+        ...plan.officialArguments,
+      ]);
       if (result.exitCode != 0) {
+        _discardTemporaryResources(temporaryRoot.path);
         final message = '${result.stdout}\n${result.stderr}'.toLowerCase();
         return AiMediaMetadata(
           c2paStatus: message.contains('no claim found')
@@ -69,7 +95,14 @@ class AiMetadataService {
               : C2paStatus.invalid,
         );
       }
-      final official = parseC2paJson(result.stdout as String);
+      final manifestStoreFile = File(
+        p.join(resourceDirectory, 'manifest_store.json'),
+      );
+      final source = await manifestStoreFile.readAsString();
+      final official = parseC2paJson(
+        source,
+        resourceDirectory: resourceDirectory,
+      );
       if (official.c2paStatus != C2paStatus.untrusted ||
           plan.legacyArguments == null) {
         return official;
@@ -85,6 +118,7 @@ class AiMetadataService {
         final legacy = parseC2paJson(
           legacyResult.stdout as String,
           trustedStatus: C2paStatus.legacyTrusted,
+          resourceDirectory: resourceDirectory,
         );
         return legacy.c2paStatus == C2paStatus.legacyTrusted
             ? legacy
@@ -93,10 +127,31 @@ class AiMetadataService {
         return official;
       }
     } on FormatException {
+      if (temporaryRootPath != null) {
+        _discardTemporaryResources(temporaryRootPath);
+      }
       return const AiMediaMetadata(c2paStatus: C2paStatus.invalid);
+    } on FileSystemException {
+      if (temporaryRootPath != null) {
+        _discardTemporaryResources(temporaryRootPath);
+      }
+      return const AiMediaMetadata();
     } on ProcessException {
+      if (temporaryRootPath != null) {
+        _discardTemporaryResources(temporaryRootPath);
+      }
       return const AiMediaMetadata();
     }
+  }
+
+  static void _discardTemporaryResources(String path) {
+    try {
+      final directory = Directory(path);
+      if (directory.existsSync()) directory.deleteSync(recursive: true);
+    } on FileSystemException {
+      // Best-effort cleanup for a failed probe.
+    }
+    _temporaryResourceDirectories.remove(path);
   }
 
   static String? findC2paTool() {
@@ -164,6 +219,7 @@ class AiMetadataService {
   static AiMediaMetadata parseC2paJson(
     String source, {
     C2paStatus trustedStatus = C2paStatus.conformant,
+    String? resourceDirectory,
   }) {
     final root = jsonDecode(source);
     if (root is! Map<String, dynamic>) {
@@ -261,7 +317,203 @@ class AiMetadataService {
         ? C2paStatus.untrusted
         : C2paStatus.invalid;
 
-    return AiMediaMetadata(c2paStatus: status, vendor: vendor, model: model);
+    return AiMediaMetadata(
+      c2paStatus: status,
+      vendor: vendor,
+      model: model,
+      c2paReport: _parseC2paReport(root, resourceDirectory),
+    );
+  }
+
+  static C2paReport _parseC2paReport(
+    Map<String, dynamic> root,
+    String? resourceDirectory,
+  ) {
+    final rawManifests = root['manifests'] as Map;
+    final manifests = <C2paManifest>[];
+    for (final entry in rawManifests.entries) {
+      final manifest = entry.value;
+      if (manifest is! Map) continue;
+      final signature = manifest['signature_info'];
+      final actions = <C2paAction>[];
+      final assertions = manifest['assertions'];
+      if (assertions is List) {
+        for (final assertion in assertions.whereType<Map>()) {
+          final assertionData = assertion['data'];
+          if (assertionData is! Map) continue;
+          final rawActions = assertionData['actions'];
+          if (rawActions is! List) continue;
+          for (final rawAction in rawActions.whereType<Map>()) {
+            final parameters = rawAction['parameters'];
+            actions.add(
+              C2paAction(
+                action:
+                    _nonEmptyString(rawAction['action']) ?? 'Unknown action',
+                softwareAgent: _displayString(rawAction['softwareAgent']),
+                digitalSourceType:
+                    _nonEmptyString(rawAction['digitalSourceType']) ??
+                    (parameters is Map
+                        ? _nonEmptyString(parameters['digital_source_type'])
+                        : null),
+              ),
+            );
+          }
+        }
+      }
+      final ingredients = <C2paIngredient>[];
+      final rawIngredients = manifest['ingredients'];
+      if (rawIngredients is List) {
+        for (final ingredient in rawIngredients.whereType<Map>()) {
+          ingredients.add(
+            C2paIngredient(
+              title: _nonEmptyString(ingredient['title']),
+              format: _nonEmptyString(ingredient['format']),
+              relationship: _nonEmptyString(ingredient['relationship']),
+              instanceId: _nonEmptyString(ingredient['instance_id']),
+              manifestLabel:
+                  _nonEmptyString(ingredient['active_manifest']) ??
+                  _nonEmptyString(ingredient['manifest_label']),
+              thumbnailPath: _resourcePathFor(
+                resourceDirectory,
+                ingredient['thumbnail'],
+              ),
+            ),
+          );
+        }
+      }
+      manifests.add(
+        C2paManifest(
+          label: entry.key.toString(),
+          title: _nonEmptyString(manifest['title']),
+          format: _nonEmptyString(manifest['format']),
+          instanceId: _nonEmptyString(manifest['instance_id']),
+          issuer: signature is Map
+              ? _nonEmptyString(signature['issuer'])
+              : null,
+          commonName: signature is Map
+              ? _nonEmptyString(signature['common_name'])
+              : null,
+          algorithm: signature is Map
+              ? _nonEmptyString(signature['alg']) ??
+                    _nonEmptyString(signature['algorithm'])
+              : null,
+          signedAt: signature is Map
+              ? _nonEmptyString(signature['time']) ??
+                    _nonEmptyString(signature['signed_at'])
+              : null,
+          claimGenerator:
+              _displayString(manifest['claim_generator_info']) ??
+              _displayString(manifest['claim_generator']),
+          thumbnailPath: _resourcePathFor(
+            resourceDirectory,
+            manifest['thumbnail'],
+          ),
+          actions: actions,
+          ingredients: ingredients,
+        ),
+      );
+    }
+
+    final validations = <C2paValidationEntry>[];
+    void collectValidations(dynamic value, C2paValidationOutcome outcome) {
+      if (value is List) {
+        for (final item in value) {
+          collectValidations(item, outcome);
+        }
+      } else if (value is Map) {
+        final code = _nonEmptyString(value['code']);
+        if (code != null) {
+          validations.add(
+            C2paValidationEntry(
+              code: code,
+              outcome: outcome,
+              explanation:
+                  _nonEmptyString(value['explanation']) ??
+                  _nonEmptyString(value['message']),
+            ),
+          );
+        }
+        for (final entry in value.entries) {
+          final key = entry.key.toString().toLowerCase();
+          final nestedOutcome = key == 'success'
+              ? C2paValidationOutcome.passed
+              : key == 'failure' || key == 'failures' || key == 'error'
+              ? C2paValidationOutcome.failed
+              : key == 'informational'
+              ? C2paValidationOutcome.informational
+              : outcome;
+          collectValidations(entry.value, nestedOutcome);
+        }
+      }
+    }
+
+    collectValidations(
+      root['validation_results'],
+      C2paValidationOutcome.informational,
+    );
+    final topLevelStatus = root['validation_status'];
+    if (topLevelStatus is List) {
+      for (final statusItem in topLevelStatus.whereType<Map>()) {
+        final code = _nonEmptyString(statusItem['code']);
+        if (code != null && !validations.any((item) => item.code == code)) {
+          validations.add(
+            C2paValidationEntry(
+              code: code,
+              outcome: code.startsWith('signingCredential.untrusted')
+                  ? C2paValidationOutcome.informational
+                  : C2paValidationOutcome.failed,
+              explanation:
+                  _nonEmptyString(statusItem['explanation']) ??
+                  _nonEmptyString(statusItem['message']),
+            ),
+          );
+        }
+      }
+    }
+
+    return C2paReport(
+      activeManifestLabel:
+          _nonEmptyString(root['active_manifest']) ??
+          (manifests.isEmpty ? '' : manifests.first.label),
+      manifests: List<C2paManifest>.unmodifiable(manifests),
+      validationEntries: List<C2paValidationEntry>.unmodifiable(validations),
+      rawJson: const JsonEncoder.withIndent('  ').convert(root),
+    );
+  }
+
+  static String? _displayString(dynamic value) {
+    if (value is String) return _nonEmptyString(value);
+    if (value is List && value.isNotEmpty) return _displayString(value.first);
+    if (value is Map) {
+      final name =
+          _nonEmptyString(value['name']) ?? _nonEmptyString(value['product']);
+      final version = _nonEmptyString(value['version']);
+      if (name != null && version != null) return '$name $version';
+      return name ?? version;
+    }
+    return null;
+  }
+
+  static String? _resourcePathFor(
+    String? resourceDirectory,
+    dynamic reference,
+  ) {
+    if (resourceDirectory == null || reference is! Map) return null;
+    final identifier = _nonEmptyString(reference['identifier']);
+    if (identifier == null) return null;
+    const prefix = 'self#jumbf=/c2pa/';
+    if (!identifier.startsWith(prefix)) return null;
+    final segments = identifier.substring(prefix.length).split('/');
+    if (segments.length < 2) return null;
+    final manifestDirectory = segments.first.replaceAll(':', '_');
+    final candidate = File(
+      p.joinAll(<String>[
+        resourceDirectory,
+        manifestDirectory,
+        ...segments.skip(1),
+      ]),
+    );
+    return candidate.existsSync() ? candidate.path : null;
   }
 
   static AiMediaMetadata parseContainerTags(Map<dynamic, dynamic>? tags) {

@@ -70,6 +70,7 @@ class AiMediaMetadata {
     this.cameraMake,
     this.cameraModel,
     this.lensModel,
+    this.c2paReport,
   });
 
   final C2paStatus c2paStatus;
@@ -78,6 +79,7 @@ class AiMediaMetadata {
   final String? cameraMake;
   final String? cameraModel;
   final String? lensModel;
+  final C2paReport? c2paReport;
 
   bool get hasC2pa => switch (c2paStatus) {
     C2paStatus.untrusted ||
@@ -94,6 +96,109 @@ class AiMediaMetadata {
       cameraMake != null ||
       cameraModel != null ||
       lensModel != null;
+}
+
+class C2paReport {
+  const C2paReport({
+    required this.activeManifestLabel,
+    required this.manifests,
+    required this.validationEntries,
+    required this.rawJson,
+  });
+
+  final String activeManifestLabel;
+  final List<C2paManifest> manifests;
+  final List<C2paValidationEntry> validationEntries;
+  final String rawJson;
+
+  C2paManifest? get activeManifest {
+    for (final manifest in manifests) {
+      if (manifest.label == activeManifestLabel) return manifest;
+    }
+    return manifests.isEmpty ? null : manifests.first;
+  }
+
+  int get passedCheckCount => validationEntries
+      .where((entry) => entry.outcome == C2paValidationOutcome.passed)
+      .length;
+
+  int get failedCheckCount => validationEntries
+      .where((entry) => entry.outcome == C2paValidationOutcome.failed)
+      .length;
+}
+
+class C2paManifest {
+  const C2paManifest({
+    required this.label,
+    this.title,
+    this.format,
+    this.instanceId,
+    this.issuer,
+    this.commonName,
+    this.algorithm,
+    this.signedAt,
+    this.claimGenerator,
+    this.thumbnailPath,
+    this.actions = const <C2paAction>[],
+    this.ingredients = const <C2paIngredient>[],
+  });
+
+  final String label;
+  final String? title;
+  final String? format;
+  final String? instanceId;
+  final String? issuer;
+  final String? commonName;
+  final String? algorithm;
+  final String? signedAt;
+  final String? claimGenerator;
+  final String? thumbnailPath;
+  final List<C2paAction> actions;
+  final List<C2paIngredient> ingredients;
+}
+
+class C2paAction {
+  const C2paAction({
+    required this.action,
+    this.softwareAgent,
+    this.digitalSourceType,
+  });
+
+  final String action;
+  final String? softwareAgent;
+  final String? digitalSourceType;
+}
+
+class C2paIngredient {
+  const C2paIngredient({
+    this.title,
+    this.format,
+    this.relationship,
+    this.instanceId,
+    this.manifestLabel,
+    this.thumbnailPath,
+  });
+
+  final String? title;
+  final String? format;
+  final String? relationship;
+  final String? instanceId;
+  final String? manifestLabel;
+  final String? thumbnailPath;
+}
+
+enum C2paValidationOutcome { passed, failed, informational }
+
+class C2paValidationEntry {
+  const C2paValidationEntry({
+    required this.code,
+    required this.outcome,
+    this.explanation,
+  });
+
+  final String code;
+  final C2paValidationOutcome outcome;
+  final String? explanation;
 }
 
 enum AudioMode {
