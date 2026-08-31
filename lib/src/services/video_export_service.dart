@@ -17,6 +17,7 @@ import 'package:path/path.dart' as p;
 
 import '../models.dart';
 import 'ai_metadata_service.dart';
+import 'c2pa_export_service.dart';
 import 'c2pa_trust_list_service.dart';
 
 class VideoExportException implements Exception {
@@ -59,10 +60,21 @@ class _VideoMergeProfile {
 }
 
 class VideoExportService {
-  VideoExportService({AiMetadataService? aiMetadataService})
-    : _aiMetadataService = aiMetadataService ?? const AiMetadataService();
+  VideoExportService({
+    AiMetadataService? aiMetadataService,
+    C2paExportService? c2paExportService,
+  }) {
+    _aiMetadataService = aiMetadataService ?? const AiMetadataService();
+    _c2paExportService =
+        c2paExportService ??
+        C2paExportService(
+          aiMetadataService: _aiMetadataService,
+          thumbnailGenerator: _generateC2paThumbnail,
+        );
+  }
 
-  final AiMetadataService _aiMetadataService;
+  late final AiMetadataService _aiMetadataService;
+  late final C2paExportService _c2paExportService;
 
   static const String _decoderThreadCount = '1';
   static const String _complexFilterThreadCount = '4';
@@ -165,6 +177,31 @@ class VideoExportService {
     ({int width, int height})? outputSize,
     int? frameRate,
     void Function(VideoExportProgress progress)? onProgress,
+  }) {
+    return _withStagedOutput(
+      outputPath,
+      (stagedOutputPath) => _exportTrimmedVideoToPath(
+        filePath: filePath,
+        start: start,
+        duration: duration,
+        outputPath: stagedOutputPath,
+        includeAudio: includeAudio,
+        outputSize: outputSize,
+        frameRate: frameRate,
+        onProgress: onProgress,
+      ),
+    );
+  }
+
+  Future<void> _exportTrimmedVideoToPath({
+    required String filePath,
+    required Duration start,
+    required Duration duration,
+    required String outputPath,
+    required bool includeAudio,
+    ({int width, int height})? outputSize,
+    int? frameRate,
+    void Function(VideoExportProgress progress)? onProgress,
   }) async {
     final totalMilliseconds = math.max(1, duration.inMilliseconds);
     var lastProgress = 0.0;
@@ -236,6 +273,12 @@ class VideoExportService {
           speed: statistics.getSpeed(),
         );
       },
+    );
+    await _c2paExportService.signExportIfNeeded(
+      sources: <C2paSourceAsset>[
+        C2paSourceAsset(path: filePath, metadata: const AiMediaMetadata()),
+      ],
+      outputPath: outputPath,
     );
     reportProgress(progress: 1, processedMilliseconds: totalMilliseconds);
   }
@@ -329,6 +372,27 @@ class VideoExportService {
   }
 
   Future<void> mergeVideos({
+    required List<VideoClipInfo> videos,
+    required String outputPath,
+    VideoClipInfo? mainVideo,
+    ClipFitMode fitMode = ClipFitMode.cropCenter,
+    VideoMergeFrameRateMode frameRateMode = VideoMergeFrameRateMode.firstVideo,
+    void Function(VideoExportProgress progress)? onProgress,
+  }) {
+    return _withStagedOutput(
+      outputPath,
+      (stagedOutputPath) => _mergeVideosToPath(
+        videos: videos,
+        outputPath: stagedOutputPath,
+        mainVideo: mainVideo,
+        fitMode: fitMode,
+        frameRateMode: frameRateMode,
+        onProgress: onProgress,
+      ),
+    );
+  }
+
+  Future<void> _mergeVideosToPath({
     required List<VideoClipInfo> videos,
     required String outputPath,
     VideoClipInfo? mainVideo,
@@ -477,6 +541,13 @@ class VideoExportService {
           ),
         );
       },
+    );
+    await _c2paExportService.signExportIfNeeded(
+      sources: videos.map(
+        (video) =>
+            C2paSourceAsset(path: video.path, metadata: video.aiMetadata),
+      ),
+      outputPath: outputPath,
     );
     onProgress?.call(
       VideoExportProgress(progress: 1, processed: total, total: total),
@@ -688,6 +759,23 @@ class VideoExportService {
     required ExportOptions options,
     required String outputPath,
     void Function(VideoExportProgress progress)? onProgress,
+  }) {
+    return _withStagedOutput(
+      outputPath,
+      (stagedOutputPath) => _exportCollageToPath(
+        slotClips: slotClips,
+        options: options,
+        outputPath: stagedOutputPath,
+        onProgress: onProgress,
+      ),
+    );
+  }
+
+  Future<void> _exportCollageToPath({
+    required List<CollageSlotClip> slotClips,
+    required ExportOptions options,
+    required String outputPath,
+    void Function(VideoExportProgress progress)? onProgress,
   }) async {
     if (slotClips.isEmpty) {
       throw const VideoExportException('Please add at least one media item.');
@@ -752,6 +840,7 @@ class VideoExportService {
           options: options,
           outputPath: outputPath,
         );
+        await _signCollageExport(slotClips, outputPath);
         reportProgress(progress: 1, processedMs: targetDurationMs);
         return;
       }
@@ -766,6 +855,7 @@ class VideoExportService {
           cellHeight: cellHeight,
           reportProgress: reportProgress,
         );
+        await _signCollageExport(slotClips, outputPath);
         return;
       }
 
@@ -976,6 +1066,7 @@ class VideoExportService {
           'ffmpeg export failed:\n${output ?? 'Unknown FFmpeg error'}',
         );
       }
+      await _signCollageExport(slotClips, outputPath);
       reportProgress(progress: 1, processedMs: targetDurationMs);
     } finally {
       if (labelTempDirectory case final directory?) {
@@ -984,6 +1075,21 @@ class VideoExportService {
         }
       }
     }
+  }
+
+  Future<void> _signCollageExport(
+    List<CollageSlotClip> slotClips,
+    String outputPath,
+  ) {
+    return _c2paExportService.signExportIfNeeded(
+      sources: slotClips.map(
+        (entry) => C2paSourceAsset(
+          path: entry.clip.path,
+          metadata: entry.clip.aiMetadata,
+        ),
+      ),
+      outputPath: outputPath,
+    );
   }
 
   Future<void> _exportPhotoCollage({
@@ -1609,6 +1715,52 @@ class VideoExportService {
       throw VideoExportException(
         'ffmpeg export failed:\n${output ?? 'Unknown FFmpeg error'}',
       );
+    }
+  }
+
+  Future<bool> _generateC2paThumbnail(
+    String sourcePath,
+    String outputPath,
+  ) async {
+    final session = await FFmpegKit.executeWithArguments(<String>[
+      '-y',
+      '-threads',
+      _decoderThreadCount,
+      '-i',
+      sourcePath,
+      '-frames:v',
+      '1',
+      '-vf',
+      'scale=640:-2:flags=lanczos',
+      '-q:v',
+      '3',
+      outputPath,
+    ]);
+    final returnCode = await session.getReturnCode();
+    return ReturnCode.isSuccess(returnCode) && await File(outputPath).exists();
+  }
+
+  Future<void> _withStagedOutput(
+    String outputPath,
+    Future<void> Function(String stagedOutputPath) operation,
+  ) async {
+    final directory = await Directory.systemTemp.createTemp(
+      'perfect_collage_render_',
+    );
+    final stagedOutputPath = p.join(
+      directory.path,
+      'rendered${p.extension(outputPath).toLowerCase()}',
+    );
+    try {
+      await operation(stagedOutputPath);
+      // The macOS Save Panel grants access to this exact path, not arbitrary
+      // sibling files. Only the fully rendered and C2PA-processed asset is
+      // copied out of the app container.
+      await File(stagedOutputPath).copy(outputPath);
+    } finally {
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
     }
   }
 

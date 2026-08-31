@@ -21,14 +21,14 @@ class AiMetadataService {
   }
 
   Future<C2paTrustListVersion?> trustListVersion() async {
-    final executable = _findC2paTool();
+    final executable = findC2paTool();
     return executable == null ? null : trustListService.versionFor(executable);
   }
 
   Future<AiMediaMetadata> probe(String filePath) async {
     final results = await Future.wait<AiMediaMetadata>(
       <Future<AiMediaMetadata>>[
-        _probeC2pa(filePath),
+        probeC2pa(filePath),
         _probeContainerMetadata(filePath),
       ],
     );
@@ -49,8 +49,8 @@ class AiMetadataService {
     );
   }
 
-  Future<AiMediaMetadata> _probeC2pa(String filePath) async {
-    final executable = _findC2paTool();
+  Future<AiMediaMetadata> probeC2pa(String filePath) async {
+    final executable = findC2paTool();
     if (executable == null) {
       return const AiMediaMetadata();
     }
@@ -99,7 +99,7 @@ class AiMetadataService {
     }
   }
 
-  String? _findC2paTool() {
+  static String? findC2paTool() {
     final executableDirectory = p.dirname(Platform.resolvedExecutable);
     final executableName = Platform.isWindows ? 'c2patool.exe' : 'c2patool';
     final pathCandidates = (Platform.environment['PATH'] ?? '')

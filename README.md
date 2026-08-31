@@ -1,6 +1,6 @@
-<p align="center">
-  <img src="assets_app_icon_128.png" width="112" height="112" alt="Perfect Collage app icon">
-</p>
+<div style="text-align: center;">
+  <img src="assets_app_icon_128.png" width="128" height="128" alt="Perfect Collage app icon">
+</div>
 
 # 🎬 Perfect Collage
 
@@ -23,6 +23,7 @@ Perfect Collage is built for comparisons, social posts, multi-camera views, and 
 - Preview clips together or play videos one by one.
 - Control aspect ratio, resolution, borders, corners, colors, audio, and duration.
 - Export photo-only collages as `JPG`; export projects containing video as `MP4`.
+- Preserve source C2PA provenance and add a Perfect Collage claim when any input has Content Credentials; leave exports unsigned when none do.
 - Track recent exports and quickly open files or reveal them in Finder.
 - Get a quiet in-app notification when a newer GitHub Release is available.
 - Reset individual sections or use **Reset All** to start fresh.
