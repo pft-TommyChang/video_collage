@@ -135,18 +135,26 @@ class AppDelegate: FlutterAppDelegate {
 
   private func openInC2paViewer(path: String, result: @escaping FlutterResult) {
     let workspace = NSWorkspace.shared
-    guard
-      let viewerURL = workspace.urlForApplication(
-        withBundleIdentifier: "com.tommychang.perfectc2pa"
-      )
-    else {
-      result(
-        FlutterError(
-          code: "viewer-not-installed",
-          message: "Perfect C2PA is not installed.",
-          details: nil
+    guard let viewerURL = workspace.urlForApplication(
+      withBundleIdentifier: "com.tommychang.perfectc2pa"
+    ) else {
+      guard
+        let viewerPageURL = URL(
+          string: "https://github.com/pft-TommyChang/c2pa_viewer"
+        ),
+        workspace.open(viewerPageURL)
+      else {
+        result(
+          FlutterError(
+            code: "viewer-page-open-failed",
+            message: "Unable to open the Perfect C2PA download page.",
+            details: nil
+          )
         )
-      )
+        return
+      }
+
+      result(nil)
       return
     }
 
