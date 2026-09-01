@@ -486,7 +486,7 @@ class _PreviewTile extends StatelessWidget {
             onEdit: onEditViewport,
             onTrim: onTrim,
             onOpenC2pa: currentClip.aiMetadata.hasC2pa
-                ? () => showC2paBrowserDialog(
+                ? () => showC2paBrowserPage(
                     context,
                     currentClip,
                     controller: controller,

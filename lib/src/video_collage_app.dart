@@ -33,7 +33,7 @@ part 'controllers/settings_controller.dart';
 part 'screens/video_collage_screen_content.dart';
 part 'utils/editor_constants.dart';
 part 'widgets/clip_label_dialog.dart';
-part 'widgets/c2pa_browser_dialog.dart';
+part 'screens/c2pa_browser_page.dart';
 part 'widgets/common_controls.dart';
 part 'widgets/export_controls.dart';
 part 'widgets/media_widgets.dart';
@@ -41,12 +41,38 @@ part 'widgets/preview_widgets.dart';
 part 'widgets/preview_toolbar.dart';
 part 'widgets/selection_widgets.dart';
 
+({bool enabled, String? path}) parseC2paLaunchArguments(
+  List<String> arguments,
+) {
+  for (var index = 0; index < arguments.length; index++) {
+    final argument = arguments[index];
+    if (argument.startsWith('--c2pa=')) {
+      final path = argument.substring('--c2pa='.length).trim();
+      return (enabled: true, path: path.isEmpty ? null : path);
+    }
+    if (argument == '--c2pa' ||
+        argument == '--c2pa-browser' ||
+        argument == '--inspect-c2pa') {
+      final next = index + 1 < arguments.length ? arguments[index + 1] : null;
+      return (
+        enabled: true,
+        path: next == null || next.startsWith('--') ? null : next,
+      );
+    }
+  }
+  return (enabled: false, path: null);
+}
+
 class VideoCollageApp extends StatelessWidget {
   const VideoCollageApp({
     super.key,
     this.deferFirstFrameUntilSettingsRestored = false,
     this.checkForUpdatesOnLaunch = true,
     this.refreshC2paTrustListOnLaunch = true,
+    this.c2paLaunchMode = false,
+    this.initialC2paPath,
+    this.c2paMediaLoader,
+    this.onC2paLaunchClose,
     this.updateService = const GitHubUpdateService(
       owner: 'pft-TommyChang',
       repository: 'video_collage',
@@ -56,6 +82,10 @@ class VideoCollageApp extends StatelessWidget {
   final bool deferFirstFrameUntilSettingsRestored;
   final bool checkForUpdatesOnLaunch;
   final bool refreshC2paTrustListOnLaunch;
+  final bool c2paLaunchMode;
+  final String? initialC2paPath;
+  final C2paMediaLoader? c2paMediaLoader;
+  final VoidCallback? onC2paLaunchClose;
   final GitHubUpdateService updateService;
 
   @override
@@ -76,13 +106,22 @@ class VideoCollageApp extends StatelessWidget {
           displayColor: const Color(0xFF171A21),
         ),
       ),
-      home: VideoCollageScreen(
-        deferFirstFrameUntilSettingsRestored:
-            deferFirstFrameUntilSettingsRestored,
-        checkForUpdatesOnLaunch: checkForUpdatesOnLaunch,
-        refreshC2paTrustListOnLaunch: refreshC2paTrustListOnLaunch,
-        updateService: updateService,
-      ),
+      home: c2paLaunchMode
+          ? _StandaloneC2paPage(
+              initialPath: initialC2paPath,
+              mediaLoader:
+                  c2paMediaLoader ??
+                  VideoExportService().probeMediaWithAiMetadata,
+              deferFirstFrame: deferFirstFrameUntilSettingsRestored,
+              onClose: onC2paLaunchClose,
+            )
+          : VideoCollageScreen(
+              deferFirstFrameUntilSettingsRestored:
+                  deferFirstFrameUntilSettingsRestored,
+              checkForUpdatesOnLaunch: checkForUpdatesOnLaunch,
+              refreshC2paTrustListOnLaunch: refreshC2paTrustListOnLaunch,
+              updateService: updateService,
+            ),
     );
   }
 }

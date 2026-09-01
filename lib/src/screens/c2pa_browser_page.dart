@@ -1,6 +1,6 @@
 part of '../video_collage_app.dart';
 
-const Color _c2paDialogBackground = Color(0xFFFFFCF7);
+const Color _c2paPageBackground = Color(0xFFFFFCF7);
 const Color _c2paPanelBackground = Color(0xFFF3EFE7);
 const Color _c2paCardBorder = Color(0xFFD8D0C4);
 const Color _c2paMutedText = Color(0xFF697180);
@@ -10,96 +10,322 @@ const double _c2paTreeCardWidth = 234;
 const double _c2paTreeCardHeight = 274;
 const double _c2paTreeLevelGap = 48;
 
-Future<void> showC2paBrowserDialog(
-  BuildContext context,
-  VideoClipInfo clip, {
-  VideoPlayerController? controller,
-}) {
-  return showDialog<void>(
-    context: context,
-    builder: (context) =>
-        _C2paBrowserDialog(clip: clip, controller: controller),
-  );
+VideoClipInfo _emptyC2paClip() => const VideoClipInfo(
+  path: '',
+  name: '',
+  duration: Duration.zero,
+  width: 0,
+  height: 0,
+  hasAudio: false,
+  mediaKind: MediaKind.photo,
+);
+
+typedef C2paMediaLoader = Future<VideoClipInfo> Function(String path);
+
+class _StandaloneC2paPage extends StatefulWidget {
+  const _StandaloneC2paPage({
+    required this.initialPath,
+    required this.mediaLoader,
+    required this.deferFirstFrame,
+    this.onClose,
+  });
+
+  final String? initialPath;
+  final C2paMediaLoader mediaLoader;
+  final bool deferFirstFrame;
+  final VoidCallback? onClose;
+
+  @override
+  State<_StandaloneC2paPage> createState() => _StandaloneC2paPageState();
 }
 
-class _C2paBrowserDialog extends StatelessWidget {
-  const _C2paBrowserDialog({required this.clip, this.controller});
+class _StandaloneC2paPageState extends State<_StandaloneC2paPage> {
+  static const MethodChannel _startupChannel = MethodChannel(
+    'video_collage/startup',
+  );
 
-  final VideoClipInfo clip;
-  final VideoPlayerController? controller;
+  @override
+  void initState() {
+    super.initState();
+    if (widget.deferFirstFrame) {
+      WidgetsBinding.instance.allowFirstFrame();
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_dismissNativeStartupView());
+    });
+  }
+
+  Future<void> _dismissNativeStartupView() async {
+    try {
+      await _startupChannel.invokeMethod<void>('dismiss');
+    } on MissingPluginException {
+      // Only the macOS runner installs the native startup view.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final report = clip.aiMetadata.c2paReport;
-    final screenSize = MediaQuery.sizeOf(context);
-    final width = screenSize.width - 48;
-    final height = screenSize.height - 48;
-    return Dialog(
-      backgroundColor: _c2paDialogBackground,
-      surfaceTintColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(24),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      child: DefaultTabController(
-        length: 3,
-        child: SizedBox(
-          key: const ValueKey<String>('c2pa-dialog-content'),
-          width: width,
-          height: height,
-          child: Column(
-            children: <Widget>[
-              _C2paDialogHeader(clip: clip),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
-                child: Material(
-                  color: _c2paPanelBackground,
-                  borderRadius: BorderRadius.circular(14),
-                  clipBehavior: Clip.antiAlias,
-                  child: const SizedBox(
-                    height: 44,
-                    child: TabBar(
-                      dividerColor: Colors.transparent,
-                      indicator: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.all(Radius.circular(10)),
+    return _C2paBrowserPage(
+      initialPath: widget.initialPath,
+      mediaLoader: widget.mediaLoader,
+      onClose: widget.onClose ?? () => exit(0),
+    );
+  }
+}
+
+int _openC2paBrowserPageCount = 0;
+
+// desktop_drop may still notify a DropTarget on the covered collage route.
+// Keep the main importer disabled for the complete lifetime of this page.
+bool get _isC2paBrowserPageOpen => _openC2paBrowserPageCount > 0;
+
+Future<void> showC2paBrowserPage(
+  BuildContext context,
+  VideoClipInfo clip, {
+  VideoPlayerController? controller,
+  C2paMediaLoader? mediaLoader,
+}) {
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (context) => _C2paBrowserPage(
+        clip: clip,
+        controller: controller,
+        mediaLoader:
+            mediaLoader ?? VideoExportService().probeMediaWithAiMetadata,
+      ),
+    ),
+  );
+}
+
+class _C2paBrowserPage extends StatefulWidget {
+  const _C2paBrowserPage({
+    required this.mediaLoader,
+    this.clip,
+    this.controller,
+    this.initialPath,
+    this.onClose,
+  });
+
+  final VideoClipInfo? clip;
+  final VideoPlayerController? controller;
+  final C2paMediaLoader mediaLoader;
+  final String? initialPath;
+  final VoidCallback? onClose;
+
+  @override
+  State<_C2paBrowserPage> createState() => _C2paBrowserPageState();
+}
+
+class _C2paBrowserPageState extends State<_C2paBrowserPage> {
+  late VideoClipInfo _clip;
+  late VideoPlayerController? _controller;
+  bool _isDragging = false;
+  bool _isParsing = false;
+  bool _hasMedia = false;
+  int _parseGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _openC2paBrowserPageCount++;
+    _hasMedia = widget.clip != null;
+    _clip = widget.clip ?? _emptyC2paClip();
+    _controller = widget.controller;
+    final initialPath = widget.initialPath;
+    if (initialPath != null && initialPath.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_inspectPath(initialPath));
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _openC2paBrowserPageCount--;
+    super.dispose();
+  }
+
+  bool _isSupportedMediaPath(String path) {
+    final extension = p.extension(path).toLowerCase();
+    return _supportedVideoExtensions.contains(extension) ||
+        _supportedPhotoExtensions.contains(extension);
+  }
+
+  void _showErrorToast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          key: const ValueKey<String>('c2pa-error-toast'),
+          behavior: SnackBarBehavior.floating,
+          content: Text(message),
+        ),
+      );
+  }
+
+  Future<void> _handleDrop(List<DropItem> items) async {
+    final path = items
+        .where((item) => item is! DropItemDirectory)
+        .map((item) => item.path)
+        .where(_isSupportedMediaPath)
+        .firstOrNull;
+    setState(() => _isDragging = false);
+    if (path == null) {
+      _showErrorToast('No supported media file was dropped.');
+      return;
+    }
+
+    await _inspectPath(path);
+  }
+
+  Future<void> _inspectPath(String path) async {
+    if (!_isSupportedMediaPath(path)) {
+      _showErrorToast('No supported media file was provided.');
+      return;
+    }
+    final generation = ++_parseGeneration;
+    setState(() => _isParsing = true);
+    try {
+      final clip = await widget.mediaLoader(path);
+      if (!mounted || generation != _parseGeneration) return;
+      setState(() {
+        _clip = clip;
+        _hasMedia = true;
+        _controller = null;
+        _isParsing = false;
+      });
+    } catch (error) {
+      if (!mounted || generation != _parseGeneration) return;
+      setState(() => _isParsing = false);
+      _showErrorToast('Unable to inspect ${p.basename(path)}: $error');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final report = _clip.aiMetadata.c2paReport;
+    return Scaffold(
+      key: const ValueKey<String>('c2pa-page-content'),
+      backgroundColor: _c2paPageBackground,
+      body: SafeArea(
+        child: DropTarget(
+          onDragEntered: (_) => setState(() => _isDragging = true),
+          onDragExited: (_) => setState(() => _isDragging = false),
+          onDragDone: (details) => unawaited(_handleDrop(details.files)),
+          child: DefaultTabController(
+            length: 3,
+            child: Stack(
+              children: <Widget>[
+                Column(
+                  children: <Widget>[
+                    _C2paPageHeader(
+                      clip: _hasMedia ? _clip : null,
+                      onClose:
+                          widget.onClose ?? () => Navigator.of(context).pop(),
+                    ),
+                    if (report != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+                        child: Material(
+                          color: _c2paPanelBackground,
+                          borderRadius: BorderRadius.circular(14),
+                          clipBehavior: Clip.antiAlias,
+                          child: const SizedBox(
+                            height: 44,
+                            child: TabBar(
+                              dividerColor: Colors.transparent,
+                              indicator: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(10),
+                                ),
+                              ),
+                              indicatorPadding: EdgeInsets.all(4),
+                              indicatorSize: TabBarIndicatorSize.tab,
+                              splashBorderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
+                              labelColor: Color(0xFF171A21),
+                              unselectedLabelColor: _c2paMutedText,
+                              labelStyle: TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                              tabs: <Widget>[
+                                _C2paTab(
+                                  icon: Icons.badge_outlined,
+                                  label: 'Overview',
+                                ),
+                                _C2paTab(
+                                  icon: Icons.account_tree_outlined,
+                                  label: 'History',
+                                ),
+                                _C2paTab(
+                                  icon: Icons.fact_check_outlined,
+                                  label: 'Checks & JSON',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                      indicatorPadding: EdgeInsets.all(4),
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      splashBorderRadius: BorderRadius.all(Radius.circular(10)),
-                      labelColor: Color(0xFF171A21),
-                      unselectedLabelColor: _c2paMutedText,
-                      labelStyle: TextStyle(fontWeight: FontWeight.w700),
-                      tabs: <Widget>[
-                        _C2paTab(icon: Icons.badge_outlined, label: 'Overview'),
-                        _C2paTab(
-                          icon: Icons.account_tree_outlined,
-                          label: 'History',
-                        ),
-                        _C2paTab(
-                          icon: Icons.fact_check_outlined,
-                          label: 'Checks & JSON',
-                        ),
-                      ],
+                    Expanded(
+                      child: report != null
+                          ? TabBarView(
+                              children: <Widget>[
+                                _C2paOverview(
+                                  clip: _clip,
+                                  report: report,
+                                  controller: _controller,
+                                ),
+                                _C2paHistoryTree(clip: _clip, report: report),
+                                _C2paTechnicalView(report: report),
+                              ],
+                            )
+                          : !_hasMedia
+                          ? const _C2paAwaitingMediaView()
+                          : _clip.aiMetadata.c2paStatus == C2paStatus.absent
+                          ? _C2paNoCredentialsView(clip: _clip)
+                          : _C2paUnavailableView(clip: _clip),
+                    ),
+                  ],
+                ),
+                IgnorePointer(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 140),
+                    opacity: _isDragging ? 1 : 0,
+                    child: Container(
+                      key: const ValueKey<String>('c2pa-drop-hover'),
+                      margin: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _c2paAccent.withValues(alpha: 0.12),
+                        border: Border.all(color: _c2paAccent, width: 3),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      alignment: Alignment.center,
+                      child: const _C2paDropPrompt(prominent: true),
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: report == null
-                    ? _C2paUnavailableView(clip: clip)
-                    : TabBarView(
-                        children: <Widget>[
-                          _C2paOverview(
-                            clip: clip,
-                            report: report,
-                            controller: controller,
-                          ),
-                          _C2paHistoryTree(clip: clip, report: report),
-                          _C2paTechnicalView(report: report),
-                        ],
+                if (_isParsing)
+                  const Positioned.fill(
+                    child: ColoredBox(
+                      key: ValueKey<String>('c2pa-parsing-overlay'),
+                      color: Color(0xAAFFFCF7),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            CircularProgressIndicator(),
+                            SizedBox(height: 14),
+                            Text('Inspecting Content Credentials…'),
+                          ],
+                        ),
                       ),
-              ),
-            ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -128,14 +354,15 @@ class _C2paTab extends StatelessWidget {
   }
 }
 
-class _C2paDialogHeader extends StatelessWidget {
-  const _C2paDialogHeader({required this.clip});
+class _C2paPageHeader extends StatelessWidget {
+  const _C2paPageHeader({required this.clip, required this.onClose});
 
-  final VideoClipInfo clip;
+  final VideoClipInfo? clip;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
-    final status = clip.aiMetadata.c2paStatus;
+    final status = clip?.aiMetadata.c2paStatus;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 10, 11),
       child: Row(
@@ -165,7 +392,9 @@ class _C2paDialogHeader extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  p.basename(clip.path),
+                  clip == null
+                      ? 'Drop a media file anywhere on this page'
+                      : p.basename(clip!.path),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(
@@ -175,15 +404,115 @@ class _C2paDialogHeader extends StatelessWidget {
               ],
             ),
           ),
-          _C2paStatusPill(status: status),
+          if (status != null) _C2paStatusPill(status: status),
           const SizedBox(width: 6),
           IconButton(
             key: const ValueKey<String>('close-c2pa-browser'),
             tooltip: 'Close',
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: onClose,
             icon: const Icon(Icons.close),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _C2paDropPrompt extends StatelessWidget {
+  const _C2paDropPrompt({this.prominent = false});
+
+  final bool prominent;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _c2paPageBackground.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: prominent
+            ? const <BoxShadow>[
+                BoxShadow(color: Color(0x22000000), blurRadius: 18),
+              ]
+            : null,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              Icons.file_download_outlined,
+              size: prominent ? 44 : 36,
+              color: _c2paAccentDark,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Drop media to inspect Content Credentials',
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 5),
+            const Text(
+              'If multiple files are dropped, only the first media file is inspected.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _c2paMutedText),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _C2paAwaitingMediaView extends StatelessWidget {
+  const _C2paAwaitingMediaView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: _C2paDropPrompt());
+  }
+}
+
+class _C2paNoCredentialsView extends StatelessWidget {
+  const _C2paNoCredentialsView({required this.clip});
+
+  final VideoClipInfo clip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Icon(
+                Icons.gpp_maybe_outlined,
+                size: 52,
+                color: _c2paMutedText,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'No Content Credentials',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${p.basename(clip.path)} does not contain C2PA data.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _c2paMutedText),
+              ),
+              const SizedBox(height: 22),
+              const _C2paDropPrompt(),
+            ],
+          ),
+        ),
       ),
     );
   }

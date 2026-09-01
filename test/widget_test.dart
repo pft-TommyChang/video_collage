@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
@@ -40,6 +41,18 @@ void main() {
     checkForUpdatesOnLaunch: false,
     refreshC2paTrustListOnLaunch: false,
   );
+
+  test('parses C2PA launch arguments and optional media path', () {
+    expect(parseC2paLaunchArguments(<String>['--c2pa', '/tmp/source.png']), (
+      enabled: true,
+      path: '/tmp/source.png',
+    ));
+    expect(parseC2paLaunchArguments(<String>['--c2pa=/tmp/source.png']), (
+      enabled: true,
+      path: '/tmp/source.png',
+    ));
+    expect(parseC2paLaunchArguments(<String>[]), (enabled: false, path: null));
+  });
 
   void mockPendingMediaFiles(WidgetTester tester, List<String> mediaPaths) {
     var didConsumeMedia = false;
@@ -1448,7 +1461,7 @@ void main() {
       MaterialApp(
         home: Builder(
           builder: (context) => TextButton(
-            onPressed: () => showC2paBrowserDialog(context, clip),
+            onPressed: () => showC2paBrowserPage(context, clip),
             child: const Text('Open C2PA'),
           ),
         ),
@@ -1458,9 +1471,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.getSize(find.byKey(const ValueKey<String>('c2pa-dialog-content'))),
-      const Size(1152, 752),
+      tester.getSize(find.byKey(const ValueKey<String>('c2pa-page-content'))),
+      const Size(1200, 800),
     );
+    expect(find.byType(Dialog), findsNothing);
     expect(find.text('Content Credentials'), findsOneWidget);
     expect(find.text('Example Studio'), findsWidgets);
     final previewWidth = tester
@@ -1557,7 +1571,7 @@ void main() {
       MaterialApp(
         home: Builder(
           builder: (context) => TextButton(
-            onPressed: () => showC2paBrowserDialog(context, clip),
+            onPressed: () => showC2paBrowserPage(context, clip),
             child: const Text('Open wide tree'),
           ),
         ),
@@ -1601,6 +1615,182 @@ void main() {
     await tester.pumpAndSettle();
     expect(vertical.offset, greaterThan(0));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('C2PA page inspects only the first dropped media file', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1000, 700));
+    final inspectedPaths = <String>[];
+    final initialClip = VideoClipInfo(
+      path: appIconPath(16),
+      name: 'initial',
+      duration: Duration.zero,
+      width: 16,
+      height: 16,
+      hasAudio: false,
+      mediaKind: MediaKind.photo,
+      aiMetadata: const AiMediaMetadata(c2paStatus: C2paStatus.absent),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showC2paBrowserPage(
+              context,
+              initialClip,
+              mediaLoader: (path) async {
+                inspectedPaths.add(path);
+                return VideoClipInfo(
+                  path: path,
+                  name: p.basenameWithoutExtension(path),
+                  duration: Duration.zero,
+                  width: 32,
+                  height: 32,
+                  hasAudio: false,
+                  mediaKind: MediaKind.photo,
+                  aiMetadata: const AiMediaMetadata(
+                    c2paStatus: C2paStatus.absent,
+                  ),
+                );
+              },
+            ),
+            child: const Text('Open C2PA drop page'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open C2PA drop page'));
+    await tester.pumpAndSettle();
+
+    final target = tester.widget<DropTarget>(find.byType(DropTarget));
+    target.onDragDone!(
+      DropDoneDetails(
+        files: <DropItem>[
+          DropItemFile('/tmp/not-media.txt'),
+          DropItemFile(appIconPath(32)),
+          DropItemFile(appIconPath(64)),
+        ],
+        localPosition: Offset.zero,
+        globalPosition: Offset.zero,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(inspectedPaths, <String>[appIconPath(32)]);
+    expect(find.text('No Content Credentials'), findsOneWidget);
+    expect(
+      find.textContaining('app_icon_32.png does not contain'),
+      findsOneWidget,
+    );
+
+    target.onDragDone!(
+      DropDoneDetails(
+        files: <DropItem>[DropItemFile('/tmp/not-media.txt')],
+        localPosition: Offset.zero,
+        globalPosition: Offset.zero,
+      ),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('c2pa-error-toast')),
+      findsOneWidget,
+    );
+    expect(find.text('No supported media file was dropped.'), findsOneWidget);
+  });
+
+  testWidgets('C2PA launch mode opens directly and X closes the app mode', (
+    WidgetTester tester,
+  ) async {
+    var closeCount = 0;
+    final sourcePath = appIconPath(64);
+    await tester.pumpWidget(
+      VideoCollageApp(
+        c2paLaunchMode: true,
+        initialC2paPath: sourcePath,
+        checkForUpdatesOnLaunch: false,
+        refreshC2paTrustListOnLaunch: false,
+        onC2paLaunchClose: () => closeCount++,
+        c2paMediaLoader: (path) async => VideoClipInfo(
+          path: path,
+          name: 'unsigned',
+          duration: Duration.zero,
+          width: 64,
+          height: 64,
+          hasAudio: false,
+          mediaKind: MediaKind.photo,
+          aiMetadata: const AiMediaMetadata(c2paStatus: C2paStatus.absent),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('c2pa-page-content')),
+      findsOneWidget,
+    );
+    expect(find.text('No Content Credentials'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('close-c2pa-browser')));
+    expect(closeCount, 1);
+  });
+
+  testWidgets('C2PA page drop does not add media to the main collage', (
+    WidgetTester tester,
+  ) async {
+    useTestWindow(tester, const Size(1200, 800));
+    await tester.pumpWidget(buildTestApp());
+    await tester.pumpAndSettle();
+    expect(find.text('0 loaded • 4 collage slots'), findsOneWidget);
+
+    final mainDropTarget = tester.widget<DropTarget>(
+      find.byType(DropTarget).first,
+    );
+    final sourcePath = appIconPath(32);
+    final initialClip = VideoClipInfo(
+      path: appIconPath(16),
+      name: 'initial',
+      duration: Duration.zero,
+      width: 16,
+      height: 16,
+      hasAudio: false,
+      mediaKind: MediaKind.photo,
+      aiMetadata: const AiMediaMetadata(c2paStatus: C2paStatus.absent),
+    );
+    unawaited(
+      showC2paBrowserPage(
+        tester.element(find.byType(Scaffold).first),
+        initialClip,
+        mediaLoader: (path) async => VideoClipInfo(
+          path: path,
+          name: 'inspected-only',
+          duration: Duration.zero,
+          width: 32,
+          height: 32,
+          hasAudio: false,
+          mediaKind: MediaKind.photo,
+          aiMetadata: const AiMediaMetadata(c2paStatus: C2paStatus.absent),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final details = DropDoneDetails(
+      files: <DropItem>[DropItemFile(sourcePath)],
+      localPosition: Offset.zero,
+      globalPosition: Offset.zero,
+    );
+    mainDropTarget.onDragDone!(details);
+    tester.widget<DropTarget>(find.byType(DropTarget)).onDragDone!(details);
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('app_icon_32.png does not contain'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('close-c2pa-browser')));
+    await tester.pumpAndSettle();
+    expect(find.text('0 loaded • 4 collage slots'), findsOneWidget);
   });
 
   testWidgets('dropping media onto a slot updates an unchanged label', (
