@@ -51,41 +51,35 @@ class _C2paBrowserDialog extends StatelessWidget {
               _C2paDialogHeader(clip: clip),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: _c2paPanelBackground,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: const SizedBox(
-                      height: 44,
-                      child: TabBar(
-                        dividerColor: Colors.transparent,
-                        indicator: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.all(Radius.circular(10)),
-                        ),
-                        indicatorPadding: EdgeInsets.all(4),
-                        indicatorSize: TabBarIndicatorSize.tab,
-                        labelColor: Color(0xFF171A21),
-                        unselectedLabelColor: _c2paMutedText,
-                        labelStyle: TextStyle(fontWeight: FontWeight.w700),
-                        tabs: <Widget>[
-                          _C2paTab(
-                            icon: Icons.badge_outlined,
-                            label: 'Overview',
-                          ),
-                          _C2paTab(
-                            icon: Icons.account_tree_outlined,
-                            label: 'History',
-                          ),
-                          _C2paTab(
-                            icon: Icons.fact_check_outlined,
-                            label: 'Checks & JSON',
-                          ),
-                        ],
+                child: Material(
+                  color: _c2paPanelBackground,
+                  borderRadius: BorderRadius.circular(14),
+                  clipBehavior: Clip.antiAlias,
+                  child: const SizedBox(
+                    height: 44,
+                    child: TabBar(
+                      dividerColor: Colors.transparent,
+                      indicator: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
                       ),
+                      indicatorPadding: EdgeInsets.all(4),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      splashBorderRadius: BorderRadius.all(Radius.circular(10)),
+                      labelColor: Color(0xFF171A21),
+                      unselectedLabelColor: _c2paMutedText,
+                      labelStyle: TextStyle(fontWeight: FontWeight.w700),
+                      tabs: <Widget>[
+                        _C2paTab(icon: Icons.badge_outlined, label: 'Overview'),
+                        _C2paTab(
+                          icon: Icons.account_tree_outlined,
+                          label: 'History',
+                        ),
+                        _C2paTab(
+                          icon: Icons.fact_check_outlined,
+                          label: 'Checks & JSON',
+                        ),
+                      ],
                     ),
                   ),
                 ),

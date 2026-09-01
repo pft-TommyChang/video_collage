@@ -148,9 +148,14 @@ const double _trimActionsMinimumDisplayWidth =
     _viewportActionEdgeDisplayPadding +
     _viewportActionButtonDisplaySize * 3 +
     _viewportActionGapDisplaySize * 2;
+const double _trimAndC2paActionsMinimumDisplayWidth =
+    _viewportActionEdgeDisplayPadding +
+    _viewportActionButtonDisplaySize * 4 +
+    _viewportActionGapDisplaySize * 3;
 
 class _ViewportActionButton extends StatelessWidget {
   const _ViewportActionButton({
+    super.key,
     required this.onPressed,
     required this.tooltip,
     required this.icon,
@@ -470,15 +475,23 @@ class _PreviewTile extends StatelessWidget {
       isDragTarget: isDragTarget,
       overlayLabelScale: overlayLabelScale,
     );
-    final interactiveTile = clip == null
+    final currentClip = clip;
+    final interactiveTile = currentClip == null
         ? tile
         : _ViewportControls(
-            clip: clip!,
+            clip: currentClip,
             viewport: viewport,
             isEditing: isEditingViewport,
             canEdit: fitMode == ClipFitMode.cropCenter,
             onEdit: onEditViewport,
             onTrim: onTrim,
+            onOpenC2pa: currentClip.aiMetadata.hasC2pa
+                ? () => showC2paBrowserDialog(
+                    context,
+                    currentClip,
+                    controller: controller,
+                  )
+                : null,
             onRemove: onRemove,
             onChanged: onViewportChanged,
             onReset: onResetViewport,
@@ -625,6 +638,7 @@ class _ViewportControls extends StatefulWidget {
     required this.canEdit,
     required this.onEdit,
     required this.onTrim,
+    required this.onOpenC2pa,
     required this.onRemove,
     required this.onChanged,
     required this.onReset,
@@ -639,6 +653,7 @@ class _ViewportControls extends StatefulWidget {
   final bool canEdit;
   final VoidCallback? onEdit;
   final VoidCallback? onTrim;
+  final VoidCallback? onOpenC2pa;
   final VoidCallback? onRemove;
   final ValueChanged<ClipViewport>? onChanged;
   final VoidCallback? onReset;
@@ -760,9 +775,15 @@ class _ViewportControlsState extends State<_ViewportControls> {
               _viewportActionEdgeDisplayPadding / previewDisplayScale;
           final showCropAction =
               displayedTileWidth >= _cropActionsMinimumDisplayWidth;
+          final showC2paAction =
+              widget.onOpenC2pa != null &&
+              displayedTileWidth >= _trimActionsMinimumDisplayWidth;
           final showTrimAction =
               widget.onTrim != null &&
-              displayedTileWidth >= _trimActionsMinimumDisplayWidth;
+              displayedTileWidth >=
+                  (widget.onOpenC2pa == null
+                      ? _trimActionsMinimumDisplayWidth
+                      : _trimAndC2paActionsMinimumDisplayWidth);
           const editingControlPadding =
               _viewportEditingControlPaddingDisplaySize;
           final showEditingSlider =
@@ -867,6 +888,18 @@ class _ViewportControlsState extends State<_ViewportControls> {
                           color: widget.clip.isTrimmed
                               ? _activeMediaEditIconColor
                               : Colors.white,
+                        ),
+                        SizedBox(width: hoverControlGap),
+                      ],
+                      if (showC2paAction) ...<Widget>[
+                        _ViewportActionButton(
+                          key: ValueKey<String>('open-c2pa-${widget.clip.id}'),
+                          onPressed: widget.onOpenC2pa,
+                          tooltip: 'Content Credentials',
+                          icon: Icons.verified_user_outlined,
+                          iconSize: hoverIconSize,
+                          buttonSize: hoverControlSize,
+                          color: Colors.white,
                         ),
                         SizedBox(width: hoverControlGap),
                       ],

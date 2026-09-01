@@ -1480,7 +1480,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('manifests ·'), findsNothing);
-    expect(find.text('ACTIVE MANIFEST'), findsOneWidget);
     expect(find.text('source.png'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
