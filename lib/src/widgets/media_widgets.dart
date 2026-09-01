@@ -233,11 +233,7 @@ class _ClipListTile extends StatelessWidget {
                   context,
                   'C2PA',
                   key: ValueKey<String>('c2pa-tag-${clip.id}'),
-                  onTap: () => showC2paBrowserPage(
-                    context,
-                    clip,
-                    controller: controller,
-                  ),
+                  onTap: () => unawaited(_openInC2paViewer(context, clip.path)),
                   trailing: Icon(
                     Icons.circle,
                     size: 9,

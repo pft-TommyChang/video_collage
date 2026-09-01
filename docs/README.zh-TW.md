@@ -23,6 +23,7 @@ Perfect Collage 適合製作比較畫面、社群貼文、多鏡頭畫面與簡�
 - 自訂比例、解析度、邊框、圓角、顏色、音訊與輸出長度。
 - 全部為圖片時輸出 `JPG`；包含影片時輸出 `MP4`。
 - 任一素材含 C2PA 時，輸出會保留來源 provenance 並新增 Perfect Collage claim；所有素材都沒有 C2PA 時則不加入 C2PA。
+- 編輯器仍會顯示 C2PA 狀態標籤；點擊後會交由另外安裝的 Perfect C2PA App 顯示憑證細節。
 - 查看最近匯出紀錄，快速開啟檔案或在 Finder 中顯示。
 - GitHub Release 有新版本時，在 app 內顯示安靜的更新通知。
 - 可重設單一設定區，或使用 **Reset All** 全部重新開始。

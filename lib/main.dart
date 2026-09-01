@@ -4,19 +4,12 @@ import 'package:video_player_media_kit/video_player_media_kit.dart';
 
 import 'src/video_collage_app.dart';
 
-void main(List<String> arguments) {
+void main() {
   final binding = WidgetsFlutterBinding.ensureInitialized();
   binding.deferFirstFrame();
   VideoPlayerMediaKit.ensureInitialized(macOS: true, windows: true);
   _installKnownFlutterDesktopWorkarounds();
-  final c2paLaunch = parseC2paLaunchArguments(arguments);
-  runApp(
-    VideoCollageApp(
-      deferFirstFrameUntilSettingsRestored: true,
-      c2paLaunchMode: c2paLaunch.enabled,
-      initialC2paPath: c2paLaunch.path,
-    ),
-  );
+  runApp(VideoCollageApp(deferFirstFrameUntilSettingsRestored: true));
 }
 
 void _installKnownFlutterDesktopWorkarounds() {

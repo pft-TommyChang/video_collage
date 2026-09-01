@@ -5,6 +5,21 @@ import 'package:video_collage_mac/src/models.dart';
 import 'package:video_collage_mac/src/services/editor_settings_store.dart';
 
 void main() {
+  test('C2PA tag eligibility remains available without the viewer page', () {
+    for (final status in <C2paStatus>[
+      C2paStatus.conformant,
+      C2paStatus.legacyTrusted,
+      C2paStatus.untrusted,
+      C2paStatus.invalid,
+    ]) {
+      expect(AiMediaMetadata(c2paStatus: status).hasC2pa, isTrue);
+    }
+    expect(
+      const AiMediaMetadata(c2paStatus: C2paStatus.absent).hasC2pa,
+      isFalse,
+    );
+  });
+
   test('short media types use canonical labels instead of extensions', () {
     expect(shortMediaTypeLabel('/media/photo.jpg', MediaKind.photo), 'JPG');
     expect(shortMediaTypeLabel('/media/photo.JPEG', MediaKind.photo), 'JPG');

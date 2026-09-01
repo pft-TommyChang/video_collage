@@ -7,6 +7,7 @@ class AppDelegate: FlutterAppDelegate {
   private let mediaProbeChannelName = "video_collage/media_probe"
   private let mediaDialogChannelName = "video_collage/media_dialogs"
   private let mediaOpenChannelName = "video_collage/media_open"
+  private let c2paViewerChannelName = "video_collage/c2pa_viewer"
   private var mediaOpenChannel: FlutterMethodChannel?
   private var pendingOpenFilePaths: [String] = []
 
@@ -29,6 +30,10 @@ class AppDelegate: FlutterAppDelegate {
       binaryMessenger: flutterViewController.engine.binaryMessenger
     )
     mediaOpenChannel = openChannel
+    let c2paViewerChannel = FlutterMethodChannel(
+      name: c2paViewerChannelName,
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
 
     channel.setMethodCallHandler { [weak self] call, result in
       guard call.method == "probeVideoMetadata" else {
@@ -71,6 +76,27 @@ class AppDelegate: FlutterAppDelegate {
       result(paths)
     }
 
+    c2paViewerChannel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "openMedia" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard
+        let arguments = call.arguments as? [String: Any],
+        let path = arguments["path"] as? String
+      else {
+        result(
+          FlutterError(
+            code: "invalid-arguments",
+            message: "Expected a media file path.",
+            details: nil
+          )
+        )
+        return
+      }
+      self?.openInC2paViewer(path: path, result: result)
+    }
+
     super.applicationDidFinishLaunching(notification)
   }
 
@@ -105,6 +131,44 @@ class AppDelegate: FlutterAppDelegate {
     mainFlutterWindow?.makeKeyAndOrderFront(nil)
     application.activate(ignoringOtherApps: true)
     mediaOpenChannel?.invokeMethod("mediaFilesOpened", arguments: nil)
+  }
+
+  private func openInC2paViewer(path: String, result: @escaping FlutterResult) {
+    let workspace = NSWorkspace.shared
+    guard
+      let viewerURL = workspace.urlForApplication(
+        withBundleIdentifier: "com.tommychang.perfectc2pa"
+      )
+    else {
+      result(
+        FlutterError(
+          code: "viewer-not-installed",
+          message: "Perfect C2PA is not installed.",
+          details: nil
+        )
+      )
+      return
+    }
+
+    let configuration = NSWorkspace.OpenConfiguration()
+    configuration.activates = true
+    workspace.open(
+      [URL(fileURLWithPath: path)],
+      withApplicationAt: viewerURL,
+      configuration: configuration
+    ) { _, error in
+      if let error {
+        result(
+          FlutterError(
+            code: "viewer-launch-failed",
+            message: error.localizedDescription,
+            details: nil
+          )
+        )
+      } else {
+        result(nil)
+      }
+    }
   }
 
   private func probeVideoMetadata(path: String, result: @escaping FlutterResult) {

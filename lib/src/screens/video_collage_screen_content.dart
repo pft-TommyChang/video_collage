@@ -36,9 +36,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
       body: SafeArea(
         child: DropTarget(
           onDragEntered: (_) {
-            if (_isVideoMergeDialogOpen ||
-                _isC2paBrowserPageOpen ||
-                _isExternalDragActive) {
+            if (_isVideoMergeDialogOpen || _isExternalDragActive) {
               return;
             }
             _updateState(() {
@@ -46,9 +44,6 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
             });
           },
           onDragExited: (_) {
-            if (_isC2paBrowserPageOpen) {
-              return;
-            }
             if (_isExternalDragActive || _externalDropHoverSlotIndex != null) {
               _updateState(() {
                 _isExternalDragActive = false;
@@ -57,7 +52,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
             }
           },
           onDragDone: (details) {
-            if (_isVideoMergeDialogOpen || _isC2paBrowserPageOpen) {
+            if (_isVideoMergeDialogOpen) {
               return;
             }
             if (_isExternalDragActive) {

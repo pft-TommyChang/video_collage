@@ -24,6 +24,7 @@ Perfect Collage is built for comparisons, social posts, multi-camera views, and 
 - Control aspect ratio, resolution, borders, corners, colors, audio, and duration.
 - Export photo-only collages as `JPG`; export projects containing video as `MP4`.
 - Preserve source C2PA provenance and add a Perfect Collage claim when any input has Content Credentials; leave exports unsigned when none do.
+- Keep C2PA status tags in the editor and open credential details in the separately installed Perfect C2PA app.
 - Track recent exports and quickly open files or reveal them in Finder.
 - Get a quiet in-app notification when a newer GitHub Release is available.
 - Reset individual sections or use **Reset All** to start fresh.
