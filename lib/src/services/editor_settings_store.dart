@@ -235,6 +235,7 @@ class EditorSettingsStore {
 
   static const _settingsFileName = 'editor_settings.json';
   static const _exportHistoryFileName = 'export_history.json';
+  static const _defaultSettingsFileName = 'default_settings.json';
 
   Future<PersistedEditorSettings?> load() async {
     try {
@@ -332,6 +333,52 @@ class EditorSettingsStore {
     } catch (_) {
       // Ignore local persistence failures to keep the editor responsive.
     }
+  }
+
+
+  Future<bool> hasDefaultSettings() async {
+    try {
+      return await (await _defaultSettingsFile()).exists();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<PersistedEditorSettings?> loadDefaultSettings() async {
+    try {
+      final file = await _defaultSettingsFile();
+      if (!await file.exists()) return null;
+      final raw = await file.readAsString();
+      if (raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      return PersistedEditorSettings.fromJson(
+        Map<String, dynamic>.from(decoded),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveDefaultSettings(PersistedEditorSettings settings) async {
+    try {
+      final file = await _defaultSettingsFile();
+      await file.parent.create(recursive: true);
+      await file.writeAsString(jsonEncode(settings.toJson()));
+    } catch (_) {}
+  }
+
+  Future<void> clearDefaultSettings() async {
+    try {
+      final file = await _defaultSettingsFile();
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+  }
+
+  Future<File> _defaultSettingsFile() async {
+    return File(
+      p.join((await _supportDirectory()).path, _defaultSettingsFileName),
+    );
   }
 
   Future<File> _settingsFile() async {

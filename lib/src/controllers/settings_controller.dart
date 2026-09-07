@@ -170,43 +170,45 @@ extension _SettingsController on _VideoCollageScreenState {
     });
   }
 
-  Future<void> _persistSettings() async {
-    await _settingsStore.save(
-      PersistedEditorSettings(
-        rows: _rows,
-        columns: _columns,
-        isMediaSectionCollapsed: _isMediaSectionCollapsed,
-        isLayoutSectionCollapsed: _isLayoutSectionCollapsed,
-        isLabelSectionCollapsed: _isLabelSectionCollapsed,
-        isOutputSectionCollapsed: _isOutputSectionCollapsed,
-        isSidePanelCollapsed: _isSidePanelCollapsed,
-        borderThickness: _borderThickness,
-        tileCornerRadius: _tileCornerRadius,
-        clipLabelFontSize: _clipLabelFontSize,
-        clipLabelAlignment: _clipLabelAlignment,
-        clipLabelVisualStyle: _clipLabelVisualStyle,
-        clipLabelPadding: _clipLabelPadding,
-        includeClipLabelsInOutput: _includeClipLabelsInOutput,
-        preferAiMetadataForClipLabels: _preferAiMetadataForClipLabels,
-        clipLabelDisplayMode: _clipLabelDisplayMode,
-        fitMode: _selectedFitMode.name,
-        outputWidth: _outputWidth,
-        outputHeight: _outputHeight,
-        aspectLabel: _selectedAspect.label,
-        resolutionLabel: _selectedResolution.label,
-        playMode: _selectedPlayMode.name,
-        audioMode: _selectedAudioMode.name,
-        durationMode: _selectedDurationMode.name,
-        appendDateTimeToExportName: _appendDateTimeToExportName,
-        lastExportDirectory: _lastExportDirectory,
-        borderColorLabel: _selectedBorderColor.label,
-        backgroundColorLabel: _selectedBackgroundColor.label,
-        borderColorValue: _selectedBorderColor.color.toARGB32(),
-        backgroundColorValue: _selectedBackgroundColor.color.toARGB32(),
-        mergeFitMode: _mergeFitMode.name,
-        mergeFrameRateMode: _mergeFrameRateMode.name,
-      ),
+  PersistedEditorSettings _buildCurrentSettings() {
+    return PersistedEditorSettings(
+      rows: _rows,
+      columns: _columns,
+      isMediaSectionCollapsed: _isMediaSectionCollapsed,
+      isLayoutSectionCollapsed: _isLayoutSectionCollapsed,
+      isLabelSectionCollapsed: _isLabelSectionCollapsed,
+      isOutputSectionCollapsed: _isOutputSectionCollapsed,
+      isSidePanelCollapsed: _isSidePanelCollapsed,
+      borderThickness: _borderThickness,
+      tileCornerRadius: _tileCornerRadius,
+      clipLabelFontSize: _clipLabelFontSize,
+      clipLabelAlignment: _clipLabelAlignment,
+      clipLabelVisualStyle: _clipLabelVisualStyle,
+      clipLabelPadding: _clipLabelPadding,
+      includeClipLabelsInOutput: _includeClipLabelsInOutput,
+      preferAiMetadataForClipLabels: _preferAiMetadataForClipLabels,
+      clipLabelDisplayMode: _clipLabelDisplayMode,
+      fitMode: _selectedFitMode.name,
+      outputWidth: _outputWidth,
+      outputHeight: _outputHeight,
+      aspectLabel: _selectedAspect.label,
+      resolutionLabel: _selectedResolution.label,
+      playMode: _selectedPlayMode.name,
+      audioMode: _selectedAudioMode.name,
+      durationMode: _selectedDurationMode.name,
+      appendDateTimeToExportName: _appendDateTimeToExportName,
+      lastExportDirectory: _lastExportDirectory,
+      borderColorLabel: _selectedBorderColor.label,
+      backgroundColorLabel: _selectedBackgroundColor.label,
+      borderColorValue: _selectedBorderColor.color.toARGB32(),
+      backgroundColorValue: _selectedBackgroundColor.color.toARGB32(),
+      mergeFitMode: _mergeFitMode.name,
+      mergeFrameRateMode: _mergeFrameRateMode.name,
     );
+  }
+
+  Future<void> _persistSettings() async {
+    await _settingsStore.save(_buildCurrentSettings());
   }
 
   void _setStateAndSave(VoidCallback update) {

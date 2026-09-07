@@ -292,7 +292,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                     key: const ValueKey<String>(
                                       'layout-reset-button',
                                     ),
-                                    onPressed: _resetLayoutDefaults,
+                                    onPressed: () => unawaited(_resetLayoutDefaults()),
                                     child: const Text('Reset'),
                                   ),
                                   child: Column(
@@ -446,7 +446,7 @@ extension _VideoCollageScreenContent on _VideoCollageScreenState {
                                   isCollapsed: _isLabelSectionCollapsed,
                                   onToggle: _toggleLabelSection,
                                   action: TextButton(
-                                    onPressed: _resetLabelDefaults,
+                                    onPressed: () => unawaited(_resetLabelDefaults()),
                                     child: const Text('Reset'),
                                   ),
                                   child: Column(

@@ -174,40 +174,139 @@ extension _MediaController on _VideoCollageScreenState {
   }
 
   Future<void> _confirmResetAll() async {
+    final hasDefaults = await _settingsStore.hasDefaultSettings();
+
     final action = await showDialog<_ResetEverythingAction>(
       context: context,
       builder: (dialogContext) {
+        final colorScheme = Theme.of(dialogContext).colorScheme;
+        final sectionBg = colorScheme.surfaceContainerHighest.withOpacity(0.45);
+        const sectionRadius = BorderRadius.all(Radius.circular(12));
+        final labelStyle = TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.8,
+          color: colorScheme.onSurfaceVariant,
+        );
+
         return AlertDialog(
           title: const Text('What would you like to reset?'),
-          content: const Text(
-            'Export history and exported files will be kept.',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Export history and exported files will be kept.'),
+              const SizedBox(height: 20),
+
+              // Zone 1: Default Settings
+              Container(
+                decoration: BoxDecoration(
+                  color: sectionBg,
+                  borderRadius: sectionRadius,
+                ),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('DEFAULT SETTINGS', style: labelStyle),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Save your current settings as the baseline that '
+                      'all Reset buttons will restore to.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(
+                        dialogContext,
+                      ).pop(_ResetEverythingAction.saveAsDefault),
+                      child: const Text('Save Current as Default'),
+                    ),
+                    if (hasDefaults) ...[
+                      const SizedBox(height: 6),
+                      TextButton(
+                        onPressed: () => Navigator.of(
+                          dialogContext,
+                        ).pop(_ResetEverythingAction.clearDefault),
+                        style: TextButton.styleFrom(
+                          foregroundColor: colorScheme.error,
+                        ),
+                        child: const Text('Reset Default to Factory'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Zone 2: Reset Now
+              Container(
+                decoration: BoxDecoration(
+                  color: sectionBg,
+                  borderRadius: sectionRadius,
+                ),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('RESET', style: labelStyle),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                        const Spacer(),
+                        OutlinedButton(
+                          onPressed: () => Navigator.of(
+                            dialogContext,
+                          ).pop(_ResetEverythingAction.settingsOnly),
+                          child: const Text('Settings Only'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: () => Navigator.of(
+                            dialogContext,
+                          ).pop(_ResetEverythingAction.settingsAndMedia),
+                          child: const Text('+ Media'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            OutlinedButton(
-              onPressed: () => Navigator.of(
-                dialogContext,
-              ).pop(_ResetEverythingAction.settingsOnly),
-              child: const Text('Reset Settings Only'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(
-                dialogContext,
-              ).pop(_ResetEverythingAction.settingsAndMedia),
-              child: const Text('Reset Settings + Media'),
-            ),
-          ],
         );
       },
     );
 
-    if (action != null && mounted) {
-      await _resetAll(
-        removeMedia: action == _ResetEverythingAction.settingsAndMedia,
-      );
+    if (action == null || !mounted) return;
+
+    switch (action) {
+      case _ResetEverythingAction.saveAsDefault:
+        await _settingsStore.saveDefaultSettings(_buildCurrentSettings());
+        if (mounted) {
+          _updateState(() {
+            _statusMessage = 'Current settings saved as default.';
+          });
+        }
+      case _ResetEverythingAction.clearDefault:
+        await _settingsStore.clearDefaultSettings();
+        if (mounted) {
+          _updateState(() {
+            _statusMessage = 'Default settings cleared. Factory defaults will be used on reset.';
+          });
+        }
+      case _ResetEverythingAction.settingsOnly:
+        await _resetAll(removeMedia: false);
+      case _ResetEverythingAction.settingsAndMedia:
+        await _resetAll(removeMedia: true);
     }
   }
 
@@ -222,10 +321,26 @@ extension _MediaController on _VideoCollageScreenState {
     _parallelPreviewTimer = null;
     _sequentialPreviewTimer?.cancel();
     _sequentialPreviewTimer = null;
-    final defaultSize = _sizeFromPreset(
-      _defaultAspectPreset,
-      _defaultResolutionPreset,
-    );
+
+    // Load user-saved defaults (if any); fall back to factory constants.
+    final customDefaults = await _settingsStore.loadDefaultSettings();
+    final usingCustomDefaults = customDefaults != null;
+
+    final targetAspect = usingCustomDefaults
+        ? _aspectPresets.firstWhere(
+            (p) => p.label == customDefaults.aspectLabel,
+            orElse: () => _defaultAspectPreset,
+          )
+        : _defaultAspectPreset;
+    final targetResolution = usingCustomDefaults
+        ? _resolutionOptions.firstWhere(
+            (p) => p.label == customDefaults.resolutionLabel,
+            orElse: () => _defaultResolutionPreset,
+          )
+        : _defaultResolutionPreset;
+    final targetSize = usingCustomDefaults
+        ? (customDefaults.outputWidth, customDefaults.outputHeight)
+        : _sizeFromPreset(_defaultAspectPreset, _defaultResolutionPreset);
 
     _updateState(() {
       if (removeMedia) {
@@ -236,39 +351,7 @@ extension _MediaController on _VideoCollageScreenState {
       }
       _clipViewports.clear();
       _editingViewportClipId = null;
-      _selectedAspect = _defaultAspectPreset;
-      _selectedResolution = _defaultResolutionPreset;
-      _selectedBorderColor = _defaultBorderColor;
-      _selectedBackgroundColor = _defaultBackgroundColor;
       _borderImagePath = null;
-      _selectedPlayMode = _defaultPlayMode;
-      _selectedAudioMode = _defaultAudioMode;
-      _selectedDurationMode = _defaultDurationMode;
-      _selectedFitMode = _defaultFitMode;
-      _mergeFitMode = ClipFitMode.cropCenter;
-      _mergeFrameRateMode = VideoMergeFrameRateMode.firstVideo;
-      _rows = _defaultRows;
-      _columns = _defaultColumns;
-      _isMediaSectionCollapsed = false;
-      _isLayoutSectionCollapsed = false;
-      _isLabelSectionCollapsed = false;
-      _isOutputSectionCollapsed = false;
-      _borderThickness = _defaultBorderThickness;
-      _tileCornerRadius = _defaultTileCornerRadius;
-      _clipLabelFontSize = _defaultClipLabelFontSize;
-      _clipLabelPadding = _defaultClipLabelPadding;
-      _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
-      _setPreferAiMetadataForClipLabels(_defaultPreferAiMetadataForClipLabels);
-      _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
-      _clipLabelAlignment = _defaultClipLabelAlignment;
-      _clipLabelVisualStyle = _defaultClipLabelVisualStyle;
-      _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
-      _lastExportDirectory = '';
-      _setAppliedResolution(
-        width: defaultSize.$1,
-        height: defaultSize.$2,
-        preset: _defaultResolutionPreset,
-      );
       _isPreviewPlaying = false;
       _isPreviewMuted = false;
       _showExportComplete = false;
@@ -280,66 +363,267 @@ extension _MediaController on _VideoCollageScreenState {
       _sequentialPreviewStartedAt = null;
       _activeSequentialClipId = null;
       _externalDropHoverSlotIndex = null;
+
+      if (usingCustomDefaults) {
+        // Apply user-saved default settings.
+        _selectedAspect = targetAspect;
+        _selectedResolution = targetResolution;
+        _rows = customDefaults.rows.clamp(1, _maxGridDimension);
+        _columns = customDefaults.columns.clamp(1, _maxGridDimension);
+        _borderThickness = customDefaults.borderThickness
+            .clamp(0, _maxBorderThickness)
+            .toDouble();
+        _tileCornerRadius = customDefaults.tileCornerRadius
+            .clamp(0, _maxTileCornerRadius)
+            .toDouble();
+        _clipLabelFontSize = customDefaults.clipLabelFontSize
+            .clamp(8, _maxClipLabelFontSize)
+            .toDouble();
+        _clipLabelPadding = customDefaults.clipLabelPadding
+            .clamp(0, _maxClipLabelPadding)
+            .toDouble();
+        _includeClipLabelsInOutput = customDefaults.includeClipLabelsInOutput;
+        _setPreferAiMetadataForClipLabels(
+          customDefaults.preferAiMetadataForClipLabels,
+        );
+        _clipLabelDisplayMode = customDefaults.clipLabelDisplayMode;
+        _clipLabelAlignment = customDefaults.clipLabelAlignment;
+        _clipLabelVisualStyle = customDefaults.clipLabelVisualStyle;
+        _selectedFitMode = ClipFitMode.values.firstWhere(
+          (m) => m.name == customDefaults.fitMode,
+          orElse: () => _defaultFitMode,
+        );
+        _mergeFitMode = ClipFitMode.values.firstWhere(
+          (m) => m.name == customDefaults.mergeFitMode,
+          orElse: () => ClipFitMode.cropCenter,
+        );
+        _mergeFrameRateMode = VideoMergeFrameRateMode.values.firstWhere(
+          (m) => m.name == customDefaults.mergeFrameRateMode,
+          orElse: () => VideoMergeFrameRateMode.firstVideo,
+        );
+        _selectedPlayMode = PlayMode.values.firstWhere(
+          (m) => m.name == customDefaults.playMode,
+          orElse: () => _defaultPlayMode,
+        );
+        _selectedAudioMode = AudioMode.values.firstWhere(
+          (m) => m.name == customDefaults.audioMode,
+          orElse: () => _defaultAudioMode,
+        );
+        _selectedDurationMode = ExportDurationMode.values.firstWhere(
+          (m) => m.name == customDefaults.durationMode,
+          orElse: () => _defaultDurationMode,
+        );
+        _selectedBorderColor = _colorChoiceFromColor(
+          Color(customDefaults.borderColorValue),
+        );
+        _selectedBackgroundColor = _colorChoiceFromColor(
+          Color(customDefaults.backgroundColorValue),
+        );
+        _appendDateTimeToExportName = customDefaults.appendDateTimeToExportName;
+        _isMediaSectionCollapsed = customDefaults.isMediaSectionCollapsed;
+        _isLayoutSectionCollapsed = customDefaults.isLayoutSectionCollapsed;
+        _isLabelSectionCollapsed = customDefaults.isLabelSectionCollapsed;
+        _isOutputSectionCollapsed = customDefaults.isOutputSectionCollapsed;
+        _lastExportDirectory = '';
+        _setAppliedResolution(
+          width: targetSize.$1,
+          height: targetSize.$2,
+          preset: targetResolution,
+        );
+      } else {
+        // Factory reset.
+        _selectedAspect = _defaultAspectPreset;
+        _selectedResolution = _defaultResolutionPreset;
+        _selectedBorderColor = _defaultBorderColor;
+        _selectedBackgroundColor = _defaultBackgroundColor;
+        _selectedPlayMode = _defaultPlayMode;
+        _selectedAudioMode = _defaultAudioMode;
+        _selectedDurationMode = _defaultDurationMode;
+        _selectedFitMode = _defaultFitMode;
+        _mergeFitMode = ClipFitMode.cropCenter;
+        _mergeFrameRateMode = VideoMergeFrameRateMode.firstVideo;
+        _rows = _defaultRows;
+        _columns = _defaultColumns;
+        _isMediaSectionCollapsed = false;
+        _isLayoutSectionCollapsed = false;
+        _isLabelSectionCollapsed = false;
+        _isOutputSectionCollapsed = false;
+        _borderThickness = _defaultBorderThickness;
+        _tileCornerRadius = _defaultTileCornerRadius;
+        _clipLabelFontSize = _defaultClipLabelFontSize;
+        _clipLabelPadding = _defaultClipLabelPadding;
+        _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
+        _setPreferAiMetadataForClipLabels(_defaultPreferAiMetadataForClipLabels);
+        _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
+        _clipLabelAlignment = _defaultClipLabelAlignment;
+        _clipLabelVisualStyle = _defaultClipLabelVisualStyle;
+        _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
+        _lastExportDirectory = '';
+        _setAppliedResolution(
+          width: targetSize.$1,
+          height: targetSize.$2,
+          preset: _defaultResolutionPreset,
+        );
+      }
+
       if (!removeMedia) {
         _backfillVisibleSlotsFromOverflow();
       }
       _statusMessage = removeMedia
-          ? 'Settings reset and all media removed.'
-          : 'Settings reset. Loaded media kept.';
+          ? (usingCustomDefaults
+              ? 'Default settings applied and all media removed.'
+              : 'Settings reset and all media removed.')
+          : (usingCustomDefaults
+              ? 'Default settings applied. Loaded media kept.'
+              : 'Settings reset. Loaded media kept.');
     });
     _scheduleSettingsSave();
     await _syncPreviewPlaybackMode();
   }
 
-  void _resetLayoutDefaults() {
-    final size = _sizeFromPreset(
-      _defaultAspectPreset,
-      _effectiveResolutionForSizing,
-    );
-    _setStateAndSave(() {
-      _selectedAspect = _defaultAspectPreset;
-      _rows = _defaultRows;
-      _columns = _defaultColumns;
-      _borderThickness = _defaultBorderThickness;
-      _tileCornerRadius = _defaultTileCornerRadius;
-      _selectedBorderColor = _defaultBorderColor;
-      _selectedBackgroundColor = _defaultBackgroundColor;
-      _borderImagePath = null;
-      _selectedFitMode = _defaultFitMode;
-      _setAppliedResolution(width: size.$1, height: size.$2);
-      _backfillVisibleSlotsFromOverflow();
-      _statusMessage = 'Layout reset to defaults.';
-    });
+  Future<void> _resetLayoutDefaults() async {
+    final customDefaults = await _settingsStore.loadDefaultSettings();
+    if (!mounted) return;
+
+    if (customDefaults != null) {
+      final targetAspect = _aspectPresets.firstWhere(
+        (p) => p.label == customDefaults.aspectLabel,
+        orElse: () => _defaultAspectPreset,
+      );
+      final targetResolution = _resolutionOptions.firstWhere(
+        (p) => p.label == customDefaults.resolutionLabel,
+        orElse: () => _defaultResolutionPreset,
+      );
+      _setStateAndSave(() {
+        _selectedAspect = targetAspect;
+        _rows = customDefaults.rows.clamp(1, _maxGridDimension);
+        _columns = customDefaults.columns.clamp(1, _maxGridDimension);
+        _borderThickness = customDefaults.borderThickness
+            .clamp(0, _maxBorderThickness)
+            .toDouble();
+        _tileCornerRadius = customDefaults.tileCornerRadius
+            .clamp(0, _maxTileCornerRadius)
+            .toDouble();
+        _selectedBorderColor = _colorChoiceFromColor(
+          Color(customDefaults.borderColorValue),
+        );
+        _selectedBackgroundColor = _colorChoiceFromColor(
+          Color(customDefaults.backgroundColorValue),
+        );
+        _borderImagePath = null;
+        _selectedFitMode = ClipFitMode.values.firstWhere(
+          (m) => m.name == customDefaults.fitMode,
+          orElse: () => _defaultFitMode,
+        );
+        _setAppliedResolution(
+          width: customDefaults.outputWidth,
+          height: customDefaults.outputHeight,
+          preset: targetResolution,
+        );
+        _backfillVisibleSlotsFromOverflow();
+        _statusMessage = 'Layout reset to saved defaults.';
+      });
+    } else {
+      final size = _sizeFromPreset(_defaultAspectPreset, _effectiveResolutionForSizing);
+      _setStateAndSave(() {
+        _selectedAspect = _defaultAspectPreset;
+        _rows = _defaultRows;
+        _columns = _defaultColumns;
+        _borderThickness = _defaultBorderThickness;
+        _tileCornerRadius = _defaultTileCornerRadius;
+        _selectedBorderColor = _defaultBorderColor;
+        _selectedBackgroundColor = _defaultBackgroundColor;
+        _borderImagePath = null;
+        _selectedFitMode = _defaultFitMode;
+        _setAppliedResolution(width: size.$1, height: size.$2);
+        _backfillVisibleSlotsFromOverflow();
+        _statusMessage = 'Layout reset to defaults.';
+      });
+    }
   }
 
-  void _resetLabelDefaults() {
-    _setStateAndSave(() {
-      _clipLabelFontSize = _defaultClipLabelFontSize;
-      _clipLabelPadding = _defaultClipLabelPadding;
-      _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
-      _setPreferAiMetadataForClipLabels(_defaultPreferAiMetadataForClipLabels);
-      _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
-      _clipLabelAlignment = _defaultClipLabelAlignment;
-      _clipLabelVisualStyle = _defaultClipLabelVisualStyle;
-      _statusMessage = 'Label settings reset to defaults.';
-    });
+  Future<void> _resetLabelDefaults() async {
+    final customDefaults = await _settingsStore.loadDefaultSettings();
+    if (!mounted) return;
+
+    if (customDefaults != null) {
+      _setStateAndSave(() {
+        _clipLabelFontSize = customDefaults.clipLabelFontSize
+            .clamp(8, _maxClipLabelFontSize)
+            .toDouble();
+        _clipLabelPadding = customDefaults.clipLabelPadding
+            .clamp(0, _maxClipLabelPadding)
+            .toDouble();
+        _includeClipLabelsInOutput = customDefaults.includeClipLabelsInOutput;
+        _setPreferAiMetadataForClipLabels(
+          customDefaults.preferAiMetadataForClipLabels,
+        );
+        _clipLabelDisplayMode = customDefaults.clipLabelDisplayMode;
+        _clipLabelAlignment = customDefaults.clipLabelAlignment;
+        _clipLabelVisualStyle = customDefaults.clipLabelVisualStyle;
+        _statusMessage = 'Label settings reset to saved defaults.';
+      });
+    } else {
+      _setStateAndSave(() {
+        _clipLabelFontSize = _defaultClipLabelFontSize;
+        _clipLabelPadding = _defaultClipLabelPadding;
+        _includeClipLabelsInOutput = _defaultIncludeClipLabelsInOutput;
+        _setPreferAiMetadataForClipLabels(_defaultPreferAiMetadataForClipLabels);
+        _clipLabelDisplayMode = _defaultClipLabelDisplayMode;
+        _clipLabelAlignment = _defaultClipLabelAlignment;
+        _clipLabelVisualStyle = _defaultClipLabelVisualStyle;
+        _statusMessage = 'Label settings reset to defaults.';
+      });
+    }
   }
 
   Future<void> _resetOutputDefaults() async {
-    final size = _sizeFromPreset(_selectedAspect, _defaultResolutionPreset);
-    _setStateAndSave(() {
-      _selectedPlayMode = _defaultPlayMode;
-      _selectedAudioMode = _defaultAudioMode;
-      _selectedDurationMode = _defaultDurationMode;
-      _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
-      _setAppliedResolution(
-        width: size.$1,
-        height: size.$2,
-        preset: _defaultResolutionPreset,
+    final customDefaults = await _settingsStore.loadDefaultSettings();
+    if (!mounted) return;
+
+    if (customDefaults != null) {
+      final targetResolution = _resolutionOptions.firstWhere(
+        (p) => p.label == customDefaults.resolutionLabel,
+        orElse: () => _defaultResolutionPreset,
       );
-      _activeSequentialClipId = null;
-      _statusMessage = 'Output reset to defaults.';
-    });
+      _setStateAndSave(() {
+        _selectedPlayMode = PlayMode.values.firstWhere(
+          (m) => m.name == customDefaults.playMode,
+          orElse: () => _defaultPlayMode,
+        );
+        _selectedAudioMode = AudioMode.values.firstWhere(
+          (m) => m.name == customDefaults.audioMode,
+          orElse: () => _defaultAudioMode,
+        );
+        _selectedDurationMode = ExportDurationMode.values.firstWhere(
+          (m) => m.name == customDefaults.durationMode,
+          orElse: () => _defaultDurationMode,
+        );
+        _appendDateTimeToExportName = customDefaults.appendDateTimeToExportName;
+        _setAppliedResolution(
+          width: customDefaults.outputWidth,
+          height: customDefaults.outputHeight,
+          preset: targetResolution,
+        );
+        _activeSequentialClipId = null;
+        _statusMessage = 'Output reset to saved defaults.';
+      });
+    } else {
+      final size = _sizeFromPreset(_selectedAspect, _defaultResolutionPreset);
+      _setStateAndSave(() {
+        _selectedPlayMode = _defaultPlayMode;
+        _selectedAudioMode = _defaultAudioMode;
+        _selectedDurationMode = _defaultDurationMode;
+        _appendDateTimeToExportName = _defaultAppendDateTimeToExportName;
+        _setAppliedResolution(
+          width: size.$1,
+          height: size.$2,
+          preset: _defaultResolutionPreset,
+        );
+        _activeSequentialClipId = null;
+        _statusMessage = 'Output reset to defaults.';
+      });
+    }
 
     _parallelPreviewElapsed = Duration.zero;
     _parallelPreviewStartedAt = null;

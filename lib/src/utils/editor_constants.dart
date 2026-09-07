@@ -138,7 +138,7 @@ enum _LastExportAction { openFile, showInFolder }
 
 enum _AutoLayoutMode { automatic, verticalStack, horizontalStrip }
 
-enum _ResetEverythingAction { settingsOnly, settingsAndMedia }
+enum _ResetEverythingAction { settingsOnly, settingsAndMedia, saveAsDefault, clearDefault }
 
 const ExportDurationMode _defaultDurationMode = ExportDurationMode.longest;
 const ClipFitMode _defaultFitMode = ClipFitMode.cropCenter;
