@@ -175,12 +175,13 @@ extension _MediaController on _VideoCollageScreenState {
 
   Future<void> _confirmResetAll() async {
     final hasDefaults = await _settingsStore.hasDefaultSettings();
+    if (!mounted) return;
 
     final action = await showDialog<_ResetEverythingAction>(
       context: context,
       builder: (dialogContext) {
         final colorScheme = Theme.of(dialogContext).colorScheme;
-        final sectionBg = colorScheme.surfaceContainerHighest.withOpacity(0.45);
+        final sectionBg = colorScheme.surfaceContainerHighest.withValues(alpha: 0.45);
         const sectionRadius = BorderRadius.all(Radius.circular(12));
         final labelStyle = TextStyle(
           fontSize: 11,
