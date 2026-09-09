@@ -31,9 +31,8 @@ class C2paSourceAsset {
 
 /// Adds provenance only when at least one source asset already has C2PA.
 ///
-/// The first C2PA source becomes the parent. Every other unique source is
-/// recorded as an ingredient, so the new claim carries both signed provenance
-/// and the complete set of inputs used to create the export.
+/// The export is a new asset. Every unique C2PA source is recorded as a
+/// component ingredient; sources without C2PA are not added to history.
 class C2paExportService {
   static const _signingCertificateAsset =
       'assets/c2pa/perfect_collage_cert.pem';
@@ -87,6 +86,9 @@ class C2paExportService {
       );
     }
 
+    final sourcesToStage = uniqueSources.where(
+      (source) => source.metadata.c2paStatus != C2paStatus.absent,
+    );
     final workDirectory = await Directory.systemTemp.createTemp(
       'perfect_collage_c2pa_export_',
     );
@@ -95,12 +97,13 @@ class C2paExportService {
       // Powerbox permissions granted to the parent app for files in Downloads
       // or other user-selected locations. Give c2patool only app-owned paths.
       final stagedSources = <C2paSourceAsset>[];
-      for (var index = 0; index < uniqueSources.length; index += 1) {
-        final source = uniqueSources[index];
+      var index = 0;
+      for (final source in sourcesToStage) {
         final stagedPath = p.join(
           workDirectory.path,
           'source_$index${p.extension(source.path).toLowerCase()}',
         );
+        index += 1;
         await File(source.path).copy(stagedPath);
         final metadata = source.metadata.c2paStatus == C2paStatus.unknown
             ? await _aiMetadataService.probeC2pa(stagedPath)
@@ -114,22 +117,15 @@ class C2paExportService {
           C2paSourceAsset(path: stagedPath, metadata: metadata),
         );
       }
-      C2paSourceAsset? parent;
-      for (final source in stagedSources) {
-        if (source.metadata.hasC2pa) {
-          parent = source;
-          break;
-        }
-      }
-      if (parent == null) return false;
+      final c2paSources = stagedSources.where(
+        (source) => source.metadata.hasC2pa,
+      );
+      if (c2paSources.isEmpty) return false;
 
       final ingredients = <Map<String, dynamic>>[];
       var ingredientIndex = 0;
-      for (final source in stagedSources) {
-        final isParent = source.path == parent.path;
-        final folderName = isParent
-            ? 'parent'
-            : 'ingredient_${ingredientIndex++}';
+      for (final source in c2paSources) {
+        final folderName = 'ingredient_${ingredientIndex++}';
         final ingredientDirectory = Directory(
           p.join(workDirectory.path, folderName),
         );
@@ -154,17 +150,9 @@ class C2paExportService {
           sourcePath: source.path,
           directory: ingredientDirectory,
         );
-        if (isParent) {
-          // Parent ingredient resources are resolved from the main manifest's
-          // base directory when c2patool combines the definitions.
-          _prefixResourceIdentifiers(decoded, folderName);
-          await ingredientFile.writeAsString(
-            const JsonEncoder.withIndent('  ').convert(decoded),
-          );
-        } else {
-          _prefixResourceIdentifiers(decoded, folderName);
-          ingredients.add(decoded);
-        }
+        decoded['relationship'] = 'componentOf';
+        _prefixResourceIdentifiers(decoded, folderName);
+        ingredients.add(decoded);
       }
 
       final renderedPath = p.join(
@@ -206,6 +194,9 @@ class C2paExportService {
         const JsonEncoder.withIndent('  ').convert(
           buildManifest(
             ingredients: ingredients,
+            actions: const <Map<String, dynamic>>[
+              <String, dynamic>{'action': 'c2pa.created'},
+            ],
             thumbnail: const <String, String>{
               'format': 'image/jpeg',
               'identifier': 'claim-thumbnail.jpg',
@@ -223,8 +214,8 @@ class C2paExportService {
         renderedPath,
         '--manifest',
         manifestFile.path,
-        '--parent',
-        p.join(workDirectory.path, 'parent'),
+        '--create',
+        'empty',
         '--force',
         '--output',
         signedPath,
@@ -245,6 +236,7 @@ class C2paExportService {
 
   static Map<String, dynamic> buildManifest({
     required List<Map<String, dynamic>> ingredients,
+    List<Map<String, dynamic>>? actions,
     Map<String, String>? thumbnail,
     String? signingCertificatePath,
     String? signingPrivateKeyPath,
@@ -255,7 +247,13 @@ class C2paExportService {
         <String, String>{'name': 'Perfect Collage'},
       ],
       'title': 'pfc asset',
-      'assertions': <Object>[],
+      'assertions': <Map<String, dynamic>>[
+        if (actions != null && actions.isNotEmpty)
+          <String, dynamic>{
+            'label': 'c2pa.actions.v2',
+            'data': <String, dynamic>{'actions': actions},
+          },
+      ],
       if (ingredients.isNotEmpty) 'ingredients': ingredients,
     };
     if (signingCertificatePath != null) {

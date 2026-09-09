@@ -22,6 +22,26 @@ void main() {
     expect(manifest['ingredients'], <Map<String, dynamic>>[ingredient]);
   });
 
+  test('manifest records a newly created collage action', () {
+    final manifest = C2paExportService.buildManifest(
+      ingredients: const <Map<String, dynamic>>[],
+      actions: const <Map<String, dynamic>>[
+        <String, dynamic>{'action': 'c2pa.created'},
+      ],
+    );
+
+    expect(manifest['assertions'], <Map<String, dynamic>>[
+      <String, dynamic>{
+        'label': 'c2pa.actions.v2',
+        'data': <String, dynamic>{
+          'actions': <Map<String, dynamic>>[
+            <String, dynamic>{'action': 'c2pa.created'},
+          ],
+        },
+      },
+    ]);
+  });
+
   test(
     'does not run c2patool when every source is known to lack C2PA',
     () async {
@@ -107,82 +127,71 @@ void main() {
     },
   );
 
-  test(
-    'preserves all inputs and replaces the export with signed media',
-    () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'c2pa_export_service_test_',
-      );
-      addTearDown(() async {
-        if (await directory.exists()) await directory.delete(recursive: true);
-      });
-      final parent = File('${directory.path}/parent.jpg');
-      final component = File('${directory.path}/component.jpg');
-      final output = File('${directory.path}/output.jpg');
-      await parent.writeAsString('parent');
-      await component.writeAsString('component');
-      await output.writeAsString('unsigned export');
-      final calls = <List<String>>[];
-      String? stagedParentContents;
+  test('preserves C2PA inputs and excludes sources without C2PA', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'c2pa_export_service_test_',
+    );
+    addTearDown(() async {
+      if (await directory.exists()) await directory.delete(recursive: true);
+    });
+    final parent = File('${directory.path}/parent.jpg');
+    final component = File('${directory.path}/component.jpg');
+    final output = File('${directory.path}/output.jpg');
+    await parent.writeAsString('parent');
+    await component.writeAsString('component');
+    await output.writeAsString('unsigned export');
+    final calls = <List<String>>[];
 
-      final service = C2paExportService(
-        aiMetadataService: const AiMetadataService(),
-        toolLocator: () => '/tools/c2patool',
-        thumbnailGenerator: (sourcePath, outputPath) async {
-          await File(outputPath).writeAsString('thumbnail');
-          return true;
-        },
-        assetLoader: (assetPath) async => assetPath.endsWith('.key')
-            ? 'test private key'
-            : 'test signing certificate',
-        processRunner: (executable, arguments) async {
-          calls.add(arguments);
-          final outputIndex = arguments.indexOf('--output');
-          final destination = arguments[outputIndex + 1];
-          if (arguments.contains('--ingredient')) {
-            final ingredientDirectory = Directory(destination);
-            await ingredientDirectory.create();
-            await File(
-              '${ingredientDirectory.path}/ingredient.json',
-            ).writeAsString(
-              '{"format":"image/jpeg","relationship":"componentOf"}',
-            );
-          } else {
-            final parentIndex = arguments.indexOf('--parent');
-            stagedParentContents = await File(
-              '${arguments[parentIndex + 1]}/ingredient.json',
-            ).readAsString();
-            await File(destination).writeAsString('signed export');
-          }
-          return ProcessResult(1, 0, '', '');
-        },
-      );
+    final service = C2paExportService(
+      aiMetadataService: const AiMetadataService(),
+      toolLocator: () => '/tools/c2patool',
+      thumbnailGenerator: (sourcePath, outputPath) async {
+        await File(outputPath).writeAsString('thumbnail');
+        return true;
+      },
+      assetLoader: (assetPath) async => assetPath.endsWith('.key')
+          ? 'test private key'
+          : 'test signing certificate',
+      processRunner: (executable, arguments) async {
+        calls.add(arguments);
+        final outputIndex = arguments.indexOf('--output');
+        final destination = arguments[outputIndex + 1];
+        if (arguments.contains('--ingredient')) {
+          final ingredientDirectory = Directory(destination);
+          await ingredientDirectory.create();
+          await File(
+            '${ingredientDirectory.path}/ingredient.json',
+          ).writeAsString(
+            '{"format":"image/jpeg","relationship":"componentOf"}',
+          );
+        } else {
+          await File(destination).writeAsString('signed export');
+        }
+        return ProcessResult(1, 0, '', '');
+      },
+    );
 
-      final signed = await service.signExportIfNeeded(
-        sources: <C2paSourceAsset>[
-          C2paSourceAsset(
-            path: parent.path,
-            metadata: const AiMediaMetadata(c2paStatus: C2paStatus.conformant),
-          ),
-          C2paSourceAsset(
-            path: component.path,
-            metadata: const AiMediaMetadata(c2paStatus: C2paStatus.absent),
-          ),
-        ],
-        outputPath: output.path,
-      );
+    final signed = await service.signExportIfNeeded(
+      sources: <C2paSourceAsset>[
+        C2paSourceAsset(
+          path: parent.path,
+          metadata: const AiMediaMetadata(c2paStatus: C2paStatus.conformant),
+        ),
+        C2paSourceAsset(
+          path: component.path,
+          metadata: const AiMediaMetadata(c2paStatus: C2paStatus.absent),
+        ),
+      ],
+      outputPath: output.path,
+    );
 
-      expect(signed, isTrue);
-      expect(await output.readAsString(), 'signed export');
-      expect(calls, hasLength(3));
-      expect(calls.first, contains('--ingredient'));
-      final parentIndex = calls.last.indexOf('--parent');
-      expect(parentIndex, greaterThanOrEqualTo(0));
-      final stagedParentPath = calls.last[parentIndex + 1];
-      expect(stagedParentPath, isNot(parent.path));
-      expect(stagedParentContents, contains('thumbnail.jpg'));
-    },
-  );
+    expect(signed, isTrue);
+    expect(await output.readAsString(), 'signed export');
+    expect(calls, hasLength(2));
+    expect(calls.first, contains('--ingredient'));
+    expect(calls.last, contains('--create'));
+    expect(calls.last, contains('empty'));
+  });
 }
 
 class _UnknownAiMetadataService extends AiMetadataService {
